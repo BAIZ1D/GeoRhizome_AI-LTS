@@ -46,8 +46,8 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          context: ./anything-llm-source/
-          file: ./anything-llm-source/docker/Dockerfile
+          context: ./georhizome-ai-source/
+          file: ./georhizome-ai-source/docker/Dockerfile
           push: true
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}

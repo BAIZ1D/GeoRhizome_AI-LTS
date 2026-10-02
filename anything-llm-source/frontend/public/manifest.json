@@ -1,0 +1,13 @@
+{
+  "name": "GeoRhizome AI",
+  "short_name": "GeoRhizome AI",
+  "display": "standalone",
+  "orientation": "portrait",
+  "start_url": "/",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "any"
+    }
+  ]
+}

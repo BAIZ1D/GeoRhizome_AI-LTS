@@ -1,0 +1,7 @@
+{
+  "ignore": ["storage/*", "storage/**/*"],
+  "events": {
+    "start": "yarn swagger",
+    "restart": "yarn swagger"
+  }
+}

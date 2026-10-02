@@ -1,0 +1,54 @@
+<svg viewBox="0 0 40 40" width="64" height="64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    @keyframes rhizome-breath {
+      0%, 100% { transform: scale3d(0.9, 0.9, 1); }
+      50% { transform: scale3d(1.12, 1.12, 1); }
+    }
+    @keyframes rhizome-root-pulse {
+      0%, 100% { stroke-dashoffset: 40; opacity: 0.45; }
+      50% { stroke-dashoffset: 0; opacity: 1; }
+    }
+    .rhizome-shoot {
+      transform-origin: 20px 20px;
+      animation: rhizome-breath 2.4s ease-in-out infinite;
+    }
+    .rhizome-root-path {
+      stroke-dasharray: 40;
+      animation: rhizome-root-pulse 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    }
+    .rhizome-root-path-delayed {
+      stroke-dasharray: 40;
+      animation: rhizome-root-pulse 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+      animation-delay: 0.6s;
+    }
+  </style>
+
+  <defs>
+    <linearGradient id="shoot-grad" x1="20" y1="2" x2="20" y2="20" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#7bbd34" />
+      <stop offset="100%" stop-color="#4e881e" />
+    </linearGradient>
+
+    <linearGradient id="root-grad" x1="20" y1="20" x2="20" y2="38" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#7bbd34" />
+      <stop offset="60%" stop-color="#006ccf" />
+      <stop offset="100%" stop-color="#004ea2" />
+    </linearGradient>
+  </defs>
+
+  <g stroke="url(#root-grad)" stroke-width="1.2" stroke-linecap="round" opacity="0.8">
+    <path d="M20 20 Q14 24 10 32 T5 38" class="rhizome-root-path" />
+    <path d="M14 24 Q9 27 7 31 M10 32 Q6 34 4 37" class="rhizome-root-path-delayed" />
+    <path d="M20 20 Q18 28 15 36" class="rhizome-root-path-delayed" />
+    <path d="M20 20 Q22 28 25 36" class="rhizome-root-path" />
+    <path d="M20 20 Q26 24 30 32 T35 38" class="rhizome-root-path-delayed" />
+    <path d="M26 24 Q31 27 33 31 M30 32 Q34 34 36 37" class="rhizome-root-path" />
+  </g>
+
+  <g class="rhizome-shoot" fill="url(#shoot-grad)">
+    <path d="M20 20 C20 14 19 8 20 2 C21 8 20 14 20 20 Z" />
+    <path d="M20 20 C18 15 12 12 7 15 C9 19 15 20 20 20 Z" />
+    <path d="M20 20 C22 15 28 12 33 15 C31 19 25 20 20 20 Z" />
+    <circle cx="20" cy="20" r="1.5" fill="#7bbd34" />
+  </g>
+</svg>

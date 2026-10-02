@@ -1,0 +1,223 @@
+process.env.NODE_ENV === "development"
+  ? require("dotenv").config({ path: `.env.${process.env.NODE_ENV}` })
+  : require("dotenv").config();
+
+require("./utils/logger")();
+const express = require("express");
+const bodyParser = require("body-parser");
+const cors = require("cors");
+const path = require("path");
+const { ACCEPTED_MIMES } = require("./utils/constants");
+const { reqBody } = require("./utils/http");
+const { processSingleFile } = require("./processSingleFile");
+const { processLink, getLinkText } = require("./processLink");
+const { wipeCollectorStorage } = require("./utils/files");
+const extensions = require("./extensions");
+const { processRawText } = require("./processRawText");
+const { verifyPayloadIntegrity } = require("./middleware/verifyIntegrity");
+const { httpLogger } = require("./middleware/httpLogger");
+const app = express();
+const FILE_LIMIT = "3GB";
+
+// Only log HTTP requests in development mode and if the ENABLE_HTTP_LOGGER environment variable is set to true
+if (
+  process.env.NODE_ENV === "development" &&
+  !!process.env.ENABLE_HTTP_LOGGER
+) {
+  app.use(
+    httpLogger({
+      enableTimestamps: !!process.env.ENABLE_HTTP_LOGGER_TIMESTAMPS,
+    })
+  );
+}
+app.use(cors({ origin: true }));
+app.use(
+  bodyParser.text({ limit: FILE_LIMIT }),
+  bodyParser.json({ limit: FILE_LIMIT }),
+  bodyParser.urlencoded({
+    limit: FILE_LIMIT,
+    extended: true,
+  })
+);
+
+app.post(
+  "/process",
+  [verifyPayloadIntegrity],
+  async function (request, response) {
+    const { filename, options = {}, metadata = {} } = reqBody(request);
+    try {
+      const targetFilename = path
+        .normalize(filename)
+        .replace(/^(\.\.(\/|\\|$))+/, "");
+      const {
+        success,
+        reason,
+        documents = [],
+      } = await processSingleFile(targetFilename, options, metadata);
+      response
+        .status(200)
+        .json({ filename: targetFilename, success, reason, documents });
+    } catch (e) {
+      console.error(e);
+      response.status(200).json({
+        filename: filename,
+        success: false,
+        reason: "A processing error occurred.",
+        documents: [],
+      });
+    }
+    return;
+  }
+);
+
+app.post(
+  "/parse",
+  [verifyPayloadIntegrity],
+  async function (request, response) {
+    const { filename, options = {} } = reqBody(request);
+    try {
+      const targetFilename = path
+        .normalize(filename)
+        .replace(/^(\.\.(\/|\\|$))+/, "");
+      const {
+        success,
+        reason,
+        documents = [],
+      } = await processSingleFile(targetFilename, {
+        ...options,
+        parseOnly: true,
+        absolutePath: options.absolutePath || null,
+      });
+      response
+        .status(200)
+        .json({ filename: targetFilename, success, reason, documents });
+    } catch (e) {
+      console.error(e);
+      response.status(200).json({
+        filename: filename,
+        success: false,
+        reason: "A processing error occurred.",
+        documents: [],
+      });
+    }
+    return;
+  }
+);
+
+app.post(
+  "/process-link",
+  [verifyPayloadIntegrity],
+  async function (request, response) {
+    const { link, scraperHeaders = {}, metadata = {} } = reqBody(request);
+    try {
+      const {
+        success,
+        reason,
+        documents = [],
+      } = await processLink(link, scraperHeaders, metadata);
+      response.status(200).json({ url: link, success, reason, documents });
+    } catch (e) {
+      console.error(e);
+      response.status(200).json({
+        url: link,
+        success: false,
+        reason: "A processing error occurred.",
+        documents: [],
+      });
+    }
+    return;
+  }
+);
+
+app.post(
+  "/util/get-link",
+  [verifyPayloadIntegrity],
+  async function (request, response) {
+    const { link, captureAs = "text" } = reqBody(request);
+    try {
+      const { success, content = null } = await getLinkText(link, captureAs);
+      response.status(200).json({ url: link, success, content });
+    } catch (e) {
+      console.error(e);
+      response.status(200).json({
+        url: link,
+        success: false,
+        content: null,
+      });
+    }
+    return;
+  }
+);
+
+app.post(
+  "/process-raw-text",
+  [verifyPayloadIntegrity],
+  async function (request, response) {
+    const { textContent, metadata } = reqBody(request);
+    try {
+      const {
+        success,
+        reason,
+        documents = [],
+      } = await processRawText(textContent, metadata);
+      response
+        .status(200)
+        .json({ filename: metadata.title, success, reason, documents });
+    } catch (e) {
+      console.error(e);
+      response.status(200).json({
+        filename: metadata?.title || "Unknown-doc.txt",
+        success: false,
+        reason: "A processing error occurred.",
+        documents: [],
+      });
+    }
+    return;
+  }
+);
+
+extensions(app);
+
+
+app.get("/upload-progress", function (request, response) {
+  const fs = require("fs");
+  const path = require("path");
+  const filename = request.query.filename;
+  if (!filename) return response.json({ message: "No filename provided" });
+  
+  // The python script writes to: hotdir/Filename.pdf.progress
+  const progressFile = path.resolve(__dirname, "hotdir", `${filename}.progress`);
+  if (fs.existsSync(progressFile)) {
+    try {
+      const data = JSON.parse(fs.readFileSync(progressFile, "utf-8"));
+      return response.json(data);
+    } catch(e) {
+      return response.json({ message: "Parsing..." });
+    }
+  }
+  response.json({ message: "Waiting in queue..." });
+});
+
+app.get("/accepts", function (_, response) {
+  response.status(200).json(ACCEPTED_MIMES);
+});
+
+app.all("*", function (_, response) {
+  response.sendStatus(200);
+});
+
+const server = app
+  .listen(8888, async () => {
+    await wipeCollectorStorage();
+    console.log(`Document processor app listening on port 8888`);
+  });
+  server.setTimeout(1000 * 60 * 60 * 2);
+  server.keepAliveTimeout = 1000 * 60 * 60 * 2;
+  server.on("error", function (_) {
+    process.once("SIGUSR2", function () {
+      process.kill(process.pid, "SIGUSR2");
+    });
+    process.on("SIGINT", function () {
+      process.kill(process.pid, "SIGINT");
+    });
+  });

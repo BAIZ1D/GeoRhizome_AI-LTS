@@ -1,0 +1,14 @@
+# GeoRhizome AI UI / AnythingLLM - Progress Snapshot
+
+## Current State
+- The frontend UI modifications for the Answer Length dropdown were successfully implemented (theme-green selection highlight, positioned over the logo issues fixed).
+- The document processing API (collector) was offline due to missing `node_modules` inside the `collector/` directory. This was resolved by running `yarn install` within that directory. 
+- Discovered the disk was completely full (`ENOSPC`), preventing further operations. The user freed up disk space (~27GB available).
+- The `anythingllm` backend was successfully dockerized using `docker-compose`. We resolved a port conflict with an older `georhizome-ai-portal-v2` container holding port 3001 by stopping the old container. 
+- Docker Compose environment `.env` was configured correctly.
+
+## Next Steps for Next Session
+- Start the Docker container using `cd docker && docker compose up -d` if it is not already running.
+- Perform end-to-end testing of 400MB PDF uploading (ensure `collector` successfully parses the document).
+- Verify the Answer Length setting correctly overrides LLM prompt output length during RAG generation.
+- Produce a screen recording/report for the Japanese company review (as per original outstanding tasks).

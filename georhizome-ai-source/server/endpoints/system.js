@@ -88,13 +88,13 @@ function systemEndpoints(app) {
       }
 
       const { Workspace } = require("../models/workspace");
-      const { WorkspaceDocument } = require("../models/workspaceDocument");
+      const { Document } = require("../models/documents");
       const { DocumentVectors } = require("../models/vectors");
 
       const workspace = await Workspace.get({ slug });
       if (!workspace) return response.status(404).json({ error: "Workspace not found" });
 
-      const workspaceDocuments = await WorkspaceDocument.where({ workspaceId: workspace.id });
+      const workspaceDocuments = await Document.where({ workspaceId: workspace.id });
       // Get document vectors for this workspace
       // Actually LanceDB holds the vectors, we just need the SQLite mapping
       // Since DocumentVectors maps docId to vectorId, we fetch all that match the docIds
@@ -253,7 +253,7 @@ function systemEndpoints(app) {
       const metadata = JSON.parse(fs.readFileSync(metadataPath, "utf8"));
       
       const { Workspace } = require("../models/workspace");
-      const { WorkspaceDocument } = require("../models/workspaceDocument");
+      const { Document } = require("../models/documents");
       const { DocumentVectors } = require("../models/vectors");
 
       // We use Prisma directly for raw upserts to prevent AnythingLLM wrapper bugs

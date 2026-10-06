@@ -4,7 +4,10 @@ import showToast from "@/utils/toast";
 export default function KnowledgeSync({ workspace }) {
   const [syncing, setSyncing] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [wiping, setWiping] = useState(false);
+  
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showWipeModal, setShowWipeModal] = useState(false);
   const [password, setPassword] = useState("");
 
   const handleSync = async () => {
@@ -64,6 +67,32 @@ export default function KnowledgeSync({ workspace }) {
     }
   };
 
+  const handleWipeVectors = async () => {
+    setShowWipeModal(false);
+    setWiping(true);
+    showToast("初期化を実行しています。お待ちください...", "info", { clear: true });
+    
+    try {
+      const response = await fetch(`/api/system/workspace-vectors/${workspace.slug}`, {
+        method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${window.localStorage.getItem("anythingllm_authToken")}`
+        }
+      });
+      
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Failed to wipe vectors");
+      
+      showToast("ベクトルデータを初期化しました。", "success", { clear: true });
+      setTimeout(() => window.location.reload(), 2000);
+    } catch (e) {
+      console.error(e);
+      showToast(`初期化エラー: ${e.message}`, "error", { clear: true });
+    } finally {
+      setWiping(false);
+    }
+  };
+
   return (
     <div className="mt-8">
       <div className="flex flex-col gap-y-2">
@@ -76,7 +105,7 @@ export default function KnowledgeSync({ workspace }) {
       <div className="flex flex-row items-center gap-x-4 mt-4">
         <button
           type="button"
-          disabled={syncing || uploading}
+          disabled={syncing || uploading || wiping}
           onClick={handleSync}
           className="px-4 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-all text-sm font-medium disabled:opacity-50"
         >
@@ -85,13 +114,50 @@ export default function KnowledgeSync({ workspace }) {
 
         <button
           type="button"
-          disabled={syncing || uploading}
+          disabled={syncing || uploading || wiping}
+          onClick={() => setShowWipeModal(true)}
+          className="px-4 py-2 rounded-lg bg-yellow-600 text-white hover:bg-yellow-700 transition-all text-sm font-medium disabled:opacity-50"
+        >
+          {wiping ? "初期化を実行しています..." : "ベクトルデータを初期化"}
+        </button>
+
+        <button
+          type="button"
+          disabled={syncing || uploading || wiping}
           onClick={() => setShowPasswordModal(true)}
           className="px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-all text-sm font-medium disabled:opacity-50"
         >
           {uploading ? "アップロードを実行しています..." : "ナレッジをアップロード"}
         </button>
       </div>
+
+      {showWipeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-theme-bg-secondary p-6 rounded-lg shadow-xl w-full max-w-md border border-theme-border">
+            <h3 className="text-lg font-semibold text-white mb-2">ベクトルデータの初期化</h3>
+            <p className="text-sm text-theme-text-secondary mb-4">
+              このワークスペースのベクトルデータを完全に削除します。この操作は取り消せません。<br/><br/>
+              次回「最新ナレッジを同期」を実行するまで、このワークスペースのチャット機能は利用できなくなります。続行してもよろしいですか？
+            </p>
+            <div className="flex justify-end gap-x-3">
+              <button
+                type="button"
+                onClick={() => setShowWipeModal(false)}
+                className="px-4 py-2 text-sm text-theme-text-secondary hover:text-white transition-all"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={handleWipeVectors}
+                className="px-4 py-2 text-sm bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-all"
+              >
+                実行する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showPasswordModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">

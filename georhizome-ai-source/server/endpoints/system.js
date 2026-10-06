@@ -257,7 +257,7 @@ function systemEndpoints(app) {
       const { DocumentVectors } = require("../models/vectors");
 
       // We use Prisma directly for raw upserts to prevent AnythingLLM wrapper bugs
-      const { prisma } = require("../utils/prisma");
+      const prisma = require("../utils/prisma");
 
       // Upsert Workspace
       const w = metadata.workspace;
@@ -375,6 +375,50 @@ function systemEndpoints(app) {
     } catch (e) {
       console.error(e.message, e);
       response.sendStatus(500).end();
+    }
+  });
+
+  
+  // =========================================================================
+  // GEORHIZOME AI: WIPE VECTORS (PILLAR 5)
+  // =========================================================================
+  app.delete("/system/workspace-vectors/:slug", async (request, response) => {
+    try {
+      const { slug } = request.params;
+      if (!slug) return response.status(400).json({ error: "Missing slug" });
+
+      const prisma = require("../utils/prisma");
+      
+      // 1. Find Workspace
+      const workspace = await prisma.workspaces.findFirst({ where: { slug } });
+      if (!workspace) return response.status(404).json({ error: "Workspace not found" });
+
+      // 2. Get Document IDs to wipe vectors
+      const workspaceDocs = await prisma.workspace_documents.findMany({ where: { workspaceId: workspace.id } });
+      const docIds = workspaceDocs.map(wd => wd.docId);
+
+      // 3. Clear SQLite Mappings
+      if (docIds.length > 0) {
+        await prisma.document_vectors.deleteMany({
+          where: { docId: { in: docIds } }
+        });
+      }
+      await prisma.workspace_documents.deleteMany({
+        where: { workspaceId: workspace.id }
+      });
+
+      // 4. Wipe physical LanceDB directory
+      const fs = require("fs");
+      const path = require("path");
+      const lancedbDest = path.join(__dirname, "..", "storage", "lancedb", `${slug}.lance`);
+      if (fs.existsSync(lancedbDest)) {
+        fs.rmSync(lancedbDest, { recursive: true, force: true });
+      }
+
+      response.status(200).json({ success: true, message: "Workspace vectors purged successfully." });
+    } catch (e) {
+      console.error("Wipe Vectors Error:", e);
+      response.status(500).json({ error: e.message });
     }
   });
 

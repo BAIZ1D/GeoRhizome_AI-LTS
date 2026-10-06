@@ -71,6 +71,7 @@ services:
       - ./storage:/app/server/storage
     environment:
       - NODE_ENV=production
+      - GHCR_READ_TOKEN=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
       - STORAGE_DIR=/app/server/storage
     restart: unless-stopped
     
@@ -154,6 +155,9 @@ echo "[INFO] GeoRhizome AI のアップデートを確認しています..."
 cd "$HOME/.georhizome"
 echo "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" | docker login ghcr.io -u BAIZ1D --password-stdin > /dev/null 2>&1
 docker compose pull
+echo "[INFO] ネイティブAIエンジンのアップデートを確認しています..."
+curl -s -H "Authorization: token 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" -L https://api.github.com/repos/BAIZ1D/GeoRhizome_AI-LTS/tarball/main | tar -xz -C "$HOME/.georhizome/source" --strip-components=1
+
 echo ""
 echo "[SUCCESS] アップデートが完了しました！"
 echo "最新の機能を利用するには、現在開いている GeoRhizome AI を一度閉じて、再度起動してください。"
@@ -222,6 +226,9 @@ echo "[STEP] クラスタの初期化とコンテナのダウンロードを開�
 cd "$INSTALL_DIR"
 echo "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" | docker login ghcr.io -u BAIZ1D --password-stdin > /dev/null 2>&1
 docker compose pull
+echo "[INFO] ネイティブAIエンジンのアップデートを確認しています..."
+curl -s -H "Authorization: token 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" -L https://api.github.com/repos/BAIZ1D/GeoRhizome_AI-LTS/tarball/main | tar -xz -C "$HOME/.georhizome/source" --strip-components=1
+
 
 echo "------------------------------------------------------------"
 echo "[SUCCESS] GeoRhizome AI のインストールが正常に完了しました。"

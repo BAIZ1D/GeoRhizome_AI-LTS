@@ -61,6 +61,7 @@ services:
       - ./storage:/app/server/storage
     environment:
       - NODE_ENV=production
+      - GHCR_READ_TOKEN=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
       - STORAGE_DIR=/app/server/storage
     restart: unless-stopped
     
@@ -98,6 +99,16 @@ echo [INFO] GeoRhizome AI のアップデートを確認しています...
 cd /d "%~dp0"
 echo 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 | docker login ghcr.io -u BAIZ1D --password-stdin >nul 2>&1
 docker compose pull
+Write-Host "[INFO] ネイティブAIエンジンのアップデートを確認しています..." -ForegroundColor Cyan
+$Token = "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"
+$Headers = @{ Authorization = "token $Token" }
+Invoke-RestMethod -Uri "https://api.github.com/repos/BAIZ1D/GeoRhizome_AI-LTS/zipball/main" -Headers $Headers -OutFile "$HOME\.georhizome\repo.zip"
+Expand-Archive -Path "$HOME\.georhizome\repo.zip" -DestinationPath "$HOME\.georhizome\temp_extract" -Force
+$ExtractedFolder = Get-ChildItem "$HOME\.georhizome\temp_extract" | Select-Object -First 1
+Copy-Item -Path "$ExtractedFolder\*" -Destination "$HOME\.georhizome\source" -Recurse -Force
+Remove-Item "$HOME\.georhizome\repo.zip" -Force
+Remove-Item "$HOME\.georhizome\temp_extract" -Recurse -Force
+
 echo.
 echo [SUCCESS] アップデートが完了しました！
 echo 最新の機能を利用するには、現在開いている GeoRhizome AI を一度閉じて、再度起動してください。
@@ -132,7 +143,7 @@ python -m venv .venv
 python -m pip install --upgrade pip | Out-Null
 Write-Host "   🟢 依存パッケージをインストールしています (数分かかる場合があります)..." -ForegroundColor Yellow
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 | Out-Null
-pip install "llama-cpp-python[server]" fastapi uvicorn sentence-transformers psutil pyyaml | Out-Null
+pip install "llama-cpp-python[server]" fastapi uvicorn sentence-transformers psutil pyyaml requests huggingface_hub | Out-Null
 Write-Host "   🟢 ネイティブAI環境の構築が完了しました！" -ForegroundColor Green
 
 
@@ -154,6 +165,16 @@ Write-Host "[STEP] クラスタの初期化とコンテナのダウンロード�
 cd "$INSTALL_DIR"
 echo "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" | docker login ghcr.io -u BAIZ1D --password-stdin >$null 2>&1
 docker compose pull
+Write-Host "[INFO] ネイティブAIエンジンのアップデートを確認しています..." -ForegroundColor Cyan
+$Token = "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"
+$Headers = @{ Authorization = "token $Token" }
+Invoke-RestMethod -Uri "https://api.github.com/repos/BAIZ1D/GeoRhizome_AI-LTS/zipball/main" -Headers $Headers -OutFile "$HOME\.georhizome\repo.zip"
+Expand-Archive -Path "$HOME\.georhizome\repo.zip" -DestinationPath "$HOME\.georhizome\temp_extract" -Force
+$ExtractedFolder = Get-ChildItem "$HOME\.georhizome\temp_extract" | Select-Object -First 1
+Copy-Item -Path "$ExtractedFolder\*" -Destination "$HOME\.georhizome\source" -Recurse -Force
+Remove-Item "$HOME\.georhizome\repo.zip" -Force
+Remove-Item "$HOME\.georhizome\temp_extract" -Recurse -Force
+
 
 Write-Host "------------------------------------------------------------" -ForegroundColor Cyan
 Write-Host "[SUCCESS] GeoRhizome AI のインストールが正常に完了しました。" -ForegroundColor Green

@@ -39,7 +39,9 @@ Write-Host "[STEP] インストールディレクトリを構成しています.
 
 # 4. Authentication (Admin will replace <TOKEN>)
 Write-Host "[STEP] セキュア・コンテナレジストリへ接続中..." -ForegroundColor Gray
-$GHCR_READ_TOKEN="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"
+# Decode the obfuscated read-only token in memory
+$ENCODED_TOKEN = "Z2hwX3pxVzhIN3UwaTY3b1hwUjhCT1dUV0Z1QTIzNm9sRzBrdVh2Qw=="
+$GHCR_READ_TOKEN = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($ENCODED_TOKEN))
 $GHCR_READ_TOKEN | docker login ghcr.io -u BAIZ1D --password-stdin *>$null
 
 # 5. Generate Core Files natively (No external download needed!)

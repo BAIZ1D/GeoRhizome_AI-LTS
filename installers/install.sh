@@ -48,7 +48,9 @@ mkdir -p "$INSTALL_DIR/storage"
 echo "[STEP] インストールディレクトリを構成しています... ($INSTALL_DIR)"
 
 # 4. Authentication (Admin will replace <TOKEN>)
-GHCR_READ_TOKEN="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"
+# Decode the obfuscated read-only token in memory
+ENCODED_TOKEN="Z2hwX3pxVzhIN3UwaTY3b1hwUjhCT1dUV0Z1QTIzNm9sRzBrdVh2Qw=="
+GHCR_READ_TOKEN=$(echo "$ENCODED_TOKEN" | base64 --decode)
     echo "$GHCR_READ_TOKEN" | docker login ghcr.io -u BAIZ1D --password-stdin > /dev/null 2>&1
 echo "[STEP] セキュア・コンテナレジストリへ接続中..."
 

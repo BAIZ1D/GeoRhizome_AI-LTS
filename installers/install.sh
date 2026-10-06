@@ -48,7 +48,8 @@ mkdir -p "$INSTALL_DIR/storage"
 echo "[STEP] インストールディレクトリを構成しています... ($INSTALL_DIR)"
 
 # 4. Authentication (Admin will replace <TOKEN>)
-# docker login ghcr.io -u BAIZ1D -p <YOUR_READ_ONLY_TOKEN>
+GHCR_READ_TOKEN="REPLACE_ME_BEFORE_DISTRIBUTION"
+    echo "$GHCR_READ_TOKEN" | docker login ghcr.io -u BAIZ1D --password-stdin > /dev/null 2>&1
 echo "[STEP] セキュア・コンテナレジストリへ接続中..."
 
 # 5. Generate Core Files

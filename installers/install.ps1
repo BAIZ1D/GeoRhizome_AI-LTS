@@ -39,6 +39,8 @@ Write-Host "[STEP] インストールディレクトリを構成しています.
 
 # 4. Authentication (Admin will replace <TOKEN>)
 Write-Host "[STEP] セキュア・コンテナレジストリへ接続中..." -ForegroundColor Gray
+$GHCR_READ_TOKEN="REPLACE_ME_BEFORE_DISTRIBUTION"
+$GHCR_READ_TOKEN | docker login ghcr.io -u BAIZ1D --password-stdin *>$null
 
 # 5. Generate Core Files natively (No external download needed!)
 Write-Host "[STEP] コア・システム構成ファイルを生成中..." -ForegroundColor Gray

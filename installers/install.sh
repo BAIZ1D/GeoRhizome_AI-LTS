@@ -70,7 +70,7 @@ services:
     volumes:
       - ./storage:/app/server/storage
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=production\n      - STORAGE_DIR=/app/server/storage
     restart: unless-stopped
 EOF_COMPOSE
 

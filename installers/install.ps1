@@ -60,7 +60,7 @@ services:
     volumes:
       - ./storage:/app/server/storage
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=production\n      - STORAGE_DIR=/app/server/storage
     restart: unless-stopped
 "@
 Set-Content -Path "$INSTALL_DIR\docker-compose.yml" -Value $ComposeContent -Encoding UTF8

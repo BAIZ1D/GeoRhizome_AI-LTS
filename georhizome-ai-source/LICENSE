@@ -1,21 +1,17 @@
-The MIT License
+Copyright (c) 2026 BAIZ1D (GeoRhizome AI). All Rights Reserved.
 
-Copyright (c) Mintplex Labs Inc.
+PROPRIETARY AND CONFIDENTIAL
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+This software, including all source code, compiled binaries, and associated documentation, is the proprietary and confidential property of BAIZ1D (GeoRhizome AI).
 
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
+1. NO OPEN SOURCE RIGHTS
+This software is NOT open source. The MIT License previously associated with the underlying architecture has been superseded by this proprietary license for all GeoRhizome AI enterprise deployments.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
+2. RESTRICTIONS ON USE
+No part of this software may be copied, reproduced, distributed, transmitted, broadcast, displayed, sold, licensed, reverse-engineered, or otherwise exploited for any purpose whatsoever outside of authorized internal enterprise deployment without the prior written consent of the owner.
+
+3. UNAUTHORIZED DISTRIBUTION
+Unauthorized copying or distribution of this software or its components, via any medium, is strictly prohibited. Employees granted access to this repository or its software binaries must maintain strict confidentiality.
+
+4. DISCLAIMER
+THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. THE ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE SOFTWARE IS WITH THE USER.

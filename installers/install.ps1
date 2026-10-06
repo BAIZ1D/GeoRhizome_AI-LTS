@@ -83,6 +83,7 @@ echo [NOTICE] ⚠️ 注意: 終了する場合はこの画面で「Enter」キ�
 pause >nul
 echo [INFO] GeoRhizome AI をシャットダウンしています...
 docker compose down >nul 2>&1
+taskkill /F /IM python.exe /T >nul 2>&1
 echo [SUCCESS] システムのシャットダウンが完了しました。
 timeout /t 3 >nul
 "@
@@ -131,7 +132,7 @@ python -m venv .venv
 python -m pip install --upgrade pip | Out-Null
 Write-Host "   🟢 依存パッケージをインストールしています (数分かかる場合があります)..." -ForegroundColor Yellow
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 | Out-Null
-pip install llama-cpp-python fastapi uvicorn sentence-transformers psutil pyyaml | Out-Null
+pip install "llama-cpp-python[server]" fastapi uvicorn sentence-transformers psutil pyyaml | Out-Null
 Write-Host "   🟢 ネイティブAI環境の構築が完了しました！" -ForegroundColor Green
 
 

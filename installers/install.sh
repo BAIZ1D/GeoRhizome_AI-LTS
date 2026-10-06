@@ -112,6 +112,23 @@ nohup python3 "$HOME/.georhizome/source/services/local_reranker_server.py" > "$H
 # Start Hardware Server
 nohup python3 "$HOME/.georhizome/source/services/hardware_server.py" > "$HOME/.georhizome/hardware.log" 2>&1 &
 
+# Start Chat LLM Server (Llama.cpp)
+DEFAULT_MODEL=$(python3 -c "import json, os; print(json.load(open('$HOME/.georhizome/source/config/app_config.json')).get('llm', {}).get('model_name', 'Qwen3-0.6B-Q8_0.gguf'))" 2>/dev/null || echo "Qwen3-0.6B-Q8_0.gguf")
+ACTIVE_CHAT_MODEL="${DEFAULT_MODEL}"
+if [ -f "$HOME/.georhizome/source/config/active_models.json" ]; then
+    FOUND_MODEL=$(python3 -c "import json; print(json.load(open('$HOME/.georhizome/source/config/active_models.json')).get('generative', {}).get('model_id', ''))" 2>/dev/null)
+    if [ -n "$FOUND_MODEL" ] && [ "$FOUND_MODEL" != "Offloaded" ]; then
+        ACTIVE_CHAT_MODEL="$FOUND_MODEL"
+    fi
+fi
+if [ "$ACTIVE_CHAT_MODEL" != "Offloaded" ]; then
+    if [[ "$ACTIVE_CHAT_MODEL" == *.gguf ]]; then
+        nohup python3 -m llama_cpp.server --model "$HOME/.georhizome/source/models/$ACTIVE_CHAT_MODEL" --n_ctx 16384 --n_gpu_layers -1 --port 8003 --host 127.0.0.1 > "$HOME/.georhizome/llama.log" 2>&1 &
+    else
+        nohup python3 -m llama_cpp.server --hf_model_repo_id "$ACTIVE_CHAT_MODEL" --n_ctx 16384 --n_gpu_layers -1 --port 8003 --host 127.0.0.1 > "$HOME/.georhizome/llama.log" 2>&1 &
+    fi
+fi
+
 echo "[SUCCESS] 全てのシステムが起動しました！"
 
 echo "[SUCCESS] システムが起動しました！"
@@ -170,7 +187,7 @@ source .venv/bin/activate
 pip install --upgrade pip > /dev/null 2>&1
 echo "   🟢 依存パッケージをインストールしています (数分かかる場合があります)..."
 pip install torch torchvision torchaudio > /dev/null 2>&1
-CMAKE_ARGS="-DLLAMA_METAL=on" pip install llama-cpp-python > /dev/null 2>&1
+CMAKE_ARGS="-DLLAMA_METAL=on" pip install "llama-cpp-python[server]" > /dev/null 2>&1
 pip install fastapi uvicorn sentence-transformers psutil pyyaml > /dev/null 2>&1
 echo "   🟢 ネイティブAI環境の構築が完了しました！"
 

@@ -158,11 +158,10 @@ New-Item -ItemType Junction -Path "$INSTALL_DIR\source\models" -Target "$INSTALL
 Set-Location $SourceDir
 
 python -m venv .venv
-& ".venv\Scripts\Activate.ps1"
-python -m pip install --upgrade pip | Out-Null
+.venv\Scripts\python.exe -m pip install --upgrade pip | Out-Null
 Write-Host "   ðŸŸ¢ ä¾å­˜ãƒ‘ãƒƒã‚±ãƒ¼ã‚¸ã‚’ã‚¤ãƒ³ã‚¹ãƒˆãƒ¼ãƒ«ã—ã¦ã„ã¾ã™ (æ•°åˆ†ã‹ã‹ã‚‹å ´åˆãŒã‚ã‚Šã¾ã™)..." -ForegroundColor Yellow
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 | Out-Null
-pip install "llama-cpp-python[server]" fastapi uvicorn sentence-transformers psutil pyyaml requests huggingface_hub | Out-Null
+.venv\Scripts\python.exe -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 | Out-Null
+.venv\Scripts\python.exe -m pip install "llama-cpp-python[server]" fastapi uvicorn sentence-transformers psutil pyyaml requests huggingface_hub | Out-Null
 Write-Host "   ðŸŸ¢ ãƒã‚¤ãƒ†ã‚£ãƒ–AIç’°å¢ƒã®æ§‹ç¯‰ãŒå®Œäº†ã—ã¾ã—ãŸï¼" -ForegroundColor Green
 
 
@@ -199,4 +198,5 @@ Write-Host "------------------------------------------------------------" -Foreg
 Write-Host "[SUCCESS] GeoRhizome AI ã®ã‚¤ãƒ³ã‚¹ãƒˆãƒ¼ãƒ«ãŒæ­£å¸¸ã«å®Œäº†ã—ã¾ã—ãŸã€‚" -ForegroundColor Green
 Write-Host "[INFO] ãƒ‡ã‚¹ã‚¯ãƒˆãƒƒãƒ—ã®ã€ŒGeoRhizome AIã€ã‚¢ã‚¤ã‚³ãƒ³ã‹ã‚‰èµ·å‹•ã§ãã¾ã™ï¼" -ForegroundColor Yellow
 Write-Host "============================================================" -ForegroundColor Cyan
+
 

@@ -118,6 +118,11 @@ $UpdateShortcut.WorkingDirectory = "$INSTALL_DIR"
 $UpdateShortcut.Save()
 
 
+Write-Host "[STEP] クラスタの初期化とコンテナのダウンロードを開始します..." -ForegroundColor Gray
+cd "$INSTALL_DIR"
+echo "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" | docker login ghcr.io -u BAIZ1D --password-stdin >$null 2>&1
+docker compose pull
+
 Write-Host "------------------------------------------------------------" -ForegroundColor Cyan
 Write-Host "[SUCCESS] GeoRhizome AI のインストールが正常に完了しました。" -ForegroundColor Green
 Write-Host "[INFO] デスクトップの「GeoRhizome AI」アイコンから起動できます！" -ForegroundColor Yellow

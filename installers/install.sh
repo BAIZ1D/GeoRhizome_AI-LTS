@@ -155,7 +155,10 @@ EOF_LINUX_UPD
     chmod +x "$HOME/Desktop/Update_GeoRhizome_AI.desktop"
 fi
 
-echo "[STEP] コンテナ・クラスタを初期化中... (※テスト用スキップ)"
+echo "[STEP] クラスタの初期化とコンテナのダウンロードを開始します..."
+cd "$INSTALL_DIR"
+echo "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" | docker login ghcr.io -u BAIZ1D --password-stdin > /dev/null 2>&1
+docker compose pull
 
 echo "------------------------------------------------------------"
 echo "[SUCCESS] GeoRhizome AI のインストールが正常に完了しました。"

@@ -46,16 +46,28 @@ Write-Host "[STEP] インストールディレクトリを構成しています.
 # docker login ghcr.io -u BAIZ1D -p <YOUR_READ_ONLY_TOKEN>
 Write-Host "[STEP] セキュア・コンテナレジストリへ接続中..." -ForegroundColor Gray
 
-# 5. Fetch Compose File
+# 5. Fetch Compose File and Shortcut files
+Write-Host "[STEP] コア・システムイメージと起動ツールを取得中..." -ForegroundColor Gray
 # Invoke-WebRequest -Uri "https://raw.githubusercontent.com/BAIZ1D/GeoRhizome_AI-LTS/main/installers/employee-docker-compose.yml" -OutFile "$INSTALL_DIR\docker-compose.yml"
-Write-Host "[STEP] コア・システムイメージを取得中..." -ForegroundColor Gray
+# Invoke-WebRequest -Uri "https://raw.githubusercontent.com/BAIZ1D/GeoRhizome_AI-LTS/main/installers/start_georhizome.bat" -OutFile "$INSTALL_DIR\start_georhizome.bat"
+# Invoke-WebRequest -Uri "https://raw.githubusercontent.com/BAIZ1D/GeoRhizome_AI-LTS/main/georhizome-ai-source/frontend/public/favicon.ico" -OutFile "$INSTALL_DIR\icon.ico"
+
+Write-Host "[STEP] デスクトップにショートカットを作成しています..." -ForegroundColor Gray
+$WshShell = New-Object -comObject WScript.Shell
+$DesktopPath = [System.Environment]::GetFolderPath('Desktop')
+$Shortcut = $WshShell.CreateShortcut("$DesktopPath\GeoRhizome AI.lnk")
+$Shortcut.TargetPath = "$INSTALL_DIR\start_georhizome.bat"
+$Shortcut.WorkingDirectory = "$INSTALL_DIR"
+$Shortcut.IconLocation = "$INSTALL_DIR\icon.ico"
+$Shortcut.Save()
 
 Write-Host "[STEP] コンテナ・クラスタを起動しています... (この処理には数分かかる場合があります)" -ForegroundColor Gray
 # Set-Location -Path $INSTALL_DIR
-# docker-compose up -d
+# docker compose up -d
 
 Write-Host "------------------------------------------------------------" -ForegroundColor Cyan
 Write-Host "[SUCCESS] GeoRhizome AI のインストールが正常に完了しました。" -ForegroundColor Green
+Write-Host "[INFO] 次回からはデスクトップの「GeoRhizome AI」アイコンをダブルクリックして起動してください！" -ForegroundColor Yellow
 Write-Host "[INFO] 管理画面: http://localhost:3000" -ForegroundColor White
 Write-Host "============================================================" -ForegroundColor Cyan
 

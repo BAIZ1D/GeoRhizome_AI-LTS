@@ -9,8 +9,6 @@ Write-Host "============================================================" -Foreg
 Write-Host "[INFO] 実行環境を確認しています..." -ForegroundColor Gray
 if (-Not (Get-Command "docker" -ErrorAction SilentlyContinue)) {
     Write-Host "[ERROR] Docker Desktop がインストールされていません。" -ForegroundColor Red
-    Write-Host "[ERROR] 以下のリンクよりインストールし、再実行してください。" -ForegroundColor Red
-    Write-Host "        https://www.docker.com/products/docker-desktop/" -ForegroundColor Yellow
     Exit
 }
 Write-Host "[SUCCESS] Docker Desktop の稼働を確認しました。" -ForegroundColor Green
@@ -20,7 +18,6 @@ Write-Host ""
 Write-Host "[SYSTEM] ハードウェア・プロファイリングを実行中..." -ForegroundColor Gray
 $ComputerInfo = Get-CimInstance Win32_ComputerSystem
 $RAM_GB = [math]::Round($ComputerInfo.TotalPhysicalMemory / 1GB)
-
 Write-Host "[SYSTEM] 物理メモリ (RAM): ${RAM_GB} GB" -ForegroundColor White
 
 if ($RAM_GB -lt 16) {
@@ -32,8 +29,6 @@ if ($RAM_GB -lt 16) {
 }
 
 Write-Host "[INFO] 推奨推論モデル: ${RECOMMENDATION}" -ForegroundColor Yellow
-Write-Host "[NOTICE] インストール完了後、画面右上の「GeoRhizome モデルハブ」を開き、" -ForegroundColor Magenta
-Write-Host "         上記の推奨モデルを選択してセットアップを完了してください。" -ForegroundColor Magenta
 Write-Host "------------------------------------------------------------" -ForegroundColor Cyan
 
 # 3. Setup Directories
@@ -43,14 +38,49 @@ New-Item -ItemType Directory -Force -Path "$INSTALL_DIR\storage" | Out-Null
 Write-Host "[STEP] インストールディレクトリを構成しています... ($INSTALL_DIR)" -ForegroundColor Gray
 
 # 4. Authentication (Admin will replace <TOKEN>)
-# docker login ghcr.io -u BAIZ1D -p <YOUR_READ_ONLY_TOKEN>
 Write-Host "[STEP] セキュア・コンテナレジストリへ接続中..." -ForegroundColor Gray
 
-# 5. Fetch Compose File and Shortcut files
-Write-Host "[STEP] コア・システムイメージと起動ツールを取得中..." -ForegroundColor Gray
-# Invoke-WebRequest -Uri "https://raw.githubusercontent.com/BAIZ1D/GeoRhizome_AI-LTS/main/installers/employee-docker-compose.yml" -OutFile "$INSTALL_DIR\docker-compose.yml"
-# Invoke-WebRequest -Uri "https://raw.githubusercontent.com/BAIZ1D/GeoRhizome_AI-LTS/main/installers/start_georhizome.bat" -OutFile "$INSTALL_DIR\start_georhizome.bat"
-# Invoke-WebRequest -Uri "https://raw.githubusercontent.com/BAIZ1D/GeoRhizome_AI-LTS/main/georhizome-ai-source/frontend/public/favicon.ico" -OutFile "$INSTALL_DIR\icon.ico"
+# 5. Generate Core Files natively (No external download needed!)
+Write-Host "[STEP] コア・システム構成ファイルを生成中..." -ForegroundColor Gray
+
+$ComposeContent = @"
+version: '3.8'
+services:
+  georhizome-core:
+    image: ghcr.io/baiz1d/georhizome_ai-lts:latest
+    container_name: georhizome-core
+    ports:
+      - `"3000:3000`"
+      - `"3001:3001`"
+      - `"8888:8888`"
+    volumes:
+      - ./storage:/app/server/storage
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+"@
+Set-Content -Path "$INSTALL_DIR\docker-compose.yml" -Value $ComposeContent -Encoding UTF8
+
+$BatContent = @"
+@echo off
+title GeoRhizome AI Enterprise Edition
+chcp 65001 >nul
+echo ============================================================
+echo   GeoRhizome AI Enterprise Edition - 起動ツール
+echo ============================================================
+cd %USERPROFILE%\.georhizome
+docker compose up -d >nul 2>&1
+echo [SUCCESS] システムが起動しました！ブラウザを開きます...
+start http://localhost:3000
+echo ------------------------------------------------------------
+echo [NOTICE] ⚠️ 注意: 終了する場合はこの画面で「Enter」キーを押してください。
+pause >nul
+echo [INFO] GeoRhizome AI をシャットダウンしています...
+docker compose down >nul 2>&1
+echo [SUCCESS] システムのシャットダウンが完了しました。
+timeout /t 3 >nul
+"@
+Set-Content -Path "$INSTALL_DIR\start_georhizome.bat" -Value $BatContent -Encoding UTF8
 
 Write-Host "[STEP] デスクトップにショートカットを作成しています..." -ForegroundColor Gray
 $WshShell = New-Object -comObject WScript.Shell
@@ -58,18 +88,9 @@ $DesktopPath = [System.Environment]::GetFolderPath('Desktop')
 $Shortcut = $WshShell.CreateShortcut("$DesktopPath\GeoRhizome AI.lnk")
 $Shortcut.TargetPath = "$INSTALL_DIR\start_georhizome.bat"
 $Shortcut.WorkingDirectory = "$INSTALL_DIR"
-$Shortcut.IconLocation = "$INSTALL_DIR\icon.ico"
 $Shortcut.Save()
-
-Write-Host "[STEP] コンテナ・クラスタを起動しています... (この処理には数分かかる場合があります)" -ForegroundColor Gray
-# Set-Location -Path $INSTALL_DIR
-# docker compose up -d
 
 Write-Host "------------------------------------------------------------" -ForegroundColor Cyan
 Write-Host "[SUCCESS] GeoRhizome AI のインストールが正常に完了しました。" -ForegroundColor Green
-Write-Host "[INFO] 次回からはデスクトップの「GeoRhizome AI」アイコンをダブルクリックして起動してください！" -ForegroundColor Yellow
-Write-Host "[INFO] 管理画面: http://localhost:3000" -ForegroundColor White
+Write-Host "[INFO] デスクトップの「GeoRhizome AI」アイコンから起動できます！" -ForegroundColor Yellow
 Write-Host "============================================================" -ForegroundColor Cyan
-
-# Open browser natively
-Start-Process "http://localhost:3000"

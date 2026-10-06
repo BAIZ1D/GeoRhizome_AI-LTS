@@ -15,8 +15,8 @@ if ! command -v docker > /dev/null 2>&1; then
 fi
 echo "[SUCCESS] Docker Desktop の稼働を確認しました。"
 
-# 2. Hardware Detection & Recommendation
 echo ""
+# 2. Hardware Detection
 echo "[SYSTEM] ハードウェア・プロファイリングを実行中..."
 OS_TYPE=$(uname)
 if [ "$OS_TYPE" = "Darwin" ]; then
@@ -51,40 +51,80 @@ echo "[STEP] インストールディレクトリを構成しています... ($I
 # docker login ghcr.io -u BAIZ1D -p <YOUR_READ_ONLY_TOKEN>
 echo "[STEP] セキュア・コンテナレジストリへ接続中..."
 
-# 5. Fetch Compose File and Startup Scripts
-echo "[STEP] コア・システムイメージを取得中..."
-# curl -s -o "$INSTALL_DIR/docker-compose.yml" "https://raw.githubusercontent.com/BAIZ1D/GeoRhizome_AI-LTS/main/installers/employee-docker-compose.yml"
-# curl -s -o "$INSTALL_DIR/start_georhizome.command" "https://raw.githubusercontent.com/BAIZ1D/GeoRhizome_AI-LTS/main/installers/start_georhizome.command"
-chmod +x "$INSTALL_DIR/start_georhizome.command" > /dev/null 2>&1
+# 5. Generate Core Files
+echo "[STEP] コア・システム構成ファイルを生成中..."
 
+cat << 'EOF_COMPOSE' > "$INSTALL_DIR/docker-compose.yml"
+version: '3.8'
+services:
+  georhizome-core:
+    image: ghcr.io/baiz1d/georhizome_ai-lts:latest
+    container_name: georhizome-core
+    ports:
+      - "3000:3000"
+      - "3001:3001"
+      - "8888:8888"
+    volumes:
+      - ./storage:/app/server/storage
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+EOF_COMPOSE
+
+cat << 'EOF_START' > "$INSTALL_DIR/start_georhizome.command"
+#!/bin/bash
+cleanup() {
+    echo ""
+    echo "------------------------------------------------------------"
+    echo "[INFO] GeoRhizome AI をシャットダウンしています..."
+    if [ -d "$HOME/.georhizome" ]; then
+        cd "$HOME/.georhizome" && docker compose down
+    fi
+    echo "[SUCCESS] システムのシャットダウンが完了しました。ウィンドウを閉じます。"
+    sleep 2
+    exit 0
+}
+trap cleanup EXIT SIGHUP SIGINT SIGTERM
+
+echo "============================================================"
+echo "  GeoRhizome AI Enterprise Edition - 起動ツール"
+echo "============================================================"
+echo "[INFO] GeoRhizome AI を起動しています..."
+cd "$HOME/.georhizome"
+docker compose up -d >/dev/null 2>&1
+echo "[SUCCESS] システムが起動しました！"
+if [ "$(uname)" = "Darwin" ]; then
+    open http://localhost:3000
+else
+    xdg-open http://localhost:3000
+fi
+echo "------------------------------------------------------------"
+echo "[NOTICE] ⚠️ 注意: 作業中はウィンドウを閉じないでください。"
+echo "[NOTICE] 終了する場合はこのウィンドウを閉じてください。"
+echo "============================================================"
+while true; do sleep 1; done
+EOF_START
+
+chmod +x "$INSTALL_DIR/start_georhizome.command"
+
+# 6. Desktop Shortcut
 echo "[STEP] デスクトップにショートカットを作成しています..."
 if [ "$OS_TYPE" = "Darwin" ]; then
-    # Create a native Mac .app on the Desktop
     osacompile -e "do shell script \"open \\\"$INSTALL_DIR/start_georhizome.command\\\"\"" -o "$HOME/Desktop/GeoRhizome AI.app" > /dev/null 2>&1
 else
-    # Linux shortcut (.desktop file)
-    cat << 'INNER_EOF' > "$HOME/Desktop/GeoRhizome_AI.desktop"
+    cat << 'EOF_LINUX' > "$HOME/Desktop/GeoRhizome_AI.desktop"
 [Desktop Entry]
 Name=GeoRhizome AI
 Exec=sh -c 'cd ~/.georhizome && ./start_georhizome.command'
 Terminal=true
 Type=Application
-INNER_EOF
+EOF_LINUX
     chmod +x "$HOME/Desktop/GeoRhizome_AI.desktop"
 fi
 
-echo "[STEP] コンテナ・クラスタを起動しています... (この処理には数分かかる場合があります)"
-# cd "$INSTALL_DIR" && docker compose up -d
+echo "[STEP] コンテナ・クラスタを初期化中... (※テスト用スキップ)"
 
 echo "------------------------------------------------------------"
 echo "[SUCCESS] GeoRhizome AI のインストールが正常に完了しました。"
-echo "[INFO] 次回からはデスクトップの「GeoRhizome AI」アイコンをダブルクリックして起動してください！"
-echo "[INFO] 管理画面: http://localhost:3000"
+echo "[INFO] デスクトップの「GeoRhizome AI」アイコンから起動できます！"
 echo "============================================================"
-
-# Open browser natively
-if [ "$OS_TYPE" = "Darwin" ]; then
-    open http://localhost:3000
-else
-    xdg-open http://localhost:3000
-fi

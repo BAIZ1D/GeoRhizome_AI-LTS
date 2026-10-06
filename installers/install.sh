@@ -69,6 +69,7 @@ services:
       - "8888:8888"
     volumes:
       - ./storage:/app/server/storage
+      - ./source/config:/config
     environment:
       - NODE_ENV=production
       - GHCR_READ_TOKEN=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
@@ -79,6 +80,17 @@ EOF_COMPOSE
 
 cat << 'EOF_START' > "$INSTALL_DIR/start_georhizome.command"
 #!/bin/bash
+check_port() {
+    if lsof -i :$1 >/dev/null 2>&1; then
+        echo "[ERROR] ポート $1 が既に使用されています。他のアプリケーションを終了してください。"
+        exit 1
+    fi
+}
+check_port 3000
+check_port 8000
+check_port 8001
+check_port 8003
+
 cleanup() {
     echo ""
     echo "------------------------------------------------------------"
@@ -175,6 +187,8 @@ echo "[STEP] AI推論エンジンのネイティブ環境を構築中 (Python / 
 
 # Download the python source code natively
 mkdir -p "$INSTALL_DIR/source"
+mkdir -p "$INSTALL_DIR/storage/models"
+
 echo "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" > "$INSTALL_DIR/git_token.txt"
 curl -s -H "Authorization: token $(cat "$INSTALL_DIR/git_token.txt")" -L https://api.github.com/repos/BAIZ1D/GeoRhizome_AI-LTS/tarball/main | tar -xz -C "$INSTALL_DIR/source" --strip-components=1
 rm "$INSTALL_DIR/git_token.txt"
@@ -185,7 +199,11 @@ if ! command -v python3 > /dev/null 2>&1; then
     exit 1
 fi
 
+
+rm -rf "$INSTALL_DIR/source/models"
+ln -s "$INSTALL_DIR/storage/models" "$INSTALL_DIR/source/models"
 cd "$INSTALL_DIR/source"
+
 python3 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip > /dev/null 2>&1

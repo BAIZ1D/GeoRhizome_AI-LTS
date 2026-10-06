@@ -59,6 +59,7 @@ services:
       - "8888:8888"
     volumes:
       - ./storage:/app/server/storage
+      - ./source/config:/config
     environment:
       - NODE_ENV=production
       - GHCR_READ_TOKEN=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
@@ -84,7 +85,10 @@ echo [NOTICE] ⚠️ 注意: 終了する場合はこの画面で「Enter」キ�
 pause >nul
 echo [INFO] GeoRhizome AI をシャットダウンしています...
 docker compose down >nul 2>&1
-taskkill /F /IM python.exe /T >nul 2>&1
+wmic process where "commandline like '%local_bge_server.py%'" call terminate >nul 2>&1
+        wmic process where "commandline like '%local_reranker_server.py%'" call terminate >nul 2>&1
+        wmic process where "commandline like '%hardware_server.py%'" call terminate >nul 2>&1
+        wmic process where "commandline like '%llama_cpp.server%'" call terminate >nul 2>&1
 echo [SUCCESS] システムのシャットダウンが完了しました。
 timeout /t 3 >nul
 "@
@@ -122,6 +126,8 @@ Set-Content -Path "$INSTALL_DIR\update_georhizome.bat" -Value $UpdateBatContent 
 Write-Host "[STEP] AI推論エンジンのネイティブ環境を構築中 (Python / CUDA)..." -ForegroundColor Cyan
 
 $SourceDir = "$INSTALL_DIR\source"
+New-Item -ItemType Directory -Force -Path "$INSTALL_DIR\storage\models" | Out-Null
+
 New-Item -ItemType Directory -Force -Path $SourceDir | Out-Null
 $Token = "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"
 $Headers = @{ Authorization = "token $Token" }
@@ -136,8 +142,18 @@ if (-not (Get-Command "python" -ErrorAction SilentlyContinue)) {
     Write-Host "[ERROR] Pythonが見つかりません。インストールしてください。" -ForegroundColor Red
     exit 1
 }
+try {
+    python -c "import sys; sys.exit(0 if sys.version_info >= (3,8) else 1)"
+} catch {
+    Write-Host "[ERROR] Python 3.8以上が必要です。" -ForegroundColor Red
+    exit 1
+}
 
+
+if (Test-Path "$INSTALL_DIR\source\models") { Remove-Item "$INSTALL_DIR\source\models" -Recurse -Force }
+New-Item -ItemType Junction -Path "$INSTALL_DIR\source\models" -Target "$INSTALL_DIR\storage\models" | Out-Null
 Set-Location $SourceDir
+
 python -m venv .venv
 & ".venv\Scripts\Activate.ps1"
 python -m pip install --upgrade pip | Out-Null

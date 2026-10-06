@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import WorkspaceName from "./WorkspaceName";
 import SuggestedChatMessages from "./SuggestedChatMessages";
 import DeleteWorkspace from "./DeleteWorkspace";
+import KnowledgeSync from "./KnowledgeSync";
 import CTAButton from "@/components/lib/CTAButton";
 
 export default function GeneralInfo({ slug }) {
@@ -64,7 +65,8 @@ export default function GeneralInfo({ slug }) {
         />
       </form>
       <SuggestedChatMessages slug={workspace.slug} />
-      <DeleteWorkspace workspace={workspace} />
+      <KnowledgeSync workspace={workspace} />
+        <DeleteWorkspace workspace={workspace} />
     </div>
   );
 }

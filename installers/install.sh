@@ -70,7 +70,19 @@ services:
     volumes:
       - ./storage:/app/server/storage
     environment:
-      - NODE_ENV=production\n      - STORAGE_DIR=/app/server/storage
+      - NODE_ENV=production
+      - STORAGE_DIR=/app/server/storage
+    restart: unless-stopped
+    depends_on:
+      - ollama
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: georhizome-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ./ollama:/root/.ollama
     restart: unless-stopped
 EOF_COMPOSE
 

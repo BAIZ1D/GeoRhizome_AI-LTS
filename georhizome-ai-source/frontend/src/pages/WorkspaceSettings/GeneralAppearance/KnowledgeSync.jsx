@@ -23,11 +23,11 @@ export default function KnowledgeSync({ workspace }) {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Failed to sync workspace");
       
-      showToast("✅ 同期が完了しました！", "success", { clear: true });
+      showToast("同期が完了しました。", "success", { clear: true });
       setTimeout(() => window.location.reload(), 2000);
     } catch (e) {
       console.error(e);
-      showToast(`❌ 同期エラー: ${e.message}`, "error", { clear: true });
+      showToast(`同期エラー: ${e.message}`, "error", { clear: true });
     } finally {
       setSyncing(false);
     }
@@ -54,10 +54,10 @@ export default function KnowledgeSync({ workspace }) {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Failed to upload workspace");
       
-      showToast("✅ 知識のアップロードが完了しました！", "success", { clear: true });
+      showToast("ナレッジのアップロードが完了しました。", "success", { clear: true });
     } catch (e) {
       console.error(e);
-      showToast(`❌ アップロードエラー: ${e.message}`, "error", { clear: true });
+      showToast(`アップロードエラー: ${e.message}`, "error", { clear: true });
     } finally {
       setUploading(false);
       setPassword("");
@@ -67,7 +67,7 @@ export default function KnowledgeSync({ workspace }) {
   return (
     <div className="mt-8">
       <div className="flex flex-col gap-y-2">
-        <h2 className="text-xl font-semibold text-white">エンタープライズ・ナレッジ同期 (Enterprise Knowledge Sync)</h2>
+        <h2 className="text-xl font-semibold text-white">エンタープライズ・ナレッジ同期</h2>
         <p className="text-sm text-theme-text-secondary">
           全社共通のガイドラインやマニュアルを最新バージョンに同期します。管理者のみアップロードが可能です。
         </p>
@@ -80,7 +80,7 @@ export default function KnowledgeSync({ workspace }) {
           onClick={handleSync}
           className="px-4 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-all text-sm font-medium disabled:opacity-50"
         >
-          {syncing ? "同期中..." : "⬇️ 最新ナレッジを同期 (Sync)"}
+          {syncing ? "同期を実行しています..." : "最新ナレッジを同期"}
         </button>
 
         <button
@@ -89,7 +89,7 @@ export default function KnowledgeSync({ workspace }) {
           onClick={() => setShowPasswordModal(true)}
           className="px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-all text-sm font-medium disabled:opacity-50"
         >
-          {uploading ? "アップロード中..." : "⬆️ ナレッジをアップロード (Admin Upload)"}
+          {uploading ? "アップロードを実行しています..." : "ナレッジをアップロード"}
         </button>
       </div>
 

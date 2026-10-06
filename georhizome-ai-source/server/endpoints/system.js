@@ -65,6 +65,294 @@ const { AgentSkillWhitelist } = require("../models/agentSkillWhitelist");
 function systemEndpoints(app) {
   if (!app) return;
 
+  
+  // =========================================================================
+  // GEORHIZOME AI: ENTERPRISE KNOWLEDGE SYNC (PILLAR 4)
+  // =========================================================================
+  
+  app.post("/upload-workspace", async (request, response) => {
+    try {
+      const { slug, password } = request.body;
+      if (!slug || !password) return response.status(400).json({ error: "Missing slug or password" });
+
+      const crypto = require("crypto");
+      const hash = crypto.createHash("sha256").update(password).digest("hex");
+      // Hardcoded hash for GeoRhizomeHAMIDBAIZIDAL
+      if (hash !== "765839e0ebfcdf6b2727cbcbf452298739112d24f259d63630a472f26245b7cc") {
+        return response.status(401).json({ error: "Unauthorized: Invalid Master Password" });
+      }
+
+      const writeToken = process.env.GHCR_WRITE_TOKEN;
+      if (!writeToken) {
+        return response.status(500).json({ error: "GHCR_WRITE_TOKEN is not set in the Admin's .env file." });
+      }
+
+      const { Workspace } = require("../models/workspace");
+      const { WorkspaceDocument } = require("../models/workspaceDocument");
+      const { DocumentVectors } = require("../models/vectors");
+
+      const workspace = await Workspace.get({ slug });
+      if (!workspace) return response.status(404).json({ error: "Workspace not found" });
+
+      const workspaceDocuments = await WorkspaceDocument.where({ workspaceId: workspace.id });
+      // Get document vectors for this workspace
+      // Actually LanceDB holds the vectors, we just need the SQLite mapping
+      // Since DocumentVectors maps docId to vectorId, we fetch all that match the docIds
+      let documentVectors = [];
+      if (workspaceDocuments.length > 0) {
+        const docIds = workspaceDocuments.map(wd => wd.docId);
+        // Note: SQLite limits IN clauses, but for simple use cases it's fine. 
+        // We'll export the mappings just in case, though they are regeneratable.
+        documentVectors = await DocumentVectors.where({ docId: { in: docIds } });
+      }
+
+      const metadata = {
+        workspace,
+        workspaceDocuments,
+        documentVectors
+      };
+
+      const os = require("os");
+      const fs = require("fs");
+      const path = require("path");
+      const { execSync } = require("child_process");
+
+      const tempDir = path.join(os.tmpdir(), `georhizome_export_${slug}_${Date.now()}`);
+      fs.mkdirSync(tempDir, { recursive: true });
+
+      // Write metadata
+      fs.writeFileSync(path.join(tempDir, "metadata.json"), JSON.stringify(metadata, null, 2));
+
+      // Copy LanceDB
+      const lancedbSrc = path.join(__dirname, "..", "storage", "lancedb", `${slug}.lance`);
+      const lancedbDest = path.join(tempDir, `${slug}.lance`);
+      if (fs.existsSync(lancedbSrc)) {
+        execSync(`cp -r "${lancedbSrc}" "${lancedbDest}"`);
+      }
+
+      // Tar it up
+      const tarPath = path.join(os.tmpdir(), `workspace-${slug}.tar.gz`);
+      execSync(`tar -czf "${tarPath}" -C "${tempDir}" .`);
+
+      // === GITHUB API UPLOAD ===
+      const repo = "BAIZ1D/GeoRhizome_AI-LTS";
+      const headers = {
+        "Authorization": `token ${writeToken}`,
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "GeoRhizome-AI-Admin"
+      };
+
+      // 1. Check if release exists
+      const fetch = require("node-fetch");
+      let releaseId;
+      const getRelRes = await fetch(`https://api.github.com/repos/${repo}/releases/tags/workspace-${slug}`, { headers });
+      if (getRelRes.ok) {
+        const relData = await getRelRes.json();
+        releaseId = relData.id;
+        // Delete old asset if exists
+        const oldAsset = relData.assets.find(a => a.name === `vectors.tar.gz`);
+        if (oldAsset) {
+          await fetch(`https://api.github.com/repos/${repo}/releases/assets/${oldAsset.id}`, { method: 'DELETE', headers });
+        }
+      } else {
+        // Create release
+        const createRes = await fetch(`https://api.github.com/repos/${repo}/releases`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            tag_name: `workspace-${slug}`,
+            name: `Workspace: ${workspace.name}`,
+            body: "Auto-generated GeoRhizome Knowledge Base Sync",
+            draft: false,
+            prerelease: false
+          })
+        });
+        const createData = await createRes.json();
+        if (!createData.id) throw new Error("Failed to create GitHub Release");
+        releaseId = createData.id;
+      }
+
+      // 2. Upload Asset
+      const stat = fs.statSync(tarPath);
+      const uploadRes = await fetch(`https://uploads.github.com/repos/${repo}/releases/${releaseId}/assets?name=vectors.tar.gz`, {
+        method: 'POST',
+        headers: {
+          ...headers,
+          "Content-Type": "application/gzip",
+          "Content-Length": stat.size
+        },
+        body: fs.createReadStream(tarPath)
+      });
+
+      if (!uploadRes.ok) {
+        const err = await uploadRes.text();
+        throw new Error(`Upload failed: ${err}`);
+      }
+
+      // Cleanup
+      fs.rmSync(tempDir, { recursive: true, force: true });
+      fs.unlinkSync(tarPath);
+
+      response.status(200).json({ success: true, message: "Workspace successfully exported and pushed to GitHub!" });
+    } catch (e) {
+      console.error(e);
+      response.status(500).json({ error: e.message });
+    }
+  });
+
+  
+  app.post("/sync-workspace", async (request, response) => {
+    try {
+      const { slug } = request.body;
+      if (!slug) return response.status(400).json({ error: "Missing slug" });
+
+      const readToken = process.env.GHCR_READ_TOKEN;
+      if (!readToken) return response.status(500).json({ error: "GHCR_READ_TOKEN is missing in the environment." });
+
+      const repo = "BAIZ1D/GeoRhizome_AI-LTS";
+      const headers = {
+        "Authorization": `token ${readToken}`,
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "GeoRhizome-AI"
+      };
+
+      const fetch = require("node-fetch");
+      
+      // 1. Get Release Asset ID
+      const relRes = await fetch(`https://api.github.com/repos/${repo}/releases/tags/workspace-${slug}`, { headers });
+      if (!relRes.ok) return response.status(404).json({ error: "No synced vectors found for this workspace." });
+      const relData = await relRes.json();
+      const asset = relData.assets.find(a => a.name === "vectors.tar.gz");
+      if (!asset) return response.status(404).json({ error: "Asset not found in release." });
+
+      // 2. Download Asset
+      const os = require("os");
+      const fs = require("fs");
+      const path = require("path");
+      const { pipeline } = require("stream");
+      const { promisify } = require("util");
+      const streamPipeline = promisify(pipeline);
+
+      const tarPath = path.join(os.tmpdir(), `download-${slug}-${Date.now()}.tar.gz`);
+      
+      const downloadRes = await fetch(asset.url, {
+        headers: { ...headers, "Accept": "application/octet-stream" }
+      });
+      if (!downloadRes.ok) throw new Error("Failed to download vector archive");
+      
+      await streamPipeline(downloadRes.body, fs.createWriteStream(tarPath));
+
+      // 3. Extract Archive
+      const { execSync } = require("child_process");
+      const extractDir = path.join(os.tmpdir(), `extract-${slug}-${Date.now()}`);
+      fs.mkdirSync(extractDir, { recursive: true });
+      execSync(`tar -xzf "${tarPath}" -C "${extractDir}"`);
+
+      // 4. Merge Metadata into SQLite
+      const metadataPath = path.join(extractDir, "metadata.json");
+      const metadata = JSON.parse(fs.readFileSync(metadataPath, "utf8"));
+      
+      const { Workspace } = require("../models/workspace");
+      const { WorkspaceDocument } = require("../models/workspaceDocument");
+      const { DocumentVectors } = require("../models/vectors");
+
+      // We use Prisma directly for raw upserts to prevent AnythingLLM wrapper bugs
+      const { prisma } = require("../utils/prisma");
+
+      // Upsert Workspace
+      const w = metadata.workspace;
+      const localWorkspace = await prisma.workspaces.upsert({
+        where: { slug: w.slug },
+        update: {
+          name: w.name,
+          vectorTag: w.vectorTag,
+          openAiTemp: w.openAiTemp,
+          openAiHistory: w.openAiHistory,
+          openAiPrompt: w.openAiPrompt,
+          similarityThreshold: w.similarityThreshold,
+          chatProvider: w.chatProvider,
+          chatModel: w.chatModel,
+          topN: w.topN,
+          chatMode: w.chatMode,
+          vectorSearchMode: w.vectorSearchMode
+        },
+        create: {
+          name: w.name,
+          slug: w.slug,
+          vectorTag: w.vectorTag,
+          openAiTemp: w.openAiTemp,
+          openAiHistory: w.openAiHistory,
+          openAiPrompt: w.openAiPrompt,
+          similarityThreshold: w.similarityThreshold,
+          chatProvider: w.chatProvider,
+          chatModel: w.chatModel,
+          topN: w.topN,
+          chatMode: w.chatMode,
+          vectorSearchMode: w.vectorSearchMode
+        }
+      });
+
+      // Upsert Workspace Documents
+      for (const wd of metadata.workspaceDocuments) {
+        await prisma.workspace_documents.upsert({
+          where: { docId: wd.docId },
+          update: {
+            workspaceId: localWorkspace.id,
+            filename: wd.filename,
+            docpath: wd.docpath,
+            metadata: wd.metadata
+          },
+          create: {
+            docId: wd.docId,
+            workspaceId: localWorkspace.id,
+            filename: wd.filename,
+            docpath: wd.docpath,
+            metadata: wd.metadata
+          }
+        });
+      }
+
+      // Re-insert Document Vectors
+      if (metadata.documentVectors && metadata.documentVectors.length > 0) {
+        const docIds = [...new Set(metadata.documentVectors.map(dv => dv.docId))];
+        // Clear existing vectors for these documents to avoid duplicates
+        await prisma.document_vectors.deleteMany({
+          where: { docId: { in: docIds } }
+        });
+        
+        // Batch insert the new mappings
+        await prisma.document_vectors.createMany({
+          data: metadata.documentVectors.map(dv => ({
+            docId: dv.docId,
+            vectorId: dv.vectorId
+          }))
+        });
+      }
+
+      // 5. Move LanceDB Folder
+      const lancedbSrc = path.join(extractDir, `${slug}.lance`);
+      const lancedbDest = path.join(__dirname, "..", "storage", "lancedb", `${slug}.lance`);
+      
+      // Delete existing local vectors for this workspace if they exist to prevent corruption
+      if (fs.existsSync(lancedbDest)) {
+        fs.rmSync(lancedbDest, { recursive: true, force: true });
+      }
+      
+      if (fs.existsSync(lancedbSrc)) {
+        execSync(`cp -r "${lancedbSrc}" "${lancedbDest}"`);
+      }
+
+      // Cleanup
+      fs.rmSync(extractDir, { recursive: true, force: true });
+      fs.unlinkSync(tarPath);
+
+      response.status(200).json({ success: true, message: "Workspace synchronized successfully!" });
+    } catch (e) {
+      console.error(e);
+      response.status(500).json({ error: e.message });
+    }
+  });
+
   app.get("/ping", (_, response) => {
     response.status(200).json({ online: true });
   });

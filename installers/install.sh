@@ -7,8 +7,8 @@ echo "============================================================"
 
 # 1. Check Docker
 echo "[INFO] 実行環境を確認しています..."
-if ! command -v docker > /dev/null 2>&1; then
-    echo "[ERROR] Docker Desktop がインストールされていません。"
+if ! docker info > /dev/null 2>&1; then
+    echo "[ERROR] Docker Desktop が起動していないか、インストールされていません。"
     echo "[ERROR] 以下のリンクよりインストールし、再実行してください。"
     echo "        https://www.docker.com/products/docker-desktop/"
     exit 1

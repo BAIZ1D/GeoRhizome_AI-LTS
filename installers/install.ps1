@@ -8,7 +8,7 @@ Write-Host "============================================================" -Foreg
 # 1. Check Docker
 Write-Host "[INFO] 実行環境を確認しています..." -ForegroundColor Gray
 if (-Not (Get-Command "docker" -ErrorAction SilentlyContinue)) {
-    Write-Host "[ERROR] Docker Desktop がインストールされていません。" -ForegroundColor Red
+    Write-Host "[ERROR] Docker Desktop が起動していないか、インストールされていません。" -ForegroundColor Red
     Exit
 }
 Write-Host "[SUCCESS] Docker Desktop の稼働を確認しました。" -ForegroundColor Green

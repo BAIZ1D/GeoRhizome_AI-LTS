@@ -7,7 +7,7 @@ echo "============================================================"
 
 # 1. Check Docker
 echo "[INFO] 実行環境を確認しています..."
-if ! command -v docker &> /dev/null; then
+if ! command -v docker > /dev/null 2>&1; then
     echo "[ERROR] Docker Desktop がインストールされていません。"
     echo "[ERROR] 以下のリンクよりインストールし、再実行してください。"
     echo "        https://www.docker.com/products/docker-desktop/"
@@ -51,15 +51,34 @@ echo "[STEP] インストールディレクトリを構成しています... ($I
 # docker login ghcr.io -u BAIZ1D -p <YOUR_READ_ONLY_TOKEN>
 echo "[STEP] セキュア・コンテナレジストリへ接続中..."
 
-# 5. Fetch Compose File (Placeholder logic for downloading the compose file)
-# curl -s -o "$INSTALL_DIR/docker-compose.yml" "https://raw.githubusercontent.com/BAIZ1D/GeoRhizome_AI-LTS/main/installers/employee-docker-compose.yml"
+# 5. Fetch Compose File and Startup Scripts
 echo "[STEP] コア・システムイメージを取得中..."
+# curl -s -o "$INSTALL_DIR/docker-compose.yml" "https://raw.githubusercontent.com/BAIZ1D/GeoRhizome_AI-LTS/main/installers/employee-docker-compose.yml"
+# curl -s -o "$INSTALL_DIR/start_georhizome.command" "https://raw.githubusercontent.com/BAIZ1D/GeoRhizome_AI-LTS/main/installers/start_georhizome.command"
+chmod +x "$INSTALL_DIR/start_georhizome.command" > /dev/null 2>&1
+
+echo "[STEP] デスクトップにショートカットを作成しています..."
+if [ "$OS_TYPE" = "Darwin" ]; then
+    # Create a native Mac .app on the Desktop
+    osacompile -e "do shell script \"open \\\"$INSTALL_DIR/start_georhizome.command\\\"\"" -o "$HOME/Desktop/GeoRhizome AI.app" > /dev/null 2>&1
+else
+    # Linux shortcut (.desktop file)
+    cat << 'INNER_EOF' > "$HOME/Desktop/GeoRhizome_AI.desktop"
+[Desktop Entry]
+Name=GeoRhizome AI
+Exec=sh -c 'cd ~/.georhizome && ./start_georhizome.command'
+Terminal=true
+Type=Application
+INNER_EOF
+    chmod +x "$HOME/Desktop/GeoRhizome_AI.desktop"
+fi
 
 echo "[STEP] コンテナ・クラスタを起動しています... (この処理には数分かかる場合があります)"
-# cd "$INSTALL_DIR" && docker-compose up -d
+# cd "$INSTALL_DIR" && docker compose up -d
 
 echo "------------------------------------------------------------"
 echo "[SUCCESS] GeoRhizome AI のインストールが正常に完了しました。"
+echo "[INFO] 次回からはデスクトップの「GeoRhizome AI」アイコンをダブルクリックして起動してください！"
 echo "[INFO] 管理画面: http://localhost:3000"
 echo "============================================================"
 

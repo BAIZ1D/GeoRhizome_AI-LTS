@@ -73,17 +73,7 @@ services:
       - NODE_ENV=production
       - STORAGE_DIR=/app/server/storage
     restart: unless-stopped
-    depends_on:
-      - ollama
-
-  ollama:
-    image: ollama/ollama:latest
-    container_name: georhizome-ollama
-    ports:
-      - "11434:11434"
-    volumes:
-      - ./ollama:/root/.ollama
-    restart: unless-stopped
+    
 EOF_COMPOSE
 
 cat << 'EOF_START' > "$INSTALL_DIR/start_georhizome.command"
@@ -94,6 +84,10 @@ cleanup() {
     echo "[INFO] GeoRhizome AI をシャットダウンしています..."
     if [ -d "$HOME/.georhizome" ]; then
         cd "$HOME/.georhizome" && docker compose down
+        pkill -f local_bge_server.py
+        pkill -f local_reranker_server.py
+        pkill -f hardware_server.py
+        pkill -f llama_cpp.server
     fi
     echo "[SUCCESS] システムのシャットダウンが完了しました。ウィンドウを閉じます。"
     sleep 2
@@ -107,6 +101,19 @@ echo "============================================================"
 echo "[INFO] GeoRhizome AI を起動しています..."
 cd "$HOME/.georhizome"
 docker compose up -d >/dev/null 2>&1
+
+echo "[INFO] ネイティブAI推論サーバーを起動しています..."
+source "$HOME/.georhizome/source/.venv/bin/activate"
+
+# Start BGE Embedder
+nohup python3 "$HOME/.georhizome/source/local_bge_server.py" > "$HOME/.georhizome/bge.log" 2>&1 &
+# Start Reranker
+nohup python3 "$HOME/.georhizome/source/services/local_reranker_server.py" > "$HOME/.georhizome/reranker.log" 2>&1 &
+# Start Hardware Server
+nohup python3 "$HOME/.georhizome/source/services/hardware_server.py" > "$HOME/.georhizome/hardware.log" 2>&1 &
+
+echo "[SUCCESS] 全てのシステムが起動しました！"
+
 echo "[SUCCESS] システムが起動しました！"
 if [ "$(uname)" = "Darwin" ]; then
     open http://localhost:3000
@@ -141,6 +148,33 @@ chmod +x "$INSTALL_DIR/update_georhizome.command"
 
 
 # 6. Desktop Shortcut
+
+echo "------------------------------------------------------------"
+echo "[STEP] AI推論エンジンのネイティブ環境を構築中 (Python / Metal API)..."
+
+# Download the python source code natively
+mkdir -p "$INSTALL_DIR/source"
+echo "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" > "$INSTALL_DIR/git_token.txt"
+curl -s -H "Authorization: token $(cat "$INSTALL_DIR/git_token.txt")" -L https://api.github.com/repos/BAIZ1D/GeoRhizome_AI-LTS/tarball/main | tar -xz -C "$INSTALL_DIR/source" --strip-components=1
+rm "$INSTALL_DIR/git_token.txt"
+
+# Ensure Python is installed
+if ! command -v python3 > /dev/null 2>&1; then
+    echo "[ERROR] Python3 が見つかりません。Homebrew等でインストールしてください。"
+    exit 1
+fi
+
+cd "$INSTALL_DIR/source"
+python3 -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip > /dev/null 2>&1
+echo "   🟢 依存パッケージをインストールしています (数分かかる場合があります)..."
+pip install torch torchvision torchaudio > /dev/null 2>&1
+CMAKE_ARGS="-DLLAMA_METAL=on" pip install llama-cpp-python > /dev/null 2>&1
+pip install fastapi uvicorn sentence-transformers psutil pyyaml > /dev/null 2>&1
+echo "   🟢 ネイティブAI環境の構築が完了しました！"
+
+
 echo "[STEP] デスクトップにショートカットを作成しています..."
 if [ "$OS_TYPE" = "Darwin" ]; then
     osacompile -e "do shell script \"open \\\"$INSTALL_DIR/start_georhizome.command\\\"\"" -o "$HOME/Desktop/GeoRhizome AI.app" > /dev/null 2>&1

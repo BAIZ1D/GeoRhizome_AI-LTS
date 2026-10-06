@@ -63,17 +63,7 @@ services:
       - NODE_ENV=production
       - STORAGE_DIR=/app/server/storage
     restart: unless-stopped
-    depends_on:
-      - ollama
-
-  ollama:
-    image: ollama/ollama:latest
-    container_name: georhizome-ollama
-    ports:
-      - "11434:11434"
-    volumes:
-      - ./ollama:/root/.ollama
-    restart: unless-stopped
+    
 "@
 Set-Content -Path "$INSTALL_DIR\docker-compose.yml" -Value $ComposeContent -Encoding UTF8
 
@@ -114,6 +104,35 @@ echo ------------------------------------------------------------
 timeout /t 5 >nul
 "@
 Set-Content -Path "$INSTALL_DIR\update_georhizome.bat" -Value $UpdateBatContent -Encoding UTF8
+
+
+
+Write-Host "[STEP] AI推論エンジンのネイティブ環境を構築中 (Python / CUDA)..." -ForegroundColor Cyan
+
+$SourceDir = "$INSTALL_DIR\source"
+New-Item -ItemType Directory -Force -Path $SourceDir | Out-Null
+$Token = "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"
+$Headers = @{ Authorization = "token $Token" }
+Invoke-RestMethod -Uri "https://api.github.com/repos/BAIZ1D/GeoRhizome_AI-LTS/zipball/main" -Headers $Headers -OutFile "$INSTALL_DIR\repo.zip"
+Expand-Archive -Path "$INSTALL_DIR\repo.zip" -DestinationPath "$INSTALL_DIR\temp_extract" -Force
+$ExtractedFolder = Get-ChildItem "$INSTALL_DIR\temp_extract" | Select-Object -First 1
+Copy-Item -Path "$ExtractedFolder\*" -Destination $SourceDir -Recurse -Force
+Remove-Item "$INSTALL_DIR\repo.zip" -Force
+Remove-Item "$INSTALL_DIR\temp_extract" -Recurse -Force
+
+if (-not (Get-Command "python" -ErrorAction SilentlyContinue)) {
+    Write-Host "[ERROR] Pythonが見つかりません。インストールしてください。" -ForegroundColor Red
+    exit 1
+}
+
+Set-Location $SourceDir
+python -m venv .venv
+& ".venv\Scripts\Activate.ps1"
+python -m pip install --upgrade pip | Out-Null
+Write-Host "   🟢 依存パッケージをインストールしています (数分かかる場合があります)..." -ForegroundColor Yellow
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 | Out-Null
+pip install llama-cpp-python fastapi uvicorn sentence-transformers psutil pyyaml | Out-Null
+Write-Host "   🟢 ネイティブAI環境の構築が完了しました！" -ForegroundColor Green
 
 
 Write-Host "[STEP] デスクトップにショートカットを作成しています..." -ForegroundColor Gray

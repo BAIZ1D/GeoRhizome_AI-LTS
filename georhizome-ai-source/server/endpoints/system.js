@@ -70,7 +70,7 @@ function systemEndpoints(app) {
   // GEORHIZOME AI: ENTERPRISE KNOWLEDGE SYNC (PILLAR 4)
   // =========================================================================
   
-  app.post("/upload-workspace", async (request, response) => {
+  app.post("/system/upload-workspace", async (request, response) => {
     try {
       const { slug, password } = request.body;
       if (!slug || !password) return response.status(400).json({ error: "Missing slug or password" });
@@ -143,7 +143,7 @@ function systemEndpoints(app) {
       };
 
       // 1. Check if release exists
-      const fetch = require("node-fetch");
+      
       let releaseId;
       const getRelRes = await fetch(`https://api.github.com/repos/${repo}/releases/tags/workspace-${slug}`, { headers });
       if (getRelRes.ok) {
@@ -201,7 +201,7 @@ function systemEndpoints(app) {
   });
 
   
-  app.post("/sync-workspace", async (request, response) => {
+  app.post("/system/sync-workspace", async (request, response) => {
     try {
       const { slug } = request.body;
       if (!slug) return response.status(400).json({ error: "Missing slug" });
@@ -216,7 +216,7 @@ function systemEndpoints(app) {
         "User-Agent": "GeoRhizome-AI"
       };
 
-      const fetch = require("node-fetch");
+      
       
       // 1. Get Release Asset ID
       const relRes = await fetch(`https://api.github.com/repos/${repo}/releases/tags/workspace-${slug}`, { headers });

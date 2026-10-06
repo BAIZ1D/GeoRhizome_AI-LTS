@@ -110,10 +110,31 @@ EOF_START
 
 chmod +x "$INSTALL_DIR/start_georhizome.command"
 
+# 5b. Generate OTA Update Shortcut
+cat << 'EOF_UPDATE' > "$INSTALL_DIR/update_georhizome.command"
+#!/bin/bash
+echo "------------------------------------------------------------"
+echo "[INFO] GeoRhizome AI のアップデートを確認しています..."
+cd "$HOME/.georhizome"
+echo "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" | docker login ghcr.io -u BAIZ1D --password-stdin > /dev/null 2>&1
+docker compose pull
+echo ""
+echo "[SUCCESS] アップデートが完了しました！"
+echo "最新の機能を利用するには、現在開いている GeoRhizome AI を一度閉じて、再度起動してください。"
+echo "------------------------------------------------------------"
+sleep 5
+EOF_UPDATE
+
+chmod +x "$INSTALL_DIR/update_georhizome.command"
+
+
 # 6. Desktop Shortcut
 echo "[STEP] デスクトップにショートカットを作成しています..."
 if [ "$OS_TYPE" = "Darwin" ]; then
     osacompile -e "do shell script \"open \\\"$INSTALL_DIR/start_georhizome.command\\\"\"" -o "$HOME/Desktop/GeoRhizome AI.app" > /dev/null 2>&1
+
+    osacompile -e "do shell script \"open \\\"$INSTALL_DIR/update_georhizome.command\\\"\"" -o "$HOME/Desktop/Update GeoRhizome AI.app" > /dev/null 2>&1
+
 else
     cat << 'EOF_LINUX' > "$HOME/Desktop/GeoRhizome_AI.desktop"
 [Desktop Entry]
@@ -123,6 +144,15 @@ Terminal=true
 Type=Application
 EOF_LINUX
     chmod +x "$HOME/Desktop/GeoRhizome_AI.desktop"
+
+    cat << 'EOF_LINUX_UPD' > "$HOME/Desktop/Update_GeoRhizome_AI.desktop"
+[Desktop Entry]
+Name=Update GeoRhizome AI
+Exec=sh -c 'cd ~/.georhizome && ./update_georhizome.command'
+Terminal=true
+Type=Application
+EOF_LINUX_UPD
+    chmod +x "$HOME/Desktop/Update_GeoRhizome_AI.desktop"
 fi
 
 echo "[STEP] コンテナ・クラスタを初期化中... (※テスト用スキップ)"

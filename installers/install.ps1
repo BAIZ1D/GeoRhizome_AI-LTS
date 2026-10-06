@@ -86,6 +86,24 @@ timeout /t 3 >nul
 "@
 Set-Content -Path "$INSTALL_DIR\start_georhizome.bat" -Value $BatContent -Encoding UTF8
 
+# 5b. Generate OTA Update Shortcut
+$UpdateBatContent = @"
+@echo off
+chcp 65001 >nul
+echo ------------------------------------------------------------
+echo [INFO] GeoRhizome AI のアップデートを確認しています...
+cd /d "%~dp0"
+echo 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 | docker login ghcr.io -u BAIZ1D --password-stdin >nul 2>&1
+docker compose pull
+echo.
+echo [SUCCESS] アップデートが完了しました！
+echo 最新の機能を利用するには、現在開いている GeoRhizome AI を一度閉じて、再度起動してください。
+echo ------------------------------------------------------------
+timeout /t 5 >nul
+"@
+Set-Content -Path "$INSTALL_DIR\update_georhizome.bat" -Value $UpdateBatContent -Encoding UTF8
+
+
 Write-Host "[STEP] デスクトップにショートカットを作成しています..." -ForegroundColor Gray
 $WshShell = New-Object -comObject WScript.Shell
 $DesktopPath = [System.Environment]::GetFolderPath('Desktop')
@@ -93,6 +111,12 @@ $Shortcut = $WshShell.CreateShortcut("$DesktopPath\GeoRhizome AI.lnk")
 $Shortcut.TargetPath = "$INSTALL_DIR\start_georhizome.bat"
 $Shortcut.WorkingDirectory = "$INSTALL_DIR"
 $Shortcut.Save()
+
+$UpdateShortcut = $WshShell.CreateShortcut("$DesktopPath\Update GeoRhizome AI.lnk")
+$UpdateShortcut.TargetPath = "$INSTALL_DIR\update_georhizome.bat"
+$UpdateShortcut.WorkingDirectory = "$INSTALL_DIR"
+$UpdateShortcut.Save()
+
 
 Write-Host "------------------------------------------------------------" -ForegroundColor Cyan
 Write-Host "[SUCCESS] GeoRhizome AI のインストールが正常に完了しました。" -ForegroundColor Green

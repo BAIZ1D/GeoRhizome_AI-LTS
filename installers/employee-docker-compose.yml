@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  georhizome-core:
+    image: ghcr.io/baiz1d/georhizome_ai-lts:latest
+    container_name: georhizome-core
+    ports:
+      - "3000:3000"
+      - "3001:3001"
+      - "8888:8888"
+    volumes:
+      - ./storage:/app/server/storage
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped

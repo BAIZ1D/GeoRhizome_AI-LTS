@@ -1,4 +1,8 @@
-import { useEffect, useRef } from "react";
+import os
+
+filepath = 'georhizome-ai-source/frontend/src/pages/OnboardingFlow/Steps/LLMPreference/index.jsx'
+with open(filepath, 'w', encoding='utf-8') as f:
+    f.write("""import { useEffect, useRef } from "react";
 import System from "@/models/system";
 import paths from "@/utils/paths";
 import showToast from "@/utils/toast";
@@ -72,3 +76,4 @@ export default function LLMPreference({
     </div>
   );
 }
+""")

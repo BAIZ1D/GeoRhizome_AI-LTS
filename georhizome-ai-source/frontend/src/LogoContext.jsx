@@ -1,6 +1,6 @@
 import { createContext, useEffect, useState } from "react";
-import GeoRhizomeAILogo from "./media/logo/anything-llm.png";
-import AnythingLLMDark from "./media/logo/anything-llm-dark.png";
+import GeoRhizomeAILogo from "./media/illustrations/login-logo-light.svg";
+import AnythingLLMDark from "./media/illustrations/login-logo.svg";
 import DefaultLoginLogoLight from "./media/illustrations/login-logo.svg";
 import DefaultLoginLogoDark from "./media/illustrations/login-logo-light.svg";
 import System from "./models/system";

@@ -1,4 +1,8 @@
-import { useTheme } from "@/hooks/useTheme";
+import os
+
+filepath = 'georhizome-ai-source/frontend/src/pages/OnboardingFlow/Steps/Home/components/OnboardingLogoSVG.jsx'
+with open(filepath, 'w', encoding='utf-8') as f:
+    f.write("""import { useTheme } from "@/hooks/useTheme";
 import LightLogo from "@/media/illustrations/login-logo-light.svg";
 import DarkLogo from "@/media/illustrations/login-logo.svg";
 
@@ -12,3 +16,4 @@ export function OnboardingLogoSVG() {
     />
   );
 }
+""")

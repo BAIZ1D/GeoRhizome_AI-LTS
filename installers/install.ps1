@@ -1,5 +1,4 @@
-﻿# GeoRhizome AI - Windows Installer
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+﻿﻿# GeoRhizome AI - Windows Installer
 
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host "  GeoRhizome AI Enterprise Edition - System Installer" -ForegroundColor White
@@ -198,3 +197,4 @@ Write-Host "------------------------------------------------------------" -Foreg
 Write-Host "[SUCCESS] GeoRhizome AI のインストールが正常に完了しました。" -ForegroundColor Green
 Write-Host "[INFO] デスクトップの「GeoRhizome AI」アイコンから起動できます！" -ForegroundColor Yellow
 Write-Host "============================================================" -ForegroundColor Cyan
+

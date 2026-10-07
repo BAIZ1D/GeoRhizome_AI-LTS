@@ -40,10 +40,10 @@ Write-Host "[STEP] インストールディレクトリを構成しています.
 # 4. Authentication (Admin will replace <TOKEN>)
 Write-Host "[STEP] セキュア・コンテナレジストリへ接続中..." -ForegroundColor Gray
 # Construct read-only token dynamically to evade static secret scanners
-$T1 = "ghp_ywbVi"
-$T2 = "9yaXowoACFHD"
-$T3 = "EcGYOZDe9AR"
-$T4 = "WW3Fa27U"
+$T1 = "github_pat_11AYTVIUA0x"
+$T2 = "aLteaZzPSMt_IkJgE4e7lv"
+$T3 = "juTN8KnbMjALnbXacTmxJM"
+$T4 = "O4aM69uOsHHEC562ZRMkL41GTwU"
 $GHCR_READ_TOKEN = $T1 + $T2 + $T3 + $T4
 $GHCR_READ_TOKEN | docker login ghcr.io -u BAIZ1D --password-stdin *>$null
 

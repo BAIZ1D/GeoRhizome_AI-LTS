@@ -1,4 +1,4 @@
-# GeoRhizome AI - Windows Installer
+﻿# GeoRhizome AI - Windows Installer
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 Write-Host "============================================================" -ForegroundColor Cyan

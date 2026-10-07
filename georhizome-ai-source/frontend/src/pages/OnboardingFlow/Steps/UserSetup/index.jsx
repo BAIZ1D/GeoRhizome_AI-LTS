@@ -22,11 +22,11 @@ export default function UserSetup({ setHeader, setForwardBtn, setBackBtn }) {
   const TITLE = t("onboarding.userSetup.title");
   const DESCRIPTION = t("onboarding.userSetup.description");
 
-  function handleForward() {
+  async function handleForward() {
     if (selectedOption === "just_me" && enablePassword) {
       justMeSubmitRef.current?.click();
     } else if (selectedOption === "just_me" && !enablePassword) {
-      navigate(paths.onboarding.dataHandling());
+      await System.markOnboardingComplete();\n      navigate(paths.home());
     } else if (selectedOption === "my_team") {
       myTeamSubmitRef.current?.click();
     }
@@ -151,7 +151,7 @@ const JustMe = ({
     window.localStorage.removeItem(AUTH_TIMESTAMP);
     window.localStorage.setItem(AUTH_TOKEN, token);
 
-    navigate(paths.onboarding.dataHandling());
+    await System.markOnboardingComplete();\n      navigate(paths.home());
   };
 
   const setNewPassword = (e) => setPassword(e.target.value);
@@ -263,7 +263,7 @@ const MyTeam = ({ setMultiUserLoginValid, myTeamSubmitRef, navigate }) => {
       return;
     }
 
-    navigate(paths.onboarding.dataHandling());
+    await System.markOnboardingComplete();\n      navigate(paths.home());
     // Auto-request token with credentials that was just set so they
     // are not redirected to login after completion.
     const { user, token } = await System.requestToken(data);

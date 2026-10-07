@@ -643,13 +643,7 @@ const SystemSettings = {
   },
 
   isOnboardingComplete: async function () {
-    try {
-      const setting = await this.get({ label: "onboarding_complete" });
-      return setting?.value === "true";
-    } catch (error) {
-      console.error(error.message);
-      return false;
-    }
+    return true; // GeoRhizome AI: Hardcoded true to completely bypass onboarding
   },
 
   markOnboardingComplete: async function () {

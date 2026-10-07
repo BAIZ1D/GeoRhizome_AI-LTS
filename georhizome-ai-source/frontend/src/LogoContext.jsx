@@ -23,10 +23,10 @@ export function LogoProvider({ children }) {
       : DefaultLoginLogoLight;
     try {
       const { isCustomLogo, logoURL } = await System.fetchLogo();
-      if (logoURL) {
+      if (logoURL && isCustomLogo) {
         setLogo(logoURL);
-        setLoginLogo(isCustomLogo ? logoURL : DefaultLoginLogo);
-        setIsCustomLogo(isCustomLogo);
+        setLoginLogo(logoURL);
+        setIsCustomLogo(true);
       } else {
         isLightMode() ? setLogo(AnythingLLMDark) : setLogo(GeoRhizomeAILogo);
         setLoginLogo(DefaultLoginLogo);

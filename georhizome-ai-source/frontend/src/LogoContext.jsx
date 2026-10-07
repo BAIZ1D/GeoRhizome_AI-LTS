@@ -1,8 +1,8 @@
 import { createContext, useEffect, useState } from "react";
-import GeoRhizomeAILogo from "./media/illustrations/login-logo-light.svg";
-import AnythingLLMDark from "./media/illustrations/login-logo.svg";
-import DefaultLoginLogoLight from "./media/illustrations/login-logo.svg";
-import DefaultLoginLogoDark from "./media/illustrations/login-logo-light.svg";
+import GeoRhizomeAILogo from "./media/logo/anything-llm.png";
+import AnythingLLMDark from "./media/logo/anything-llm-dark.png";
+import DefaultLoginLogoLight from "./media/logo/anything-llm-dark.png";
+import DefaultLoginLogoDark from "./media/logo/anything-llm.png";
 import System from "./models/system";
 
 export const REFETCH_LOGO_EVENT = "refetch-logo";

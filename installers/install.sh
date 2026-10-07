@@ -149,9 +149,9 @@ echo "[SUCCESS] 全てのシステムが起動しました！"
 
 echo "[SUCCESS] システムが起動しました！"
 if [ "$(uname)" = "Darwin" ]; then
-    open http://localhost:3000
+    open http://localhost:3001
 else
-    xdg-open http://localhost:3000
+    xdg-open http://localhost:3001
 fi
 echo "------------------------------------------------------------"
 echo "[NOTICE] ⚠️ 注意: 作業中はウィンドウを閉じないでください。"

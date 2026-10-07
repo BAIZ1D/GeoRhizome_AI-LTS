@@ -1,4 +1,4 @@
-﻿# GeoRhizome AI - Windows Installer
+# GeoRhizome AI - Windows Installer
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 Write-Host "============================================================" -ForegroundColor Cyan
@@ -6,39 +6,39 @@ Write-Host "  GeoRhizome AI Enterprise Edition - System Installer" -ForegroundCo
 Write-Host "============================================================" -ForegroundColor Cyan
 
 # 1. Check Docker
-Write-Host "[INFO] å®Ÿè¡Œç’°å¢ƒã‚’ç¢ºèªã—ã¦ã„ã¾ã™..." -ForegroundColor Gray
+Write-Host "[INFO] 実行環境を確認しています..." -ForegroundColor Gray
 if (-Not (Get-Command "docker" -ErrorAction SilentlyContinue)) {
-    Write-Host "[ERROR] Docker Desktop ãŒèµ·å‹•ã—ã¦ã„ãªã„ã‹ã€ã‚¤ãƒ³ã‚¹ãƒˆãƒ¼ãƒ«ã•ã‚Œã¦ã„ã¾ã›ã‚“ã€‚" -ForegroundColor Red
+    Write-Host "[ERROR] Docker Desktop が起動していないか、インストールされていません。" -ForegroundColor Red
     Exit
 }
-Write-Host "[SUCCESS] Docker Desktop ã®ç¨¼åƒã‚’ç¢ºèªã—ã¾ã—ãŸã€‚" -ForegroundColor Green
+Write-Host "[SUCCESS] Docker Desktop の稼働を確認しました。" -ForegroundColor Green
 
 Write-Host ""
 # 2. Hardware Detection
-Write-Host "[SYSTEM] ãƒãƒ¼ãƒ‰ã‚¦ã‚§ã‚¢ãƒ»ãƒ—ãƒ­ãƒ•ã‚¡ã‚¤ãƒªãƒ³ã‚°ã‚’å®Ÿè¡Œä¸­..." -ForegroundColor Gray
+Write-Host "[SYSTEM] ハードウェア・プロファイリングを実行中..." -ForegroundColor Gray
 $ComputerInfo = Get-CimInstance Win32_ComputerSystem
 $RAM_GB = [math]::Round($ComputerInfo.TotalPhysicalMemory / 1GB)
-Write-Host "[SYSTEM] ç‰©ç†ãƒ¡ãƒ¢ãƒª (RAM): ${RAM_GB} GB" -ForegroundColor White
+Write-Host "[SYSTEM] 物理メモリ (RAM): ${RAM_GB} GB" -ForegroundColor White
 
 if ($RAM_GB -lt 16) {
-    $RECOMMENDATION = "Q2_K (è¶…è»½é‡ç‰ˆ)"
+    $RECOMMENDATION = "Q2_K (超軽量版)"
 } elseif ($RAM_GB -lt 32) {
-    $RECOMMENDATION = "Q4_K_M (æœ€é©æ§‹æˆ)"
+    $RECOMMENDATION = "Q4_K_M (最適構成)"
 } else {
-    $RECOMMENDATION = "Q8_0 (é«˜å“è³ªç‰ˆ)"
+    $RECOMMENDATION = "Q8_0 (高品質版)"
 }
 
-Write-Host "[INFO] æŽ¨å¥¨æŽ¨è«–ãƒ¢ãƒ‡ãƒ«: ${RECOMMENDATION}" -ForegroundColor Yellow
+Write-Host "[INFO] 推奨推論モデル: ${RECOMMENDATION}" -ForegroundColor Yellow
 Write-Host "------------------------------------------------------------" -ForegroundColor Cyan
 
 # 3. Setup Directories
 $INSTALL_DIR = "$env:USERPROFILE\.georhizome"
 New-Item -ItemType Directory -Force -Path "$INSTALL_DIR\models" | Out-Null
 New-Item -ItemType Directory -Force -Path "$INSTALL_DIR\storage" | Out-Null
-Write-Host "[STEP] ã‚¤ãƒ³ã‚¹ãƒˆãƒ¼ãƒ«ãƒ‡ã‚£ãƒ¬ã‚¯ãƒˆãƒªã‚’æ§‹æˆã—ã¦ã„ã¾ã™... ($INSTALL_DIR)" -ForegroundColor Gray
+Write-Host "[STEP] インストールディレクトリを構成しています... ($INSTALL_DIR)" -ForegroundColor Gray
 
 # 4. Authentication (Admin will replace <TOKEN>)
-Write-Host "[STEP] ã‚»ã‚­ãƒ¥ã‚¢ãƒ»ã‚³ãƒ³ãƒ†ãƒŠãƒ¬ã‚¸ã‚¹ãƒˆãƒªã¸æŽ¥ç¶šä¸­..." -ForegroundColor Gray
+Write-Host "[STEP] セキュア・コンテナレジストリへ接続中..." -ForegroundColor Gray
 # Construct read-only token dynamically to evade static secret scanners
 $T1 = "ghp_ywbVi"
 $T2 = "9yaXowoACFHD"
@@ -48,7 +48,7 @@ $GHCR_READ_TOKEN = $T1 + $T2 + $T3 + $T4
 $GHCR_READ_TOKEN | docker login ghcr.io -u BAIZ1D --password-stdin *>$null
 
 # 5. Generate Core Files natively (No external download needed!)
-Write-Host "[STEP] ã‚³ã‚¢ãƒ»ã‚·ã‚¹ãƒ†ãƒ æ§‹æˆãƒ•ã‚¡ã‚¤ãƒ«ã‚’ç”Ÿæˆä¸­..." -ForegroundColor Gray
+Write-Host "[STEP] コア・システム構成ファイルを生成中..." -ForegroundColor Gray
 
 $ComposeContent = @"
 version: '3.8'
@@ -77,22 +77,22 @@ $BatContent = @"
 title GeoRhizome AI Enterprise Edition
 chcp 65001 >nul
 echo ============================================================
-echo   GeoRhizome AI Enterprise Edition - èµ·å‹•ãƒ„ãƒ¼ãƒ«
+echo   GeoRhizome AI Enterprise Edition - 起動ツール
 echo ============================================================
 cd %USERPROFILE%\.georhizome
 docker compose up -d >nul 2>&1
-echo [SUCCESS] ã‚·ã‚¹ãƒ†ãƒ ãŒèµ·å‹•ã—ã¾ã—ãŸï¼ãƒ–ãƒ©ã‚¦ã‚¶ã‚’é–‹ãã¾ã™...
+echo [SUCCESS] システムが起動しました！ブラウザを開きます...
 start http://localhost:3000
 echo ------------------------------------------------------------
-echo [NOTICE] âš ï¸ æ³¨æ„: çµ‚äº†ã™ã‚‹å ´åˆã¯ã“ã®ç”»é¢ã§ã€ŒEnterã€ã‚­ãƒ¼ã‚’æŠ¼ã—ã¦ãã ã•ã„ã€‚
+echo [NOTICE] ⚠️ 注意: 終了する場合はこの画面で「Enter」キーを押してください。
 pause >nul
-echo [INFO] GeoRhizome AI ã‚’ã‚·ãƒ£ãƒƒãƒˆãƒ€ã‚¦ãƒ³ã—ã¦ã„ã¾ã™...
+echo [INFO] GeoRhizome AI をシャットダウンしています...
 docker compose down >nul 2>&1
 wmic process where "commandline like '%local_bge_server.py%'" call terminate >nul 2>&1
         wmic process where "commandline like '%local_reranker_server.py%'" call terminate >nul 2>&1
         wmic process where "commandline like '%hardware_server.py%'" call terminate >nul 2>&1
         wmic process where "commandline like '%llama_cpp.server%'" call terminate >nul 2>&1
-echo [SUCCESS] ã‚·ã‚¹ãƒ†ãƒ ã®ã‚·ãƒ£ãƒƒãƒˆãƒ€ã‚¦ãƒ³ãŒå®Œäº†ã—ã¾ã—ãŸã€‚
+echo [SUCCESS] システムのシャットダウンが完了しました。
 timeout /t 3 >nul
 "@
 Set-Content -Path "$INSTALL_DIR\start_georhizome.bat" -Value $BatContent -Encoding UTF8
@@ -102,11 +102,11 @@ $UpdateBatContent = @"
 @echo off
 chcp 65001 >nul
 echo ------------------------------------------------------------
-echo [INFO] GeoRhizome AI ã®ã‚¢ãƒƒãƒ—ãƒ‡ãƒ¼ãƒˆã‚’ç¢ºèªã—ã¦ã„ã¾ã™...
+echo [INFO] GeoRhizome AI のアップデートを確認しています...
 cd /d "%~dp0"
 echo $GHCR_READ_TOKEN | docker login ghcr.io -u BAIZ1D --password-stdin >nul 2>&1
 docker compose pull
-Write-Host "[INFO] ãƒã‚¤ãƒ†ã‚£ãƒ–AIã‚¨ãƒ³ã‚¸ãƒ³ã®ã‚¢ãƒƒãƒ—ãƒ‡ãƒ¼ãƒˆã‚’ç¢ºèªã—ã¦ã„ã¾ã™..." -ForegroundColor Cyan
+Write-Host "[INFO] ネイティブAIエンジンのアップデートを確認しています..." -ForegroundColor Cyan
 $Token = "$GHCR_READ_TOKEN"
 $Headers = @{ Authorization = "token $Token" }
 Invoke-RestMethod -Uri "https://api.github.com/repos/BAIZ1D/GeoRhizome_AI-LTS/zipball/main" -Headers $Headers -OutFile "$HOME\.georhizome\repo.zip"
@@ -117,8 +117,8 @@ Remove-Item "$HOME\.georhizome\repo.zip" -Force
 Remove-Item "$HOME\.georhizome\temp_extract" -Recurse -Force
 
 echo.
-echo [SUCCESS] ã‚¢ãƒƒãƒ—ãƒ‡ãƒ¼ãƒˆãŒå®Œäº†ã—ã¾ã—ãŸï¼
-echo æœ€æ–°ã®æ©Ÿèƒ½ã‚’åˆ©ç”¨ã™ã‚‹ã«ã¯ã€ç¾åœ¨é–‹ã„ã¦ã„ã‚‹ GeoRhizome AI ã‚’ä¸€åº¦é–‰ã˜ã¦ã€å†åº¦èµ·å‹•ã—ã¦ãã ã•ã„ã€‚
+echo [SUCCESS] アップデートが完了しました！
+echo 最新の機能を利用するには、現在開いている GeoRhizome AI を一度閉じて、再度起動してください。
 echo ------------------------------------------------------------
 timeout /t 5 >nul
 "@
@@ -126,7 +126,7 @@ Set-Content -Path "$INSTALL_DIR\update_georhizome.bat" -Value $UpdateBatContent 
 
 
 
-Write-Host "[STEP] AIæŽ¨è«–ã‚¨ãƒ³ã‚¸ãƒ³ã®ãƒã‚¤ãƒ†ã‚£ãƒ–ç’°å¢ƒã‚’æ§‹ç¯‰ä¸­ (Python / CUDA)..." -ForegroundColor Cyan
+Write-Host "[STEP] AI推論エンジンのネイティブ環境を構築中 (Python / CUDA)..." -ForegroundColor Cyan
 
 $SourceDir = "$INSTALL_DIR\source"
 New-Item -ItemType Directory -Force -Path "$INSTALL_DIR\storage\models" | Out-Null
@@ -142,13 +142,13 @@ Remove-Item "$INSTALL_DIR\repo.zip" -Force
 Remove-Item "$INSTALL_DIR\temp_extract" -Recurse -Force
 
 if (-not (Get-Command "python" -ErrorAction SilentlyContinue)) {
-    Write-Host "[ERROR] PythonãŒè¦‹ã¤ã‹ã‚Šã¾ã›ã‚“ã€‚ã‚¤ãƒ³ã‚¹ãƒˆãƒ¼ãƒ«ã—ã¦ãã ã•ã„ã€‚" -ForegroundColor Red
+    Write-Host "[ERROR] Pythonが見つかりません。インストールしてください。" -ForegroundColor Red
     exit 1
 }
 try {
     python -c "import sys; sys.exit(0 if sys.version_info >= (3,8) else 1)"
 } catch {
-    Write-Host "[ERROR] Python 3.8ä»¥ä¸ŠãŒå¿…è¦ã§ã™ã€‚" -ForegroundColor Red
+    Write-Host "[ERROR] Python 3.8以上が必要です。" -ForegroundColor Red
     exit 1
 }
 
@@ -159,13 +159,13 @@ Set-Location $SourceDir
 
 python -m venv .venv
 .venv\Scripts\python.exe -m pip install --upgrade pip | Out-Null
-Write-Host "   ðŸŸ¢ ä¾å­˜ãƒ‘ãƒƒã‚±ãƒ¼ã‚¸ã‚’ã‚¤ãƒ³ã‚¹ãƒˆãƒ¼ãƒ«ã—ã¦ã„ã¾ã™ (æ•°åˆ†ã‹ã‹ã‚‹å ´åˆãŒã‚ã‚Šã¾ã™)..." -ForegroundColor Yellow
+Write-Host "   🟢 依存パッケージをインストールしています (数分かかる場合があります)..." -ForegroundColor Yellow
 .venv\Scripts\python.exe -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 | Out-Null
 .venv\Scripts\python.exe -m pip install "llama-cpp-python[server]" fastapi uvicorn sentence-transformers psutil pyyaml requests huggingface_hub | Out-Null
-Write-Host "   ðŸŸ¢ ãƒã‚¤ãƒ†ã‚£ãƒ–AIç’°å¢ƒã®æ§‹ç¯‰ãŒå®Œäº†ã—ã¾ã—ãŸï¼" -ForegroundColor Green
+Write-Host "   🟢 ネイティブAI環境の構築が完了しました！" -ForegroundColor Green
 
 
-Write-Host "[STEP] ãƒ‡ã‚¹ã‚¯ãƒˆãƒƒãƒ—ã«ã‚·ãƒ§ãƒ¼ãƒˆã‚«ãƒƒãƒˆã‚’ä½œæˆã—ã¦ã„ã¾ã™..." -ForegroundColor Gray
+Write-Host "[STEP] デスクトップにショートカットを作成しています..." -ForegroundColor Gray
 $WshShell = New-Object -comObject WScript.Shell
 $DesktopPath = [System.Environment]::GetFolderPath('Desktop')
 $Shortcut = $WshShell.CreateShortcut("$DesktopPath\GeoRhizome AI.lnk")
@@ -179,11 +179,11 @@ $UpdateShortcut.WorkingDirectory = "$INSTALL_DIR"
 $UpdateShortcut.Save()
 
 
-Write-Host "[STEP] ã‚¯ãƒ©ã‚¹ã‚¿ã®åˆæœŸåŒ–ã¨ã‚³ãƒ³ãƒ†ãƒŠã®ãƒ€ã‚¦ãƒ³ãƒ­ãƒ¼ãƒ‰ã‚’é–‹å§‹ã—ã¾ã™..." -ForegroundColor Gray
+Write-Host "[STEP] クラスタの初期化とコンテナのダウンロードを開始します..." -ForegroundColor Gray
 cd "$INSTALL_DIR"
 echo "$GHCR_READ_TOKEN" | docker login ghcr.io -u BAIZ1D --password-stdin >$null 2>&1
 docker compose pull
-Write-Host "[INFO] ãƒã‚¤ãƒ†ã‚£ãƒ–AIã‚¨ãƒ³ã‚¸ãƒ³ã®ã‚¢ãƒƒãƒ—ãƒ‡ãƒ¼ãƒˆã‚’ç¢ºèªã—ã¦ã„ã¾ã™..." -ForegroundColor Cyan
+Write-Host "[INFO] ネイティブAIエンジンのアップデートを確認しています..." -ForegroundColor Cyan
 $Token = "$GHCR_READ_TOKEN"
 $Headers = @{ Authorization = "token $Token" }
 Invoke-RestMethod -Uri "https://api.github.com/repos/BAIZ1D/GeoRhizome_AI-LTS/zipball/main" -Headers $Headers -OutFile "$HOME\.georhizome\repo.zip"
@@ -195,8 +195,6 @@ Remove-Item "$HOME\.georhizome\temp_extract" -Recurse -Force
 
 
 Write-Host "------------------------------------------------------------" -ForegroundColor Cyan
-Write-Host "[SUCCESS] GeoRhizome AI ã®ã‚¤ãƒ³ã‚¹ãƒˆãƒ¼ãƒ«ãŒæ­£å¸¸ã«å®Œäº†ã—ã¾ã—ãŸã€‚" -ForegroundColor Green
-Write-Host "[INFO] ãƒ‡ã‚¹ã‚¯ãƒˆãƒƒãƒ—ã®ã€ŒGeoRhizome AIã€ã‚¢ã‚¤ã‚³ãƒ³ã‹ã‚‰èµ·å‹•ã§ãã¾ã™ï¼" -ForegroundColor Yellow
+Write-Host "[SUCCESS] GeoRhizome AI のインストールが正常に完了しました。" -ForegroundColor Green
+Write-Host "[INFO] デスクトップの「GeoRhizome AI」アイコンから起動できます！" -ForegroundColor Yellow
 Write-Host "============================================================" -ForegroundColor Cyan
-
-

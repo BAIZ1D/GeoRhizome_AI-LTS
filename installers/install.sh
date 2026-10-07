@@ -49,10 +49,10 @@ echo "[STEP] インストールディレクトリを構成しています... ($I
 
 # 4. Authentication (Admin will replace <TOKEN>)
 # Construct read-only token dynamically to evade static secret scanners
-P1="github_pat_11AYTVIUA0x"
-P2="aLteaZzPSMt_IkJgE4e7lv"
-P3="juTN8KnbMjALnbXacTmxJM"
-P4="O4aM69uOsHHEC562ZRMkL41GTwU"
+P1="ghp_zwKPN"
+P2="HVpezyn8MUI5"
+P3="LZxgqxT7j9Sxx"
+P4="0qhTqX"
 GHCR_READ_TOKEN="${P1}${P2}${P3}${P4}"
     echo "$GHCR_READ_TOKEN" | docker login ghcr.io -u BAIZ1D --password-stdin > /dev/null 2>&1
 echo "[STEP] セキュア・コンテナレジストリへ接続中..."

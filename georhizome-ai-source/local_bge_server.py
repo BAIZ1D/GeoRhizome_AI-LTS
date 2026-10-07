@@ -29,7 +29,7 @@ PORT = int(os.getenv("EMBEDDING_PORT", 8000))
 app = FastAPI()
 
 # Use MPS if available with feather-light batch size to guarantee 0% VRAM swapping & 0% lag
-device = "mps" if torch.backends.mps.is_available() else "cpu"
+device = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
 print(f"Loading {EMBEDDING_MODEL_NAME} on device: {device}...")
 model = SentenceTransformer(EMBEDDING_MODEL_NAME, device=device)
 print(f"{EMBEDDING_MODEL_NAME} successfully loaded on {device}!")

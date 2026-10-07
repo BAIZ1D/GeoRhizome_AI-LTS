@@ -112,7 +112,7 @@ $Headers = @{ Authorization = "token $Token" }
 Invoke-RestMethod -Uri "https://api.github.com/repos/BAIZ1D/GeoRhizome_AI-LTS/zipball/main" -Headers $Headers -OutFile "$HOME\.georhizome\repo.zip"
 Expand-Archive -Path "$HOME\.georhizome\repo.zip" -DestinationPath "$HOME\.georhizome\temp_extract" -Force
 $ExtractedFolder = Get-ChildItem "$HOME\.georhizome\temp_extract" | Select-Object -First 1
-Copy-Item -Path "$ExtractedFolder\*" -Destination "$HOME\.georhizome\source" -Recurse -Force
+Copy-Item -Path "$($ExtractedFolder.FullName)\*" -Destination "$HOME\.georhizome\source" -Recurse -Force
 Remove-Item "$HOME\.georhizome\repo.zip" -Force
 Remove-Item "$HOME\.georhizome\temp_extract" -Recurse -Force
 
@@ -137,7 +137,7 @@ $Headers = @{ Authorization = "token $Token" }
 Invoke-RestMethod -Uri "https://api.github.com/repos/BAIZ1D/GeoRhizome_AI-LTS/zipball/main" -Headers $Headers -OutFile "$INSTALL_DIR\repo.zip"
 Expand-Archive -Path "$INSTALL_DIR\repo.zip" -DestinationPath "$INSTALL_DIR\temp_extract" -Force
 $ExtractedFolder = Get-ChildItem "$INSTALL_DIR\temp_extract" | Select-Object -First 1
-Copy-Item -Path "$ExtractedFolder\*" -Destination $SourceDir -Recurse -Force
+Copy-Item -Path "$($ExtractedFolder.FullName)\*" -Destination $SourceDir -Recurse -Force
 Remove-Item "$INSTALL_DIR\repo.zip" -Force
 Remove-Item "$INSTALL_DIR\temp_extract" -Recurse -Force
 
@@ -189,7 +189,7 @@ $Headers = @{ Authorization = "token $Token" }
 Invoke-RestMethod -Uri "https://api.github.com/repos/BAIZ1D/GeoRhizome_AI-LTS/zipball/main" -Headers $Headers -OutFile "$HOME\.georhizome\repo.zip"
 Expand-Archive -Path "$HOME\.georhizome\repo.zip" -DestinationPath "$HOME\.georhizome\temp_extract" -Force
 $ExtractedFolder = Get-ChildItem "$HOME\.georhizome\temp_extract" | Select-Object -First 1
-Copy-Item -Path "$ExtractedFolder\*" -Destination "$HOME\.georhizome\source" -Recurse -Force
+Copy-Item -Path "$($ExtractedFolder.FullName)\*" -Destination "$HOME\.georhizome\source" -Recurse -Force
 Remove-Item "$HOME\.georhizome\repo.zip" -Force
 Remove-Item "$HOME\.georhizome\temp_extract" -Recurse -Force
 

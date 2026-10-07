@@ -1,0 +1,80 @@
+{
+  "generative": [
+    {
+      "name": "Llama 3.1 Swallow 8B Instruct (Tokyo Tech Japanese)",
+      "repo_id": "mmnga/Llama-3.1-Swallow-8B-Instruct-v0.1-gguf",
+      "use_case": "reasoning",
+      "description": "Tokyo Tech's flagship Japanese-enhanced reasoning & instruction model.",
+      "default_quant": "q4_k_m",
+      "files": {
+        "q4_k_m": "Llama-3.1-Swallow-8B-Instruct-v0.1-Q4_K_M.gguf",
+        "q8_0": "Llama-3.1-Swallow-8B-Instruct-v0.1-Q8_0.gguf"
+      }
+    },
+    {
+      "name": "DeepSeek R1 Distill Qwen 7B (Japanese Reasoning)",
+      "repo_id": "mmnga/DeepSeek-R1-Distill-Qwen-7B-japanese-gguf",
+      "use_case": "reasoning",
+      "description": "Advanced step-by-step reasoning LLM fine-tuned for high Japanese fluency.",
+      "default_quant": "q4_k_m",
+      "files": {
+        "q4_k_m": "DeepSeek-R1-Distill-Qwen-7B-japanese-Q4_K_M.gguf",
+        "q8_0": "DeepSeek-R1-Distill-Qwen-7B-japanese-Q8_0.gguf"
+      }
+    },
+    {
+      "name": "Swallow 7B Instruct v0.1 (Lightweight Japanese)",
+      "repo_id": "mmnga/Swallow-7b-instruct-v0.1-gguf",
+      "use_case": "chat",
+      "description": "Fast lightweight Japanese instruction model developed by Tokyo Tech.",
+      "default_quant": "q4_k_m",
+      "files": {
+        "q4_k_m": "Swallow-7b-instruct-v0.1-q4_k_m.gguf",
+        "q8_0": "Swallow-7b-instruct-v0.1-q8_0.gguf"
+      }
+    },
+    {
+      "name": "Qwen 2.5 7B Instruct (Multilingual & Japanese RAG)",
+      "repo_id": "mmnga/Qwen2.5-7B-Instruct-gguf",
+      "use_case": "chat",
+      "description": "Battle-tested multilingual model with top-tier Japanese RAG & reasoning.",
+      "default_quant": "q4_k_m",
+      "files": {
+        "q4_k_m": "Qwen2.5-7B-Instruct-Q4_K_M.gguf",
+        "q8_0": "Qwen2.5-7B-Instruct-Q8_0.gguf"
+      }
+    }
+  ],
+  "embedding": [
+    {
+      "name": "BAAI BGE-M3 (Multilingual & Japanese 1024-dim)",
+      "repo_id": "BAAI/bge-m3",
+      "use_case": "embedding",
+      "description": "1024-dim dense multilingual & Japanese embedding model.",
+      "default_quant": "fp16"
+    },
+    {
+      "name": "BAAI BGE-Small English/Multilingual (384-dim)",
+      "repo_id": "BAAI/bge-small-en-v1.5",
+      "use_case": "embedding",
+      "description": "Ultra-lightweight 384-dim embedding model.",
+      "default_quant": "fp16"
+    }
+  ],
+  "reranker": [
+    {
+      "name": "BAAI BGE Reranker Base (Lightweight CPU)",
+      "repo_id": "BAAI/bge-reranker-base",
+      "use_case": "rerank",
+      "description": "Feather-light CPU cross-encoder reranker (~270MB).",
+      "default_quant": "fp16"
+    },
+    {
+      "name": "BAAI BGE Reranker V2 M3 (Multilingual & Japanese)",
+      "repo_id": "BAAI/bge-reranker-v2-m3",
+      "use_case": "rerank",
+      "description": "High-accuracy multilingual & Japanese cross-encoder reranker (~2.2GB).",
+      "default_quant": "fp16"
+    }
+  ]
+}

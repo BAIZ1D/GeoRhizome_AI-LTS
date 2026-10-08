@@ -574,6 +574,7 @@ const STATUS_STYLES = {
 };
 
 function EmbeddingFileRow({ filename, status: fileStatus, onRemove }) {
+  const { t } = useTranslation();
   const { status, chunksProcessed = 0, totalChunks = 0 } = fileStatus;
   const displayName = getDisplayName(filename);
   const isEmbedding = status === "embedding";

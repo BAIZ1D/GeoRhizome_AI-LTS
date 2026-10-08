@@ -24,7 +24,7 @@
     "snippet_max_length": 250
   },
   "llm": {
-    "model_name": "Qwen3-0.6B-Q8_0.gguf",
+    "model_name": "Qwen3.5-0.8B-Japanese-SFT-v2-Q4_K_M.gguf",
     "base_url": "http://127.0.0.1:8003/v1",
     "api_key": "sk-123abc",
     "token_limit": 16384

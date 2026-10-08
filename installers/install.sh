@@ -82,7 +82,7 @@ services:
       - STORAGE_DIR=/app/server/storage
       - LLM_PROVIDER=generic-openai
       - GENERIC_OPEN_AI_API_KEY=sk-local
-      - GENERIC_OPEN_AI_MODEL_PREF=Qwen3-0.6B-Q8_0.gguf
+      - GENERIC_OPEN_AI_MODEL_PREF=Qwen3.5-0.8B-Japanese-SFT-v2-Q4_K_M.gguf
       - EMBEDDING_ENGINE=generic-openai
       - EMBEDDING_MODEL_PREF=cl-nagoya/ruri-v3-310m
       - VECTOR_DB=lancedb
@@ -106,7 +106,7 @@ cat << 'ENV_EOF' > "$HOME/.georhizome/source/georhizome-ai-source/server/.env"
 LLM_PROVIDER=generic-openai
 GENERIC_OPEN_AI_BASE_PATH=http://host.docker.internal:8003/v1
 GENERIC_OPEN_AI_API_KEY=sk-local
-GENERIC_OPEN_AI_MODEL_PREF=Qwen3-0.6B-Q8_0.gguf
+GENERIC_OPEN_AI_MODEL_PREF=Qwen3.5-0.8B-Japanese-SFT-v2-Q4_K_M.gguf
 EMBEDDING_ENGINE=generic-openai
 EMBEDDING_BASE_PATH=http://host.docker.internal:8000/v1
 EMBEDDING_MODEL_PREF=cl-nagoya/ruri-v3-310m
@@ -122,8 +122,8 @@ nohup "$VENV_PYTHON" "$HOME/.georhizome/source/services/local_reranker_server.py
 nohup "$VENV_PYTHON" "$HOME/.georhizome/source/services/hardware_server.py" > "$HOME/.georhizome/hardware.log" 2>&1 &
 
 # Determine and start Chat LLM Server on Port 8003
-DEFAULT_MODEL=$("$VENV_PYTHON" -c "import json; print(json.load(open('$HOME/.georhizome/source/config/app_config.json')).get('llm', {}).get('model_name', 'Qwen3-0.6B-Q8_0.gguf'))" 2>/dev/null)
-ACTIVE_CHAT_MODEL="${DEFAULT_MODEL:-Qwen3-0.6B-Q8_0.gguf}"
+DEFAULT_MODEL=$("$VENV_PYTHON" -c "import json; print(json.load(open('$HOME/.georhizome/source/config/app_config.json')).get('llm', {}).get('model_name', 'Qwen3.5-0.8B-Japanese-SFT-v2-Q4_K_M.gguf'))" 2>/dev/null)
+ACTIVE_CHAT_MODEL="${DEFAULT_MODEL:-Qwen3.5-0.8B-Japanese-SFT-v2-Q4_K_M.gguf}"
 if [ -f "$HOME/.georhizome/source/config/active_models.json" ]; then
   FOUND_MODEL=$("$VENV_PYTHON" -c "import json; print(json.load(open('$HOME/.georhizome/source/config/active_models.json')).get('generative', {}).get('model_id', ''))" 2>/dev/null)
   if [ -n "$FOUND_MODEL" ] && [ "$FOUND_MODEL" != "Offloaded" ]; then
@@ -140,6 +140,9 @@ if [ "$ACTIVE_CHAT_MODEL" != "Offloaded" ]; then
 fi
 
 nohup docker compose up -d > "$HOME/.georhizome/docker.log" 2>&1 &
+sleep 3
+docker exec georhizome-core pip3 install --break-system-packages PyMuPDF markitdown pytesseract >/dev/null 2>&1
+
 sleep 5
 open http://localhost:3001
 echo "[SUCCESS] 全てのシステムが起動しました！"
@@ -266,8 +269,8 @@ print('-> Downloading Embedder: cl-nagoya/ruri-v3-310m ...')
 snapshot_download('cl-nagoya/ruri-v3-310m')
 print('-> Downloading Reranker: cl-nagoya/ruri-v3-reranker-310m ...')
 snapshot_download('cl-nagoya/ruri-v3-reranker-310m')
-print('-> Downloading LLM: unsloth/Qwen3-0.6B-GGUF (Q8_0) ...')
-hf_hub_download(repo_id='unsloth/Qwen3-0.6B-GGUF', filename='Qwen3-0.6B-Q8_0.gguf', local_dir=models_dir)
+print('-> Downloading LLM: Takenoko12345678/Qwen3.5-0.8B-Japanese-SFT-v2-GGUF (Q4) ...')
+hf_hub_download(repo_id='Takenoko12345678/Qwen3.5-0.8B-Japanese-SFT-v2-GGUF', filename='Qwen3.5-0.8B-Japanese-SFT-v2-Q4_K_M.gguf', local_dir=models_dir)
 "
 
 echo "------------------------------------------------------------"

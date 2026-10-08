@@ -11,7 +11,7 @@ if not exist "%USERPROFILE%\.georhizome\source\georhizome-ai-source\server\.env"
     echo LLM_PROVIDER=generic-openai> "%USERPROFILE%\.georhizome\source\georhizome-ai-source\server\.env"
     echo GENERIC_OPEN_AI_BASE_PATH=http://host.docker.internal:8003/v1>> "%USERPROFILE%\.georhizome\source\georhizome-ai-source\server\.env"
     echo GENERIC_OPEN_AI_API_KEY=sk-local>> "%USERPROFILE%\.georhizome\source\georhizome-ai-source\server\.env"
-    echo GENERIC_OPEN_AI_MODEL_PREF=Qwen3-0.6B-Q8_0.gguf>> "%USERPROFILE%\.georhizome\source\georhizome-ai-source\server\.env"
+    echo GENERIC_OPEN_AI_MODEL_PREF=Qwen3.5-0.8B-Japanese-SFT-v2-Q4_K_M.gguf>> "%USERPROFILE%\.georhizome\source\georhizome-ai-source\server\.env"
     echo EMBEDDING_ENGINE=generic-openai>> "%USERPROFILE%\.georhizome\source\georhizome-ai-source\server\.env"
     echo EMBEDDING_BASE_PATH=http://host.docker.internal:8000/v1>> "%USERPROFILE%\.georhizome\source\georhizome-ai-source\server\.env"
     echo EMBEDDING_MODEL_PREF=cl-nagoya/ruri-v3-310m>> "%USERPROFILE%\.georhizome\source\georhizome-ai-source\server\.env"
@@ -25,9 +25,11 @@ start /b "" "%USERPROFILE%\.georhizome\source\.venv\Scripts\python.exe" "%USERPR
 echo [INFO] Starting Hardware ^& Model Hub Server (Port 8002)...
 start /b "" "%USERPROFILE%\.georhizome\source\.venv\Scripts\python.exe" "%USERPROFILE%\.georhizome\source\services\hardware_server.py" >nul 2>&1
 echo [INFO] Starting Local Chat LLM Server (Port 8003)...
-start /b "" "%USERPROFILE%\.georhizome\source\.venv\Scripts\python.exe" -m llama_cpp.server --model "%USERPROFILE%\.georhizome\storage\models\Qwen3-0.6B-Q8_0.gguf" --n_ctx 16384 --n_gpu_layers -1 --port 8003 --host 127.0.0.1 >nul 2>&1
+start /b "" "%USERPROFILE%\.georhizome\source\.venv\Scripts\python.exe" -m llama_cpp.server --model "%USERPROFILE%\.georhizome\storage\models\Qwen3.5-0.8B-Japanese-SFT-v2-Q4_K_M.gguf" --n_ctx 16384 --n_gpu_layers -1 --port 8003 --host 127.0.0.1 >nul 2>&1
 
 docker compose up -d >nul 2>&1
+docker exec georhizome-core pip3 install --break-system-packages PyMuPDF markitdown pytesseract >nul 2>&1
+
 echo [SUCCESS] システムが起動しました！ブラウザを開きます...
 start http://localhost:3001
 echo ------------------------------------------------------------

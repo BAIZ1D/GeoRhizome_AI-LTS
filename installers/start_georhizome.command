@@ -45,7 +45,7 @@ fi
 
 nohup docker compose up -d > "$HOME/.georhizome/docker.log" 2>&1 &
 sleep 3
-docker exec georhizome-core pip3 install --break-system-packages PyMuPDF markitdown pytesseract >/dev/null 2>&1
+docker exec georhizome-core pip3 install --break-system-packages PyMuPDF pymupdf4llm markitdown pytesseract >/dev/null 2>&1
 
 sleep 5
 open http://localhost:3001

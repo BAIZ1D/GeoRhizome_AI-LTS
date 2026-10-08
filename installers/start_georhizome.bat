@@ -28,7 +28,7 @@ echo [INFO] Starting Local Chat LLM Server (Port 8003)...
 start /b "" "%USERPROFILE%\.georhizome\source\.venv\Scripts\python.exe" -m llama_cpp.server --model "%USERPROFILE%\.georhizome\storage\models\Qwen3.5-0.8B-Japanese-SFT-v2-Q4_K_M.gguf" --n_ctx 16384 --n_gpu_layers -1 --port 8003 --host 127.0.0.1 >nul 2>&1
 
 docker compose up -d >nul 2>&1
-docker exec georhizome-core pip3 install --break-system-packages PyMuPDF markitdown pytesseract >nul 2>&1
+docker exec georhizome-core pip3 install --break-system-packages PyMuPDF pymupdf4llm markitdown pytesseract >nul 2>&1
 
 echo [SUCCESS] システムが起動しました！ブラウザを開きます...
 start http://localhost:3001

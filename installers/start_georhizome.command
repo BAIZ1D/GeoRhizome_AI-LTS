@@ -1,63 +1,66 @@
 #!/bin/bash
-# GeoRhizome AI - Mac/Linux Smart Shortcut
-
-# Trap window close (SIGHUP) or script exit to spin down
-cleanup() {
-    echo ""
-    echo "------------------------------------------------------------"
-    echo "[INFO] GeoRhizome AI をシャットダウンしています..."
-    echo "[INFO] コンテナと推論モデルを安全にアンロード中..."
-    
-    # Check if the directory exists to avoid errors
-    if [ -d "$HOME/.georhizome" ]; then
-        cd "$HOME/.georhizome" && docker compose down
-    fi
-    
-    echo "[SUCCESS] システムのシャットダウンとメモリ解放が完了しました。"
-    echo "ウィンドウを閉じます..."
-    sleep 2
-    exit 0
-}
-# Catch all terminal exit signals
-trap cleanup EXIT SIGHUP SIGINT SIGTERM
-
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 echo "============================================================"
 echo "  GeoRhizome AI Enterprise Edition - 起動ツール"
 echo "============================================================"
-echo "[INFO] GeoRhizome AI を起動しています..."
-
-# Create directory just in case it doesn't exist
-mkdir -p "$HOME/.georhizome"
 cd "$HOME/.georhizome"
 
-# If docker-compose.yml doesn't exist here (e.g. they ran this without installing), warn them
-if [ ! -f "docker-compose.yml" ]; then
-    echo "[ERROR] システムが見つかりません。先に install.sh を実行してください。"
-    exit 1
+if [ ! -s "$HOME/.georhizome/source/georhizome-ai-source/server/.env" ]; then
+cat << 'ENV_EOF' > "$HOME/.georhizome/source/georhizome-ai-source/server/.env"
+LLM_PROVIDER=generic-openai
+GENERIC_OPEN_AI_BASE_PATH=http://host.docker.internal:8003/v1
+GENERIC_OPEN_AI_API_KEY=sk-local
+GENERIC_OPEN_AI_MODEL_PREF=Qwen3-0.6B-Q8_0.gguf
+EMBEDDING_ENGINE=generic-openai
+EMBEDDING_BASE_PATH=http://host.docker.internal:8000/v1
+EMBEDDING_MODEL_PREF=cl-nagoya/ruri-v3-310m
+VECTOR_DB=lancedb
+ENV_EOF
 fi
 
-# Start the docker cluster in the background
-docker compose up -d
+echo "[INFO] GeoRhizome AI を起動しています..."
+echo "[INFO] ネイティブAI推論サーバーを起動しています..."
+VENV_PYTHON="$HOME/.georhizome/source/.venv/bin/python3"
+nohup "$VENV_PYTHON" "$HOME/.georhizome/source/local_bge_server.py" > "$HOME/.georhizome/bge.log" 2>&1 &
+nohup "$VENV_PYTHON" "$HOME/.georhizome/source/services/local_reranker_server.py" > "$HOME/.georhizome/reranker.log" 2>&1 &
+nohup "$VENV_PYTHON" "$HOME/.georhizome/source/services/hardware_server.py" > "$HOME/.georhizome/hardware.log" 2>&1 &
 
-echo "[SUCCESS] システムが起動しました！"
-echo "[INFO] ブラウザを http://localhost:3000 に開きます..."
-
-# Open browser
-if [ "$(uname)" = "Darwin" ]; then
-    open http://localhost:3000
-else
-    xdg-open http://localhost:3000
+# Determine and start Chat LLM Server on Port 8003
+DEFAULT_MODEL=$("$VENV_PYTHON" -c "import json; print(json.load(open('$HOME/.georhizome/source/config/app_config.json')).get('llm', {}).get('model_name', 'Qwen3-0.6B-Q8_0.gguf'))" 2>/dev/null)
+ACTIVE_CHAT_MODEL="${DEFAULT_MODEL:-Qwen3-0.6B-Q8_0.gguf}"
+if [ -f "$HOME/.georhizome/source/config/active_models.json" ]; then
+  FOUND_MODEL=$("$VENV_PYTHON" -c "import json; print(json.load(open('$HOME/.georhizome/source/config/active_models.json')).get('generative', {}).get('model_id', ''))" 2>/dev/null)
+  if [ -n "$FOUND_MODEL" ] && [ "$FOUND_MODEL" != "Offloaded" ]; then
+    ACTIVE_CHAT_MODEL="$FOUND_MODEL"
+  fi
+fi
+if [ "$ACTIVE_CHAT_MODEL" != "Offloaded" ]; then
+  echo "[INFO] Chat LLM Server ($ACTIVE_CHAT_MODEL) をポート 8003 で起動しています..."
+  if [[ "$ACTIVE_CHAT_MODEL" == *.gguf ]]; then
+    nohup "$VENV_PYTHON" -m llama_cpp.server --model "$HOME/.georhizome/storage/models/$ACTIVE_CHAT_MODEL" --n_ctx 16384 --n_gpu_layers -1 --port 8003 --host 127.0.0.1 > "$HOME/.georhizome/chat.log" 2>&1 &
+  else
+    nohup "$VENV_PYTHON" -m llama_cpp.server --hf_model_repo_id "$ACTIVE_CHAT_MODEL" --n_ctx 16384 --n_gpu_layers -1 --port 8003 --host 127.0.0.1 > "$HOME/.georhizome/chat.log" 2>&1 &
+  fi
 fi
 
+nohup docker compose up -d > "$HOME/.georhizome/docker.log" 2>&1 &
+sleep 5
+open http://localhost:3001
+echo "[SUCCESS] 全てのシステムが起動しました！"
 echo "------------------------------------------------------------"
-echo "[NOTICE] ⚠️ 注意: GeoRhizome AI を使用中は、このターミナルウィンドウを"
-echo "         閉じないでください。"
-echo "[NOTICE] 作業が完了し終了する場合は、このウィンドウを閉じるか、"
-echo "         Ctrl+C を押してください。"
-echo "         ※ すべての会話履歴とアップロードデータは安全に自動保存されています。"
+echo "[NOTICE] ⚠️ 注意: 作業中はウィンドウを閉じないでください。"
+echo "[NOTICE] 終了する場合はこのウィンドウを閉じてください。"
 echo "============================================================"
 
-# Keep script running to maintain the trap listener
-while true; do
-    sleep 1
-done
+cleanup() {
+    echo "[INFO] GeoRhizome AI をシャットダウンしています..."
+    docker compose down
+    pkill -f local_bge_server.py
+    pkill -f local_reranker_server.py
+    pkill -f hardware_server.py
+    pkill -f llama_cpp.server
+    echo "[SUCCESS] シャットダウンが完了しました。"
+    exit 0
+}
+trap cleanup EXIT INT TERM
+while true; do sleep 1; done

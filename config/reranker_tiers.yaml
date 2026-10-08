@@ -1,0 +1,17 @@
+tiers:
+  low:
+    model: "BAAI/bge-reranker-base"
+    quantization: "onnx-int8"
+    min_ram_gb: 4
+    device: "cpu"
+  medium:
+    model: "BAAI/bge-reranker-base"
+    precision: "fp16"
+    min_ram_gb: 8
+    device: "cpu"
+  high:
+    model: "BAAI/bge-reranker-base"
+    precision: "fp32"
+    batch_size: 16
+    min_ram_gb: 16
+    device: "cpu"

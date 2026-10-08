@@ -1,0 +1,8 @@
+retrieval:
+  wide_candidate_count: 30
+  final_top_k: 10
+  min_reranker_score: -10.0
+  reranker_server_url: "http://127.0.0.1:8001/rerank"
+  reranker_enabled: false
+  timeout_ms: 3000
+

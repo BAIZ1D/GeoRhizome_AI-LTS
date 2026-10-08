@@ -1,0 +1,22 @@
+# Configuration for OCR Quality Gate (Confidence Scoring + Garbage Detection)
+
+# Tesseract Word-Level Confidence Threshold (0-100)
+min_tesseract_confidence: 60
+
+# Valid Character Ratio Threshold (ratio of valid CJK / Kana / Latin / Punctuation to total chars)
+min_valid_char_ratio: 0.70
+
+# Shannon Entropy Threshold (bits per char to detect low-entropy repetitive OCR garbage cycles)
+min_entropy: 3.0
+
+# Short Block Guard (Minimum character length required to evaluate entropy)
+min_char_length_for_entropy: 20
+
+# Flagging Combination Mode: "any" | "all" | "majority"
+flag_mode: "any"
+
+# PaddleOCR High-Accuracy Recovery Pass Settings
+paddleocr_fallback_enabled: true
+paddleocr_lang: "japan"
+paddleocr_model_tier: "PP-OCRv6_medium"
+paddleocr_min_confidence: 0.75

@@ -1,0 +1,48 @@
+{
+  "embedding": {
+    "model_name": "cl-nagoya/ruri-v3-310m",
+    "dimension": 768,
+    "base_url": "http://127.0.0.1:8000/v1",
+    "api_key": "sk-123abc",
+    "max_chunk_length": 1024,
+    "max_concurrent_chunks": 2
+  },
+  "text_splitter": {
+    "chunk_size": 1024,
+    "chunk_overlap": 20
+  },
+  "similarity": {
+    "default_threshold": 0.0,
+    "default_top_n": 4,
+    "distance_metric": "cosine"
+  },
+  "reranker": {
+    "enabled": true,
+    "base_url": "http://127.0.0.1:8001/rerank",
+    "web_search_top_k": 5,
+    "web_search_fetch_k": 12,
+    "snippet_max_length": 250
+  },
+  "llm": {
+    "model_name": "Qwen3-0.6B-Q8_0.gguf",
+    "base_url": "http://127.0.0.1:8003/v1",
+    "api_key": "sk-123abc",
+    "token_limit": 16384
+  },
+  "paths": {
+    "lancedb_dir": "server/storage/lancedb",
+    "vector_cache_dir": "server/storage/vector-cache",
+    "documents_dir": "server/storage/documents",
+    "tesseract_models_dir": "server/storage/models/tesseract"
+  },
+  "ocr": {
+    "dpi": 300,
+    "contrast_enhancement": 1.8,
+    "min_readable_chars": 50,
+    "cid_threshold": 3,
+    "vertical_psm": "--psm 5",
+    "horizontal_psm": "--psm 6",
+    "lang_horizontal": "jpn",
+    "lang_vertical": "jpn_vert+jpn"
+  }
+}

@@ -1,8 +1,8 @@
 {
   "generative": {
     "pid": 17015,
-    "model_id": "Qwen3-0.6B-Q8_0.gguf",
-    "name": "Qwen3-0.6B-Q8_0.gguf",
+    "model_id": "Qwen3.5-0.8B-Japanese-SFT-v2-Q4_K_M.gguf",
+    "name": "Qwen3.5-0.8B-Japanese-SFT-v2-Q4_K_M.gguf",
     "quant": "Q4_K_M",
     "port": 8003,
     "start_time": 1787713449.950604,

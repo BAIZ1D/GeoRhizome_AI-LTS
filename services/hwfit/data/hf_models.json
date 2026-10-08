@@ -1815,7 +1815,7 @@
   "release_date": "2025-04-27",
   "gguf_sources": [
    {
-    "repo": "unsloth/Qwen3-0.6B-GGUF",
+    "repo": "Takenoko12345678/Qwen3.5-0.8B-Japanese-SFT-v2-GGUF",
     "provider": "unsloth"
    }
   ]

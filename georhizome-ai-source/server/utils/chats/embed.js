@@ -229,11 +229,20 @@ async function recentEmbedChatHistory(sessionId, embed, messageLimit = 20, curre
     const path = require("path");
     const yaml = require("js-yaml");
     const { safeJsonParse } = require("../http");
-    const cfgPath = path.resolve(__dirname, "../../../../../config/retrieval.yaml");
+    const containerPath = "/config/app_config.json";
+    const localPath = path.resolve(__dirname, "../../../../../config/app_config.json");
     let retrievalCfg = { final_top_k: 8, reranker_server_url: "http://127.0.0.1:8001/rerank", reranker_enabled: false };
-    if (fs.existsSync(cfgPath)) {
-      const parsed = yaml.load(fs.readFileSync(cfgPath, "utf8")) || {};
-      retrievalCfg = { ...retrievalCfg, ...parsed };
+    
+    let appConfig = null;
+    if (fs.existsSync(containerPath)) {
+      appConfig = JSON.parse(fs.readFileSync(containerPath, "utf8"));
+    } else if (fs.existsSync(localPath)) {
+      appConfig = JSON.parse(fs.readFileSync(localPath, "utf8"));
+    }
+
+    if (appConfig && appConfig.reranker) {
+      retrievalCfg.reranker_enabled = appConfig.reranker.enabled !== false;
+      retrievalCfg.reranker_server_url = appConfig.reranker.base_url || retrievalCfg.reranker_server_url;
     }
     if (retrievalCfg.reranker_enabled && rawHistory.length > 0 && currentPrompt) {
       const payload = {

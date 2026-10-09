@@ -19,7 +19,7 @@
   },
   "reranker": {
     "enabled": true,
-    "base_url": "http://127.0.0.1:8001/rerank",
+    "base_url": "http://host.docker.internal:8001/rerank",
     "web_search_top_k": 5,
     "web_search_fetch_k": 12,
     "snippet_max_length": 250

@@ -10,6 +10,7 @@ import os
 import json
 import time
 import subprocess
+import yaml
 from typing import List, Dict, Any, Optional
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Query
 from pydantic import BaseModel
@@ -21,6 +22,7 @@ from hwfit.fit import rank_models, analyze_model
 from core.platform_compat import kill_process_tree, pid_alive
 
 CONFIG_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config"))
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 CATALOG_PATH = os.path.join(CONFIG_DIR, "model_catalog.json")
 MODELS_CACHE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "models"))
 os.makedirs(MODELS_CACHE_DIR, exist_ok=True)
@@ -43,7 +45,7 @@ def load_active_state():
     default_gen_model = "Qwen3-0.6B-Q8_0.gguf"
     default_emb_model = "cl-nagoya/ruri-v3-310m"
     default_rerank_model = "cl-nagoya/ruri-v3-reranker-310m"
-    app_cfg_p = os.path.join(ROOT_DIR, "config", "app_config.json")
+    app_cfg_p = os.path.join(CONFIG_DIR, "app_config.json")
     if os.path.exists(app_cfg_p):
         try:
             with open(app_cfg_p, "r", encoding="utf-8") as f:
@@ -53,7 +55,7 @@ def load_active_state():
         except Exception:
             pass
 
-    ret_cfg_p = os.path.join(ROOT_DIR, "config", "retrieval.yaml")
+    ret_cfg_p = os.path.join(CONFIG_DIR, "retrieval.yaml")
     if os.path.exists(ret_cfg_p):
         try:
             with open(ret_cfg_p, "r", encoding="utf-8") as f:
@@ -590,10 +592,20 @@ def serve_model(req: ServeRequest, background_tasks: BackgroundTasks):
 
     if cat == "reranker":
         try:
-            pids = subprocess.check_output("lsof -ti:8001", shell=True, text=True).strip()
-            if pids:
-                for p in pids.splitlines():
-                    subprocess.run(f"kill -9 {p}", shell=True)
+            import platform
+            if platform.system() == "Windows":
+                out = subprocess.check_output(f"netstat -ano | findstr :8001", shell=True, text=True)
+                for line in out.splitlines():
+                    if f":8001" in line and "LISTENING" in line:
+                        parts = line.split()
+                        if len(parts) >= 5:
+                            pid = parts[-1]
+                            subprocess.run(f"taskkill /F /PID {pid}", shell=True)
+            else:
+                pids = subprocess.check_output("lsof -ti:8001", shell=True, text=True).strip()
+                if pids:
+                    for p in pids.splitlines():
+                        subprocess.run(f"kill -9 {p}", shell=True)
         except Exception:
             pass
 
@@ -623,10 +635,20 @@ def serve_model(req: ServeRequest, background_tasks: BackgroundTasks):
 
     elif cat == "embedding":
         try:
-            pids = subprocess.check_output("lsof -ti:8000", shell=True, text=True).strip()
-            if pids:
-                for p in pids.splitlines():
-                    subprocess.run(f"kill -9 {p}", shell=True)
+            import platform
+            if platform.system() == "Windows":
+                out = subprocess.check_output(f"netstat -ano | findstr :8000", shell=True, text=True)
+                for line in out.splitlines():
+                    if f":8000" in line and "LISTENING" in line:
+                        parts = line.split()
+                        if len(parts) >= 5:
+                            pid = parts[-1]
+                            subprocess.run(f"taskkill /F /PID {pid}", shell=True)
+            else:
+                pids = subprocess.check_output("lsof -ti:8000", shell=True, text=True).strip()
+                if pids:
+                    for p in pids.splitlines():
+                        subprocess.run(f"kill -9 {p}", shell=True)
         except Exception:
             pass
 
@@ -644,7 +666,7 @@ def serve_model(req: ServeRequest, background_tasks: BackgroundTasks):
 
     elif cat == "generative":
         default_model = "Qwen3-0.6B-Q8_0.gguf"
-        app_cfg_path = os.path.join(ROOT_DIR, "config", "app_config.json")
+        app_cfg_path = os.path.join(CONFIG_DIR, "app_config.json")
         if os.path.exists(app_cfg_path):
             try:
                 with open(app_cfg_path, "r", encoding="utf-8") as f:
@@ -656,10 +678,20 @@ def serve_model(req: ServeRequest, background_tasks: BackgroundTasks):
         update_app_config_llm(actual_model_id, 16384)
         # Kill any old listener on port 8003
         try:
-            pids = subprocess.check_output("lsof -ti:8003", shell=True, text=True).strip()
-            if pids:
-                for p in pids.splitlines():
-                    subprocess.run(f"kill -9 {p}", shell=True)
+            import platform
+            if platform.system() == "Windows":
+                out = subprocess.check_output(f"netstat -ano | findstr :8003", shell=True, text=True)
+                for line in out.splitlines():
+                    if f":8003" in line and "LISTENING" in line:
+                        parts = line.split()
+                        if len(parts) >= 5:
+                            pid = parts[-1]
+                            subprocess.run(f"taskkill /F /PID {pid}", shell=True)
+            else:
+                pids = subprocess.check_output("lsof -ti:8003", shell=True, text=True).strip()
+                if pids:
+                    for p in pids.splitlines():
+                        subprocess.run(f"kill -9 {p}", shell=True)
         except Exception:
             pass
 
@@ -863,10 +895,20 @@ def offload_model(req: OffloadRequest):
     if cat == "embedding":
         # Kill processes listening on port 8000 (Fast-BGE Embedder)
         try:
-            pids = subprocess.check_output("lsof -ti:8000", shell=True, text=True).strip()
-            if pids:
-                for p in pids.splitlines():
-                    subprocess.run(f"kill -9 {p}", shell=True)
+            import platform
+            if platform.system() == "Windows":
+                out = subprocess.check_output(f"netstat -ano | findstr :8000", shell=True, text=True)
+                for line in out.splitlines():
+                    if f":8000" in line and "LISTENING" in line:
+                        parts = line.split()
+                        if len(parts) >= 5:
+                            pid = parts[-1]
+                            subprocess.run(f"taskkill /F /PID {pid}", shell=True)
+            else:
+                pids = subprocess.check_output("lsof -ti:8000", shell=True, text=True).strip()
+                if pids:
+                    for p in pids.splitlines():
+                        subprocess.run(f"kill -9 {p}", shell=True)
         except Exception:
             pass
         ACTIVE_PROCESSES["embedding"] = {
@@ -882,10 +924,20 @@ def offload_model(req: OffloadRequest):
     elif cat == "reranker":
         # Kill processes listening on port 8001 (Reranker)
         try:
-            pids = subprocess.check_output("lsof -ti:8001", shell=True, text=True).strip()
-            if pids:
-                for p in pids.splitlines():
-                    subprocess.run(f"kill -9 {p}", shell=True)
+            import platform
+            if platform.system() == "Windows":
+                out = subprocess.check_output(f"netstat -ano | findstr :8001", shell=True, text=True)
+                for line in out.splitlines():
+                    if f":8001" in line and "LISTENING" in line:
+                        parts = line.split()
+                        if len(parts) >= 5:
+                            pid = parts[-1]
+                            subprocess.run(f"taskkill /F /PID {pid}", shell=True)
+            else:
+                pids = subprocess.check_output("lsof -ti:8001", shell=True, text=True).strip()
+                if pids:
+                    for p in pids.splitlines():
+                        subprocess.run(f"kill -9 {p}", shell=True)
         except Exception:
             pass
         ACTIVE_PROCESSES["reranker"] = {
@@ -901,10 +953,20 @@ def offload_model(req: OffloadRequest):
     elif cat == "generative":
         # Kill process listening on port 8003 (Chat LLM Server)
         try:
-            pids = subprocess.check_output("lsof -ti:8003", shell=True, text=True).strip()
-            if pids:
-                for p in pids.splitlines():
-                    subprocess.run(f"kill -9 {p}", shell=True)
+            import platform
+            if platform.system() == "Windows":
+                out = subprocess.check_output(f"netstat -ano | findstr :8003", shell=True, text=True)
+                for line in out.splitlines():
+                    if f":8003" in line and "LISTENING" in line:
+                        parts = line.split()
+                        if len(parts) >= 5:
+                            pid = parts[-1]
+                            subprocess.run(f"taskkill /F /PID {pid}", shell=True)
+            else:
+                pids = subprocess.check_output("lsof -ti:8003", shell=True, text=True).strip()
+                if pids:
+                    for p in pids.splitlines():
+                        subprocess.run(f"kill -9 {p}", shell=True)
         except Exception:
             pass
         ACTIVE_PROCESSES["generative"] = {

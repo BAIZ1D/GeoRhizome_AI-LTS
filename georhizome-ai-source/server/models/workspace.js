@@ -8,6 +8,43 @@ const { User } = require("./user");
 const { PromptHistory } = require("./promptHistory");
 const { SystemSettings } = require("./systemSettings");
 
+const fs = require("fs");
+const path = require("path");
+let appConfigCache = null;
+function getAppConfig() {
+  if (appConfigCache) return appConfigCache;
+  try {
+    const containerPath = "/config/app_config.json";
+    const localPath = path.resolve(__dirname, "../../../../config/app_config.json");
+    if (fs.existsSync(containerPath)) {
+      appConfigCache = JSON.parse(fs.readFileSync(containerPath, 'utf8'));
+    } else if (fs.existsSync(localPath)) {
+      appConfigCache = JSON.parse(fs.readFileSync(localPath, 'utf8'));
+    }
+  } catch (e) {
+    console.error("Failed to read app_config.json", e);
+  }
+  return appConfigCache || {};
+}
+
+function getDefaultThreshold() {
+  const cfg = getAppConfig();
+  if (cfg && cfg.similarity && cfg.similarity.default_threshold !== undefined) return cfg.similarity.default_threshold;
+  return 0.25;
+}
+
+function getDefaultTopN() {
+  const cfg = getAppConfig();
+  if (cfg && cfg.similarity && cfg.similarity.default_top_n !== undefined) return cfg.similarity.default_top_n;
+  return 5;
+}
+
+function getDefaultSearchMode() {
+  const cfg = getAppConfig();
+  if (cfg && cfg.similarity && cfg.similarity.default_vector_search_mode !== undefined) return cfg.similarity.default_vector_search_mode;
+  return "rerank";
+}
+
 function isNullOrNaN(value) {
   if (value === null) return true;
   return isNaN(value);
@@ -79,17 +116,19 @@ const Workspace = {
       return history;
     },
     similarityThreshold: (value) => {
-      if (value === null || value === undefined) return 0.25;
+      const def = getDefaultThreshold();
+      if (value === null || value === undefined) return def;
       const threshold = parseFloat(value);
-      if (isNullOrNaN(threshold)) return 0.25;
+      if (isNullOrNaN(threshold)) return def;
       if (threshold < 0) return 0.0;
       if (threshold > 1) return 1.0;
       return threshold;
     },
     topN: (value) => {
-      if (value === null || value === undefined) return 4;
+      const def = getDefaultTopN();
+      if (value === null || value === undefined) return def;
       const n = parseInt(value);
-      if (isNullOrNaN(n)) return 4;
+      if (isNullOrNaN(n)) return def;
       if (n < 1) return 1;
       return n;
     },
@@ -123,12 +162,13 @@ const Workspace = {
       return String(value);
     },
     vectorSearchMode: (value) => {
+      const def = getDefaultSearchMode();
       if (
         !value ||
         typeof value !== "string" ||
         !["default", "rerank"].includes(value)
       )
-        return "default";
+        return def;
       return value;
     },
   },

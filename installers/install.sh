@@ -117,7 +117,7 @@ fi
 echo "[INFO] GeoRhizome AI を起動しています..."
 echo "[INFO] ネイティブAI推論サーバーを起動しています..."
 VENV_PYTHON="$HOME/.georhizome/source/.venv/bin/python3"
-nohup "$VENV_PYTHON" "$HOME/.georhizome/source/local_bge_server.py" > "$HOME/.georhizome/bge.log" 2>&1 &
+nohup "$VENV_PYTHON" "$HOME/.georhizome/source/services/local_bge_server.py" > "$HOME/.georhizome/bge.log" 2>&1 &
 nohup "$VENV_PYTHON" "$HOME/.georhizome/source/services/local_reranker_server.py" > "$HOME/.georhizome/reranker.log" 2>&1 &
 nohup "$VENV_PYTHON" "$HOME/.georhizome/source/services/hardware_server.py" > "$HOME/.georhizome/hardware.log" 2>&1 &
 

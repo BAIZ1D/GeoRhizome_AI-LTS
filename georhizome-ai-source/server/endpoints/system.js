@@ -72,19 +72,12 @@ function systemEndpoints(app) {
   
   app.post("/system/upload-workspace", async (request, response) => {
     try {
-      const { slug, password, githubPat } = request.body;
-      if (!slug || !password) return response.status(400).json({ error: "Missing slug or password" });
-
-      const crypto = require("crypto");
-      const hash = crypto.createHash("sha256").update(password).digest("hex");
-      // Hardcoded hash for GeoRhizomeHAMIDBAIZIDAL
-      if (hash !== "765839e0ebfcdf6b2727cbcbf452298739112d24f259d63630a472f26245b7cc") {
-        return response.status(401).json({ error: "Unauthorized: Invalid Master Password" });
-      }
+      const { slug, githubPat } = request.body;
+      if (!slug) return response.status(400).json({ error: "Missing slug" });
 
       const writeToken = githubPat || process.env.GHCR_WRITE_TOKEN;
       if (!writeToken) {
-        return response.status(500).json({ error: "GitHub Write PAT is required." });
+        return response.status(400).json({ error: "GitHub Write PAT is required." });
       }
 
       const { Workspace } = require("../models/workspace");
@@ -169,7 +162,7 @@ function systemEndpoints(app) {
             })
           });
           const createData = await createRes.json();
-          if (!createData.id) throw new Error("Failed to create GitHub Release");
+          if (!createData.id) throw new Error(`Failed to create GitHub Release: ${createData.message || 'Unauthorized PAT'}`);
           releaseId = createData.id;
         }
 

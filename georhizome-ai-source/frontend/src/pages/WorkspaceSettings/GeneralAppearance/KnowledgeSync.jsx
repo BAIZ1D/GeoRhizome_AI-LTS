@@ -8,7 +8,6 @@ export default function KnowledgeSync({ workspace }) {
   
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showWipeModal, setShowWipeModal] = useState(false);
-  const [password, setPassword] = useState("");
   const [githubPat, setGithubPat] = useState("");
 
   const handleSync = async () => {
@@ -39,7 +38,7 @@ export default function KnowledgeSync({ workspace }) {
 
   const handleUploadSubmit = async (e) => {
     e.preventDefault();
-    if (!password) return;
+    if (!githubPat) return;
     
     setShowPasswordModal(false);
     setUploading(true);
@@ -52,7 +51,7 @@ export default function KnowledgeSync({ workspace }) {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${window.localStorage.getItem("anythingllm_authToken")}`
         },
-        body: JSON.stringify({ slug: workspace.slug, password, githubPat })
+        body: JSON.stringify({ slug: workspace.slug, githubPat })
       });
       
       const data = await response.json();
@@ -64,7 +63,7 @@ export default function KnowledgeSync({ workspace }) {
       showToast(`アップロードエラー: ${e.message}`, "error", { clear: true });
     } finally {
       setUploading(false);
-      setPassword("");
+      setGithubPat("");
     }
   };
 
@@ -163,25 +162,18 @@ export default function KnowledgeSync({ workspace }) {
       {showPasswordModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="bg-theme-bg-secondary p-6 rounded-lg shadow-xl w-full max-w-md border border-theme-border">
-            <h3 className="text-lg font-semibold text-white mb-2">管理者権限が必要です</h3>
+            <h3 className="text-lg font-semibold text-white mb-2">GitHub 認証が必要です</h3>
             <p className="text-sm text-theme-text-secondary mb-4">
-              ナレッジベースのアップロードにはマスターパスワードが必要です。
+              ナレッジベースのアップロードにはGitHub Write PATが必要です。
             </p>
             <form onSubmit={handleUploadSubmit}>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="マスターパスワードを入力"
-                className="w-full bg-theme-bg-primary text-white border border-theme-border rounded-lg px-4 py-2 mb-4 outline-none focus:border-blue-500"
-                autoFocus
-              />
               <input
                 type="password"
                 value={githubPat}
                 onChange={(e) => setGithubPat(e.target.value)}
                 placeholder="GitHub Write PATを入力 (github_pat_...)"
                 className="w-full bg-theme-bg-primary text-white border border-theme-border rounded-lg px-4 py-2 mb-4 outline-none focus:border-blue-500"
+                autoFocus
               />
               <div className="flex justify-end gap-x-3">
                 <button

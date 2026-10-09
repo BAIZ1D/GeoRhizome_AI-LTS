@@ -118,9 +118,10 @@ class LanceDb extends VectorDatabase {
     namespace,
     query,
     queryVector,
-    topN = 10,
+    topN = 5,
     similarityThreshold = 0.25,
     filterIdentifiers = [],
+    rerank = false,
   }) {
     const fs = require("fs");
     const path = require("path");
@@ -136,14 +137,29 @@ class LanceDb extends VectorDatabase {
     };
 
     try {
-      const cfgPath = path.resolve(__dirname, "../../../../../../config/retrieval.yaml");
-      if (fs.existsSync(cfgPath)) {
-        const yamlContent = yaml.load(fs.readFileSync(cfgPath, "utf-8"));
-        if (yamlContent?.retrieval) {
-          retrievalCfg = { ...retrievalCfg, ...yamlContent.retrieval };
-        }
+      const containerPath = "/config/app_config.json";
+      const localPath = path.resolve(__dirname, "../../../../../../config/app_config.json");
+      let appConfig = null;
+      if (fs.existsSync(containerPath)) {
+        appConfig = JSON.parse(fs.readFileSync(containerPath, "utf-8"));
+      } else if (fs.existsSync(localPath)) {
+        appConfig = JSON.parse(fs.readFileSync(localPath, "utf-8"));
       }
-    } catch (e) {}
+
+      if (appConfig) {
+        if (appConfig.reranker) {
+          retrievalCfg.reranker_enabled = rerank && (appConfig.reranker.enabled !== false);
+          retrievalCfg.reranker_server_url = appConfig.reranker.base_url || retrievalCfg.reranker_server_url;
+        }
+        if (appConfig.similarity) {
+          retrievalCfg.final_top_k = topN || appConfig.similarity.default_top_n || 5;
+        }
+      } else {
+        retrievalCfg.reranker_enabled = rerank;
+      }
+    } catch (e) {
+      retrievalCfg.reranker_enabled = rerank;
+    }
 
     const collection = await client.openTable(namespace);
     const wideCount = Math.max(topN, retrievalCfg.wide_candidate_count || 30);
@@ -618,6 +634,7 @@ class LanceDb extends VectorDatabase {
       similarityThreshold,
       topN,
       filterIdentifiers,
+      rerank,
     });
 
     const { contextTexts, sourceDocuments } = result;

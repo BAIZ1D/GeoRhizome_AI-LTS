@@ -360,13 +360,21 @@ class AgentHandler {
         try {
           const path = require("path");
           const fs = require("fs");
+          const containerActivePath = "/config/active_models.json";
           const activePath = path.resolve(__dirname, "../../../../config/active_models.json");
-          if (fs.existsSync(activePath)) {
+          if (fs.existsSync(containerActivePath)) {
+            const act = JSON.parse(fs.readFileSync(containerActivePath, "utf-8"));
+            if (act.generative?.model_id) return act.generative.model_id;
+          } else if (fs.existsSync(activePath)) {
             const act = JSON.parse(fs.readFileSync(activePath, "utf-8"));
             if (act.generative?.model_id) return act.generative.model_id;
           }
+          const containerAppCfgPath = "/config/app_config.json";
           const appCfgPath = path.resolve(__dirname, "../../../../config/app_config.json");
-          if (fs.existsSync(appCfgPath)) {
+          if (fs.existsSync(containerAppCfgPath)) {
+            const cfg = JSON.parse(fs.readFileSync(containerAppCfgPath, "utf-8"));
+            if (cfg.llm?.model_name) return cfg.llm.model_name;
+          } else if (fs.existsSync(appCfgPath)) {
             const cfg = JSON.parse(fs.readFileSync(appCfgPath, "utf-8"));
             if (cfg.llm?.model_name) return cfg.llm.model_name;
           }

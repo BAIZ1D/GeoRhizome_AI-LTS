@@ -12,8 +12,9 @@
     "chunk_overlap": 20
   },
   "similarity": {
-    "default_threshold": 0.0,
-    "default_top_n": 4,
+    "default_threshold": 0.25,
+    "default_top_n": 5,
+    "default_vector_search_mode": "rerank",
     "distance_metric": "cosine"
   },
   "reranker": {

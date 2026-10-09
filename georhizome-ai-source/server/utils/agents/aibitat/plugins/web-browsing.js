@@ -6,9 +6,12 @@ const tiktoken = new TokenManager();
 
 function getAppConfig() {
   try {
-    const configPath = path.resolve(__dirname, "../../../../../../../config/app_config.json");
-    if (fs.existsSync(configPath)) {
-      return JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    const containerPath = "/config/app_config.json";
+    const localPath = path.resolve(__dirname, "../../../../../../../config/app_config.json");
+    if (fs.existsSync(containerPath)) {
+      return JSON.parse(fs.readFileSync(containerPath, "utf-8"));
+    } else if (fs.existsSync(localPath)) {
+      return JSON.parse(fs.readFileSync(localPath, "utf-8"));
     }
   } catch (e) {
     console.error("[WebBrowsing] Failed to read app_config.json:", e.message);

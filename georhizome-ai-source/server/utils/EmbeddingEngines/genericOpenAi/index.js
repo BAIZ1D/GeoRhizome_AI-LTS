@@ -12,9 +12,12 @@ class GenericOpenAiEmbedder {
     const path = require("path");
     let config = {};
     try {
-      const configPath = path.resolve(__dirname, "../../../../../../config/app_config.json");
-      if (fs.existsSync(configPath)) {
-        config = JSON.parse(fs.readFileSync(configPath, "utf-8"))?.embedding || {};
+      const containerPath = "/config/app_config.json";
+      const localPath = path.resolve(__dirname, "../../../../../../config/app_config.json");
+      if (fs.existsSync(containerPath)) {
+        config = JSON.parse(fs.readFileSync(containerPath, "utf-8"))?.embedding || {};
+      } else if (fs.existsSync(localPath)) {
+        config = JSON.parse(fs.readFileSync(localPath, "utf-8"))?.embedding || {};
       }
     } catch (e) {}
 

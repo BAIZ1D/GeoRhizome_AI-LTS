@@ -138,7 +138,7 @@ Maintaining version parity across an enterprise fleet is handled autonomously vi
 
 **PROPRIETARY AND CONFIDENTIAL**
 
-This software, including all source code, compiled binaries, and associated documentation, is the proprietary and confidential property of BAIZ1D (GeoRhizome AI).
+This software, including all source code, compiled binaries, and associated documentation, is the proprietary and confidential property of 株式会社GeoRhizome.
 
 1. **NO OPEN SOURCE RIGHTS:** This software is NOT open source. Any prior open-source licensing associated with underlying architectures has been superseded by this proprietary license for all internal deployments.
 2. **RESTRICTIONS ON USE:** No part of this software may be copied, reproduced, distributed, transmitted, broadcast, displayed, sold, licensed, reverse-engineered, or otherwise exploited for any purpose whatsoever outside of authorized internal enterprise deployment without prior written consent.

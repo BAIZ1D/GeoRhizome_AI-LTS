@@ -72,7 +72,7 @@ function systemEndpoints(app) {
   
   app.post("/system/upload-workspace", async (request, response) => {
     try {
-      const { slug, password } = request.body;
+      const { slug, password, githubPat } = request.body;
       if (!slug || !password) return response.status(400).json({ error: "Missing slug or password" });
 
       const crypto = require("crypto");
@@ -82,9 +82,9 @@ function systemEndpoints(app) {
         return response.status(401).json({ error: "Unauthorized: Invalid Master Password" });
       }
 
-      const writeToken = process.env.GHCR_WRITE_TOKEN;
+      const writeToken = githubPat || process.env.GHCR_WRITE_TOKEN;
       if (!writeToken) {
-        return response.status(500).json({ error: "GHCR_WRITE_TOKEN is not set in the Admin's .env file." });
+        return response.status(500).json({ error: "GitHub Write PAT is required." });
       }
 
       const { Workspace } = require("../models/workspace");
@@ -118,82 +118,85 @@ function systemEndpoints(app) {
       const { execSync } = require("child_process");
 
       const tempDir = path.join(os.tmpdir(), `georhizome_export_${slug}_${Date.now()}`);
-      fs.mkdirSync(tempDir, { recursive: true });
+      const tarPath = path.join(os.tmpdir(), `workspace-${slug}-${Date.now()}.tar.gz`);
 
-      // Write metadata
-      fs.writeFileSync(path.join(tempDir, "metadata.json"), JSON.stringify(metadata, null, 2));
+      try {
+        fs.mkdirSync(tempDir, { recursive: true });
 
-      // Copy LanceDB
-      const lancedbSrc = path.join(__dirname, "..", "storage", "lancedb", `${slug}.lance`);
-      const lancedbDest = path.join(tempDir, `${slug}.lance`);
-      if (fs.existsSync(lancedbSrc)) {
-        execSync(`cp -r "${lancedbSrc}" "${lancedbDest}"`);
-      }
+        // Write metadata
+        fs.writeFileSync(path.join(tempDir, "metadata.json"), JSON.stringify(metadata, null, 2));
 
-      // Tar it up
-      const tarPath = path.join(os.tmpdir(), `workspace-${slug}.tar.gz`);
-      execSync(`tar -czf "${tarPath}" -C "${tempDir}" .`);
-
-      // === GITHUB API UPLOAD ===
-      const repo = "BAIZ1D/GeoRhizome_AI-LTS";
-      const headers = {
-        "Authorization": `token ${writeToken}`,
-        "Accept": "application/vnd.github.v3+json",
-        "User-Agent": "GeoRhizome-AI-Admin"
-      };
-
-      // 1. Check if release exists
-      
-      let releaseId;
-      const getRelRes = await fetch(`https://api.github.com/repos/${repo}/releases/tags/workspace-${slug}`, { headers });
-      if (getRelRes.ok) {
-        const relData = await getRelRes.json();
-        releaseId = relData.id;
-        // Delete old asset if exists
-        const oldAsset = relData.assets.find(a => a.name === `vectors.tar.gz`);
-        if (oldAsset) {
-          await fetch(`https://api.github.com/repos/${repo}/releases/assets/${oldAsset.id}`, { method: 'DELETE', headers });
+        // Copy LanceDB
+        const lancedbSrc = path.join(__dirname, "..", "storage", "lancedb", `${slug}.lance`);
+        const lancedbDest = path.join(tempDir, `${slug}.lance`);
+        if (fs.existsSync(lancedbSrc)) {
+          execSync(`cp -r "${lancedbSrc}" "${lancedbDest}"`);
         }
-      } else {
-        // Create release
-        const createRes = await fetch(`https://api.github.com/repos/${repo}/releases`, {
+
+        // Tar it up
+        execSync(`tar -czf "${tarPath}" -C "${tempDir}" .`);
+
+        // === GITHUB API UPLOAD ===
+        const repo = "BAIZ1D/GeoRhizome_AI-LTS";
+        const headers = {
+          "Authorization": `token ${writeToken}`,
+          "Accept": "application/vnd.github.v3+json",
+          "User-Agent": "GeoRhizome-AI-Admin"
+        };
+
+        // 1. Check if release exists
+        let releaseId;
+        const getRelRes = await fetch(`https://api.github.com/repos/${repo}/releases/tags/workspace-${slug}`, { headers });
+        if (getRelRes.ok) {
+          const relData = await getRelRes.json();
+          releaseId = relData.id;
+          // Delete old asset if exists
+          const oldAsset = relData.assets.find(a => a.name === `vectors.tar.gz`);
+          if (oldAsset) {
+            await fetch(`https://api.github.com/repos/${repo}/releases/assets/${oldAsset.id}`, { method: 'DELETE', headers });
+          }
+        } else {
+          // Create release
+          const createRes = await fetch(`https://api.github.com/repos/${repo}/releases`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              tag_name: `workspace-${slug}`,
+              name: `Workspace: ${workspace.name}`,
+              body: "Auto-generated GeoRhizome Knowledge Base Sync",
+              draft: false,
+              prerelease: false
+            })
+          });
+          const createData = await createRes.json();
+          if (!createData.id) throw new Error("Failed to create GitHub Release");
+          releaseId = createData.id;
+        }
+
+        // 2. Upload Asset
+        const stat = fs.statSync(tarPath);
+        const uploadRes = await fetch(`https://uploads.github.com/repos/${repo}/releases/${releaseId}/assets?name=vectors.tar.gz`, {
           method: 'POST',
-          headers,
-          body: JSON.stringify({
-            tag_name: `workspace-${slug}`,
-            name: `Workspace: ${workspace.name}`,
-            body: "Auto-generated GeoRhizome Knowledge Base Sync",
-            draft: false,
-            prerelease: false
-          })
+          duplex: 'half',
+          headers: {
+            ...headers,
+            "Content-Type": "application/gzip",
+            "Content-Length": stat.size
+          },
+          body: fs.createReadStream(tarPath)
         });
-        const createData = await createRes.json();
-        if (!createData.id) throw new Error("Failed to create GitHub Release");
-        releaseId = createData.id;
+
+        if (!uploadRes.ok) {
+          const err = await uploadRes.text();
+          throw new Error(`Upload failed: ${err}`);
+        }
+
+        response.status(200).json({ success: true, message: "Workspace successfully exported and pushed to GitHub!" });
+      } finally {
+        // Cleanup
+        if (fs.existsSync(tempDir)) fs.rmSync(tempDir, { recursive: true, force: true });
+        if (fs.existsSync(tarPath)) fs.unlinkSync(tarPath);
       }
-
-      // 2. Upload Asset
-      const stat = fs.statSync(tarPath);
-      const uploadRes = await fetch(`https://uploads.github.com/repos/${repo}/releases/${releaseId}/assets?name=vectors.tar.gz`, {
-        method: 'POST',
-        headers: {
-          ...headers,
-          "Content-Type": "application/gzip",
-          "Content-Length": stat.size
-        },
-        body: fs.createReadStream(tarPath)
-      });
-
-      if (!uploadRes.ok) {
-        const err = await uploadRes.text();
-        throw new Error(`Upload failed: ${err}`);
-      }
-
-      // Cleanup
-      fs.rmSync(tempDir, { recursive: true, force: true });
-      fs.unlinkSync(tarPath);
-
-      response.status(200).json({ success: true, message: "Workspace successfully exported and pushed to GitHub!" });
     } catch (e) {
       console.error(e);
       response.status(500).json({ error: e.message });

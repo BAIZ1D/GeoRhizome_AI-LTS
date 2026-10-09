@@ -9,6 +9,7 @@ export default function KnowledgeSync({ workspace }) {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showWipeModal, setShowWipeModal] = useState(false);
   const [password, setPassword] = useState("");
+  const [githubPat, setGithubPat] = useState("");
 
   const handleSync = async () => {
     setSyncing(true);
@@ -51,7 +52,7 @@ export default function KnowledgeSync({ workspace }) {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${window.localStorage.getItem("anythingllm_authToken")}`
         },
-        body: JSON.stringify({ slug: workspace.slug, password })
+        body: JSON.stringify({ slug: workspace.slug, password, githubPat })
       });
       
       const data = await response.json();
@@ -174,6 +175,13 @@ export default function KnowledgeSync({ workspace }) {
                 placeholder="マスターパスワードを入力"
                 className="w-full bg-theme-bg-primary text-white border border-theme-border rounded-lg px-4 py-2 mb-4 outline-none focus:border-blue-500"
                 autoFocus
+              />
+              <input
+                type="password"
+                value={githubPat}
+                onChange={(e) => setGithubPat(e.target.value)}
+                placeholder="GitHub Write PATを入力 (github_pat_...)"
+                className="w-full bg-theme-bg-primary text-white border border-theme-border rounded-lg px-4 py-2 mb-4 outline-none focus:border-blue-500"
               />
               <div className="flex justify-end gap-x-3">
                 <button

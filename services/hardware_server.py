@@ -20,9 +20,14 @@ sys.path.insert(0, os.path.dirname(__file__))
 from hwfit.hardware import detect_system
 from hwfit.fit import rank_models, analyze_model
 from core.platform_compat import kill_process_tree, pid_alive
+from core.config_io import CONFIG_LOCK, atomic_write_json, get_config_dir, read_json
+import reranker_state
 
-CONFIG_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config"))
+CONFIG_DIR = get_config_dir()
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+SERVER_ENV_PATH = os.path.join(ROOT_DIR, "georhizome-ai-source", "server", ".env")
+ANYTHINGLLM_DB_PATH = os.path.join(ROOT_DIR, "..", "storage", "anythingllm.db")
+LEGACY_SENTINEL = "Offloaded"  # display-only in /hardware/status; never written for the reranker
 CATALOG_PATH = os.path.join(CONFIG_DIR, "model_catalog.json")
 MODELS_CACHE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "models"))
 os.makedirs(MODELS_CACHE_DIR, exist_ok=True)
@@ -32,85 +37,80 @@ app = FastAPI(title="GeoRhizome Hardware & Model Hub Server", version="1.0.0")
 ACTIVE_MODELS_STATE_PATH = os.path.join(CONFIG_DIR, "active_models.json")
 
 def load_active_state():
-    if os.path.exists(ACTIVE_MODELS_STATE_PATH):
-        try:
-            with open(ACTIVE_MODELS_STATE_PATH, "r", encoding="utf-8") as f:
-                st = json.load(f)
-                for cat, info in st.items():
-                    if info.get("model_id") and info.get("model_id") != "Offloaded":
-                        info["alive"] = True
-                return st
-        except Exception:
-            pass
-    default_gen_model = "Qwen3-0.6B-Q8_0.gguf"
-    default_emb_model = "cl-nagoya/ruri-v3-310m"
-    default_rerank_model = "cl-nagoya/ruri-v3-reranker-310m"
-    app_cfg_p = os.path.join(CONFIG_DIR, "app_config.json")
-    if os.path.exists(app_cfg_p):
-        try:
-            with open(app_cfg_p, "r", encoding="utf-8") as f:
-                c = json.load(f)
-                default_gen_model = c.get("llm", {}).get("model_name") or default_gen_model
-                default_emb_model = c.get("embedding", {}).get("model_name") or default_emb_model
-        except Exception:
-            pass
+    """Load runtime model state. Seeds config/active_models.json from the tracked
+    active_models.default.json when missing, strips persisted liveness flags and
+    migrates a legacy reranker "Offloaded" sentinel. Liveness is computed in
+    /hardware/status (pid_alive / port probe), never stored."""
+    try:
+        reranker_state.seed_active_models(CONFIG_DIR)
+        reranker_state.migrate_legacy_sentinel(CONFIG_DIR)
+        st = read_json(ACTIVE_MODELS_STATE_PATH)
+    except Exception as e:
+        print("[Warning] Failed loading active models state:", e)
+        st = {}
+    for info in st.values():
+        if isinstance(info, dict):
+            info.pop("alive", None)
+    if st:
+        return st
 
-    ret_cfg_p = os.path.join(CONFIG_DIR, "retrieval.yaml")
-    if os.path.exists(ret_cfg_p):
-        try:
-            with open(ret_cfg_p, "r", encoding="utf-8") as f:
-                y = yaml.safe_load(f) or {}
-                default_rerank_model = y.get("retrieval", {}).get("reranker_model") or default_rerank_model
-        except Exception:
-            pass
-
-    return {
-        "generative": {
-            "model_id": default_gen_model,
-            "name": default_gen_model,
-            "quant": "Q4_K_M",
-            "pid": os.getpid(),
-            "alive": True
-        },
-        "embedding": {
-            "model_id": default_emb_model,
-            "name": default_emb_model,
-            "port": 8000,
-            "pid": os.getpid(),
-            "alive": True
-        },
-        "reranker": {
-            "model_id": default_rerank_model,
-            "name": default_rerank_model,
-            "port": 8001,
-            "pid": os.getpid(),
-            "alive": True
-        }
-    }
+    app_cfg = read_json(os.path.join(CONFIG_DIR, "app_config.json"))
+    gen = (app_cfg.get("llm") or {}).get("model_name")
+    emb = (app_cfg.get("embedding") or {}).get("model_name")
+    rer = (app_cfg.get("reranker") or {}).get("model_name")
+    out: Dict[str, Dict[str, Any]] = {}
+    if gen:
+        out["generative"] = {"model_id": gen, "name": gen, "port": 8003}
+    if emb:
+        out["embedding"] = {"model_id": emb, "name": emb, "port": 8000}
+    if rer:
+        out["reranker"] = {"model_id": rer, "name": rer, "port": 8001}
+    return out
 
 def save_active_state():
+    """Persist ACTIVE_PROCESSES (without computed liveness) under CONFIG_LOCK, atomically."""
     try:
-        with open(ACTIVE_MODELS_STATE_PATH, "w", encoding="utf-8") as f:
-            json.dump(ACTIVE_PROCESSES, f, indent=2)
+        with CONFIG_LOCK:
+            data = {
+                cat: {k: v for k, v in info.items() if k != "alive"}
+                for cat, info in ACTIVE_PROCESSES.items()
+                if isinstance(info, dict)
+            }
+            atomic_write_json(ACTIVE_MODELS_STATE_PATH, data)
     except Exception as e:
         print("[Error] Failed saving active models state:", e)
 
+def _refresh_reranker_state(pid: Optional[int] = None) -> None:
+    """Reload the reranker entry written by sync_reranker_state into memory."""
+    with CONFIG_LOCK:
+        rr = dict((read_json(ACTIVE_MODELS_STATE_PATH).get("reranker") or {}))
+        if pid is not None:
+            rr["pid"] = pid
+            rr["start_time"] = time.time()
+        ACTIVE_PROCESSES["reranker"] = rr
+
+def _active_model_id(cat: str) -> Optional[str]:
+    info = ACTIVE_PROCESSES.get(cat) or {}
+    if info.get("enabled") is False:
+        return None
+    return info.get("model_id")
+
 def update_app_config_embedding(model_id: str, dimension: int):
     """Dynamically write embedding model name & derived vector dimension to app_config.json & server/.env."""
-    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    app_config_path = os.path.join(root_dir, "config", "app_config.json")
-    env_path = os.path.join(root_dir, "georhizome-ai-source", "server", ".env")
+    root_dir = ROOT_DIR
+    app_config_path = os.path.join(CONFIG_DIR, "app_config.json")
+    env_path = SERVER_ENV_PATH
 
     # 1. Update config/app_config.json
     if os.path.exists(app_config_path):
         try:
-            with open(app_config_path, "r", encoding="utf-8") as f:
-                cfg = json.load(f)
-            old_dim = cfg.get("embedding", {}).get("dimension")
-            cfg.setdefault("embedding", {})["model_name"] = model_id
-            cfg.setdefault("embedding", {})["dimension"] = dimension
-            with open(app_config_path, "w", encoding="utf-8") as f:
-                json.dump(cfg, f, indent=2)
+            with CONFIG_LOCK:
+                with open(app_config_path, "r", encoding="utf-8") as f:
+                    cfg = json.load(f)
+                old_dim = cfg.get("embedding", {}).get("dimension")
+                cfg.setdefault("embedding", {})["model_name"] = model_id
+                cfg.setdefault("embedding", {})["dimension"] = dimension
+                atomic_write_json(app_config_path, cfg)
             print(f"[DynamicConfig] Updated app_config.json -> embedding.model_name={model_id}, dimension={dimension}")
 
             # If vector dimension changed, purge vector stores automatically to avoid LanceDB mismatch crashes!
@@ -192,18 +192,18 @@ def probe_and_sync_llm(model_id: str, default_n_ctx: int = 16384):
 
 def update_app_config_llm(model_id: str, token_limit: int = 16384):
     """Dynamically write LLM model name & token limit to app_config.json & server/.env."""
-    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    app_config_path = os.path.join(root_dir, "config", "app_config.json")
-    env_path = os.path.join(root_dir, "georhizome-ai-source", "server", ".env")
+    root_dir = ROOT_DIR
+    app_config_path = os.path.join(CONFIG_DIR, "app_config.json")
+    env_path = SERVER_ENV_PATH
 
     if os.path.exists(app_config_path):
         try:
-            with open(app_config_path, "r", encoding="utf-8") as f:
-                cfg = json.load(f)
-            cfg.setdefault("llm", {})["model_name"] = model_id
-            cfg.setdefault("llm", {})["token_limit"] = token_limit
-            with open(app_config_path, "w", encoding="utf-8") as f:
-                json.dump(cfg, f, indent=2)
+            with CONFIG_LOCK:
+                with open(app_config_path, "r", encoding="utf-8") as f:
+                    cfg = json.load(f)
+                cfg.setdefault("llm", {})["model_name"] = model_id
+                cfg.setdefault("llm", {})["token_limit"] = token_limit
+                atomic_write_json(app_config_path, cfg)
             print(f"[DynamicConfig] Updated app_config.json -> llm.model_name={model_id}, token_limit={token_limit}")
         except Exception as e:
             print(f"[DynamicConfig Error] Failed updating app_config.json: {e}")
@@ -236,7 +236,7 @@ def update_app_config_llm(model_id: str, token_limit: int = 16384):
             print(f"[DynamicConfig Error] Failed updating server/.env: {e}")
 
     # 3. Dynamically sync SQLite workspaces database so all generic-openai workspaces track the active model
-    db_path = os.path.join(root_dir, "..", "storage", "anythingllm.db")
+    db_path = ANYTHINGLLM_DB_PATH
     if os.path.exists(db_path):
         try:
             import sqlite3
@@ -257,23 +257,13 @@ def update_app_config_llm(model_id: str, token_limit: int = 16384):
             print(f"[DynamicConfig Error] Failed syncing SQLite workspaces: {e}")
 
 
-def update_retrieval_reranker(enabled: bool, model_id: str = ""):
-    """Dynamically sync reranker state in retrieval.yaml."""
-    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    ret_path = os.path.join(root_dir, "config", "retrieval.yaml")
-    if os.path.exists(ret_path):
-        try:
-            with open(ret_path, "r", encoding="utf-8") as f:
-                ydata = yaml.safe_load(f) or {}
-            if "retrieval" in ydata:
-                ydata["retrieval"]["reranker_enabled"] = enabled
-                if model_id:
-                    ydata["retrieval"]["reranker_model"] = model_id
-                with open(ret_path, "w", encoding="utf-8") as f:
-                    yaml.dump(ydata, f)
-            print(f"[DynamicConfig] Updated retrieval.yaml -> reranker_enabled={enabled}, reranker_model={model_id}")
-        except Exception as e:
-            print(f"[DynamicConfig Error] Failed updating retrieval.yaml: {e}")
+def update_retrieval_reranker(enabled: bool, model_id: str = "") -> str:
+    """The single writer of reranker state: active_models.json, retrieval.yaml and
+    app_config.json, under CONFIG_LOCK with atomic writes. Disabling keeps the last
+    real model name; the "Offloaded" sentinel is never written."""
+    name = reranker_state.sync_reranker_state(CONFIG_DIR, enabled, model_id)
+    print(f"[DynamicConfig] Reranker state synced -> enabled={enabled}, model={name}")
+    return name
 
 ACTIVE_PROCESSES: Dict[str, Dict[str, Any]] = load_active_state()
 DOWNLOAD_JOBS: Dict[str, Dict[str, Any]] = {}
@@ -361,7 +351,7 @@ def get_catalog(
             for m in ranked:
                 repo_id = m.get("name")
                 seen_repos.add(repo_id.lower())
-                is_active = cat in ACTIVE_PROCESSES and ACTIVE_PROCESSES[cat].get("model_id") == repo_id
+                is_active = _active_model_id(cat) == repo_id
                 
                 formatted_items.append({
                     "name": repo_id.split("/")[-1] if "/" in repo_id else repo_id,
@@ -399,7 +389,7 @@ def get_catalog(
                                 target_quant=q_type
                             ) or {}
 
-                            is_act = cat in ACTIVE_PROCESSES and ACTIVE_PROCESSES[cat].get("model_id") == h_id
+                            is_act = _active_model_id(cat) == h_id
                             formatted_items.insert(0, {
                                 "name": h_id.split("/")[-1] if "/" in h_id else h_id,
                                 "repo_id": h_id,
@@ -436,7 +426,7 @@ def get_catalog(
                             target_quant=default_q
                         ) or {}
 
-                        is_active = cat in ACTIVE_PROCESSES and ACTIVE_PROCESSES[cat].get("model_id") == item.get("repo_id")
+                        is_active = _active_model_id(cat) == item.get("repo_id")
                         
                         formatted_items.insert(0, {
                             "name": item.get("name"),
@@ -609,29 +599,18 @@ def serve_model(req: ServeRequest, background_tasks: BackgroundTasks):
         except Exception:
             pass
 
+        # Empty model_id keeps the current configured reranker (resolved by the sync).
+        model_id = req.model_id or req.repo_id or ""
+        # State is written before the child starts so it reads the new model.
+        model_id = update_retrieval_reranker(True, model_id)
+
         reranker_script = os.path.abspath(os.path.join(os.path.dirname(__file__), "local_reranker_server.py"))
         env = os.environ.copy()
-        if req.model_id:
-            env["RERANKER_MODEL_PREF"] = req.model_id
+        env["RERANKER_MODEL_PREF"] = model_id
         p = subprocess.Popen([sys.executable, reranker_script], env=env)
-        ACTIVE_PROCESSES["reranker"] = {"pid": p.pid, "model_id": req.model_id, "name": req.model_id, "port": 8001, "start_time": time.time(), "alive": True}
-        
-        # Enable reranker in retrieval.yaml
-        try:
-            ret_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config", "retrieval.yaml"))
-            if os.path.exists(ret_path):
-                with open(ret_path, "r", encoding="utf-8") as f:
-                    ydata = yaml.safe_load(f) or {}
-                if "retrieval" in ydata:
-                    ydata["retrieval"]["reranker_enabled"] = True
-                    with open(ret_path, "w", encoding="utf-8") as f:
-                        yaml.dump(ydata, f)
-        except Exception as e:
-            print(f"[HardwareServer Error] Failed to update retrieval.yaml: {e}")
-
-        update_retrieval_reranker(True, req.model_id)
+        _refresh_reranker_state(pid=p.pid)
         save_active_state()
-        return {"status": "ok", "message": f"Successfully loaded reranker {req.model_id} on port 8001", "pid": p.pid}
+        return {"status": "ok", "message": f"Successfully loaded reranker {model_id} on port 8001", "pid": p.pid}
 
     elif cat == "embedding":
         try:
@@ -657,7 +636,7 @@ def serve_model(req: ServeRequest, background_tasks: BackgroundTasks):
         if req.model_id:
             env["EMBEDDING_MODEL_PREF"] = req.model_id
         p = subprocess.Popen([sys.executable, bge_script], env=env)
-        ACTIVE_PROCESSES["embedding"] = {"pid": p.pid, "model_id": req.model_id, "name": req.model_id, "port": 8000, "start_time": time.time(), "alive": True}
+        ACTIVE_PROCESSES["embedding"] = {"pid": p.pid, "model_id": req.model_id, "name": req.model_id, "port": 8000, "start_time": time.time()}
         
         # Automatically probe live model for runtime dimension and update configs
         background_tasks.add_task(probe_and_sync_embedder, req.model_id)
@@ -764,7 +743,6 @@ def serve_model(req: ServeRequest, background_tasks: BackgroundTasks):
                     "quant": req.quant or "MLX-4bit",
                     "port": 8003,
                     "start_time": time.time(),
-                    "alive": True
                 }
                 save_active_state()
                 return
@@ -798,7 +776,6 @@ def serve_model(req: ServeRequest, background_tasks: BackgroundTasks):
                     "quant": req.quant or ("MLX" if is_mlx_local else "GGUF"),
                     "port": 8003,
                     "start_time": time.time(),
-                    "alive": True
                 }
                 background_tasks.add_task(probe_and_sync_llm, req.model_id, 16384)
                 save_active_state()
@@ -834,7 +811,6 @@ def serve_model(req: ServeRequest, background_tasks: BackgroundTasks):
                     "quant": req.quant or "GGUF",
                     "port": 8003,
                     "start_time": time.time(),
-                    "alive": True
                 }
                 background_tasks.add_task(probe_and_sync_llm, req.model_id, 16384)
                 save_active_state()
@@ -875,7 +851,6 @@ def serve_model(req: ServeRequest, background_tasks: BackgroundTasks):
                     "quant": req.quant,
                     "port": 8003,
                     "start_time": time.time(),
-                    "alive": True
                 }
                 background_tasks.add_task(probe_and_sync_llm, req.model_id, 16384)
                 save_active_state()
@@ -940,14 +915,9 @@ def offload_model(req: OffloadRequest):
                         subprocess.run(f"kill -9 {p}", shell=True)
         except Exception:
             pass
-        ACTIVE_PROCESSES["reranker"] = {
-            "model_id": "Offloaded",
-            "name": "No Reranker Loaded (Offloaded)",
-            "port": 8001,
-            "alive": False
-        }
+        update_retrieval_reranker(False)
+        _refresh_reranker_state()
         save_active_state()
-        update_retrieval_reranker(False, "Offloaded")
         return {"status": "ok", "message": "Successfully offloaded Reranker from Port 8001 and reclaimed RAM/VRAM."}
 
     elif cat == "generative":
@@ -1082,16 +1052,30 @@ def hardware_status():
     """Get active processes and background download jobs."""
     active_summary = {}
     for cat, info in ACTIVE_PROCESSES.items():
-        mid = info.get("model_id", "Offloaded")
-        is_alive = mid != "Offloaded" and info.get("alive", True)
-
-        active_summary[cat] = {
+        mid = info.get("model_id") or LEGACY_SENTINEL
+        enabled = info.get("enabled") is not False
+        pid = info.get("pid")
+        port = info.get("port")
+        is_alive = bool(
+            mid != LEGACY_SENTINEL
+            and enabled
+            and ((pid_alive(pid) if pid else False) or is_port_active(port))
+        )
+        entry = {
             "model_id": mid,
             "name": info.get("name", mid),
             "quant": info.get("quant", "FP16"),
-            "port": info.get("port"),
-            "alive": is_alive
+            "port": port,
+            "alive": is_alive,
         }
+        if cat == "reranker":
+            entry["enabled"] = enabled
+            if not enabled:
+                # Display-only sentinel for the UI; files keep the real model name.
+                entry["last_model_id"] = mid
+                entry["model_id"] = LEGACY_SENTINEL
+                entry["name"] = "No Reranker Loaded (Offloaded)"
+        active_summary[cat] = entry
 
     # Scan models/.cache for active download metrics if ACTIVE_DOWNLOAD_STATE is active
     downloads_info = {"is_downloading": False, "files": []}

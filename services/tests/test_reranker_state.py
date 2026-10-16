@@ -114,6 +114,16 @@ def test_migrate_noop_when_clean(tmp_config_dir):
     assert rs.migrate_legacy_sentinel(tmp_config_dir) is False
 
 
+def test_seed_active_models_from_default(tmp_config_dir):
+    p = os.path.join(tmp_config_dir, "active_models.json")
+    if os.path.exists(p):
+        os.remove(p)
+    st = rs.seed_active_models(tmp_config_dir)
+    assert os.path.exists(p)
+    assert st["reranker"]["port"] == 8001
+    assert "alive" not in json.dumps(st)
+
+
 def test_seed_strips_alive(tmp_config_dir):
     config_io.atomic_write_json(os.path.join(tmp_config_dir, "active_models.json"),
                                 {"generative": {"model_id": "g", "pid": 3, "alive": True},
@@ -149,3 +159,37 @@ def test_holds_lock_and_no_tmp(tmp_config_dir, monkeypatch):
     rs.sync_reranker_state(tmp_config_dir, True, "org/X")
     assert entered["n"] >= 1 and len(written) == 2
     assert [n for n in os.listdir(tmp_config_dir) if n.startswith(".tmp-")] == []
+
+
+# ---- Task 2: shipped config -------------------------------------------
+def test_repo_retrieval_yaml():
+    r = yaml.safe_load(open(os.path.join(REPO_CONFIG, "retrieval.yaml")))["retrieval"]
+    tiers_model = yaml.safe_load(open(os.path.join(REPO_CONFIG, "reranker_tiers.yaml")))["model"]
+    assert r["reranker_enabled"] is True and r["reranker_model"] == tiers_model
+
+
+def test_repo_app_config_reranker_keys():
+    c = json.load(open(os.path.join(REPO_CONFIG, "app_config.json")))["reranker"]
+    for k in ("enabled", "base_url", "web_search_top_k", "web_search_fetch_k", "snippet_max_length",
+              "model_name", "activation", "max_length", "idle_unload_minutes", "timeout_ms",
+              "wide_candidate_count", "final_top_k", "min_reranker_score", "selftest_min_spearman"):
+        assert k in c, k
+    assert c["activation"] == "identity" and c["max_length"] == 1024 and c["wide_candidate_count"] == 30
+
+
+def test_repo_active_defaults():
+    p = os.path.join(REPO_CONFIG, "active_models.default.json")
+    d = json.load(open(p))
+    raw = open(p).read()
+    assert '"pid"' not in raw and '"alive"' not in raw
+    app = json.load(open(os.path.join(REPO_CONFIG, "app_config.json")))
+    assert d["generative"]["model_id"] == app["llm"]["model_name"]
+    assert d["embedding"]["port"] == 8000 and d["reranker"]["port"] == 8001 and d["reranker"]["enabled"] is True
+
+
+def test_runtime_active_models_untracked():
+    rc = subprocess.run(["git", "-C", REPO_ROOT, "check-ignore", "-q", "config/active_models.json"]).returncode
+    assert rc == 0
+    out = subprocess.run(["git", "-C", REPO_ROOT, "ls-files", "config/active_models.json"],
+                         capture_output=True, text=True).stdout
+    assert out.strip() == ""

@@ -19,10 +19,22 @@
   },
   "reranker": {
     "enabled": true,
+    "model_name": "cl-nagoya/ruri-v3-reranker-310m",
     "base_url": "http://host.docker.internal:8001/rerank",
+    "activation": "identity",
+    "max_length": 1024,
+    "idle_unload_minutes": 15,
+    "timeout_ms": 3000,
+    "wide_candidate_count": 30,
+    "final_top_k": 10,
+    "min_reranker_score": -10.0,
+    "selftest_min_spearman": 0.99,
     "web_search_top_k": 5,
     "web_search_fetch_k": 12,
-    "snippet_max_length": 250
+    "snippet_max_length": 250,
+    "calibration": {
+      "status": "pending-spike"
+    }
   },
   "llm": {
     "model_name": "Qwen3.5-0.8B-Japanese-SFT-v2-Q4_K_M.gguf",

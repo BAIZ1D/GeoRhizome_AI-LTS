@@ -1,27 +1,18 @@
 {
   "generative": {
-    "pid": 17015,
     "model_id": "Qwen3.5-0.8B-Japanese-SFT-v2-Q4_K_M.gguf",
     "name": "Qwen3.5-0.8B-Japanese-SFT-v2-Q4_K_M.gguf",
-    "quant": "Q4_K_M",
-    "port": 8003,
-    "start_time": 1787713449.950604,
-    "alive": true
+    "port": 8003
   },
   "embedding": {
-    "pid": 16787,
     "model_id": "cl-nagoya/ruri-v3-310m",
     "name": "cl-nagoya/ruri-v3-310m",
-    "port": 8000,
-    "start_time": 1787713243.932006,
-    "alive": true
+    "port": 8000
   },
   "reranker": {
-    "pid": 16077,
     "model_id": "cl-nagoya/ruri-v3-reranker-310m",
     "name": "cl-nagoya/ruri-v3-reranker-310m",
     "port": 8001,
-    "start_time": 1787712307.285423,
-    "alive": true
+    "enabled": true
   }
 }

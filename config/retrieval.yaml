@@ -2,7 +2,7 @@ retrieval:
   wide_candidate_count: 30
   final_top_k: 10
   min_reranker_score: -10.0
-  reranker_server_url: "http://host.docker.internal:8001/rerank"
-  reranker_enabled: false
+  reranker_server_url: http://host.docker.internal:8001/rerank
+  reranker_enabled: true
   timeout_ms: 3000
-
+  reranker_model: cl-nagoya/ruri-v3-reranker-310m

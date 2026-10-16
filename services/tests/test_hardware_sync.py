@@ -156,3 +156,60 @@ def test_status_liveness_and_display_sentinel(hs, tmp_config_dir, monkeypatch):
 def test_no_pid0_probe():
     src = open(os.path.join(os.path.dirname(__file__), "..", "hardware_server.py"), encoding="utf-8").read()
     assert "os.kill(" not in src
+
+
+# ---- Task 2: shared lock + atomic writes ---------------------------------
+def test_writers_concurrent_no_lost_update(hs, tmp_config_dir):
+    import reranker_state
+
+    def emb():
+        for i in range(50):
+            hs.update_app_config_embedding("org/emb", 768)
+
+    def llm():
+        for i in range(50):
+            hs.update_app_config_llm("m%d.gguf" % i, 4096)
+
+    def rer():
+        for i in range(50):
+            reranker_state.sync_reranker_state(tmp_config_dir, bool(i % 2), "org/R")
+
+    ts = [threading.Thread(target=f) for f in (emb, llm, rer)]
+    [t.start() for t in ts]
+    [t.join() for t in ts]
+    c = json.load(open(os.path.join(tmp_config_dir, "app_config.json")))
+    assert c["embedding"]["model_name"] == "org/emb" and c["llm"]["model_name"] == "m49.gguf"
+    for k in ("activation", "max_length", "timeout_ms", "min_reranker_score", "model_name"):
+        assert k in c["reranker"]
+    assert c["reranker"]["enabled"] is True  # i == 49 -> True
+    assert [n for n in os.listdir(tmp_config_dir) if n.startswith(".tmp-")] == []
+
+
+def test_writer_golden_output(hs, tmp_config_dir):
+    p = os.path.join(tmp_config_dir, "app_config.json")
+    before = json.load(open(p))
+    hs.update_app_config_embedding(before["embedding"]["model_name"], before["embedding"]["dimension"])
+    hs.update_app_config_llm("x.gguf", 8192)
+    after = json.load(open(p))
+    exp = dict(before)
+    exp["llm"] = dict(before["llm"], model_name="x.gguf", token_limit=8192)
+    assert after == exp
+
+
+def test_save_active_state_locked_atomic(hs, tmp_config_dir, monkeypatch):
+    from core import config_io
+
+    seen = []
+    orig = hs.atomic_write_json
+
+    def spy(p, d):
+        seen.append(config_io.CONFIG_LOCK._is_owned())
+        orig(p, d)
+
+    monkeypatch.setattr(hs, "atomic_write_json", spy)
+    hs.ACTIVE_PROCESSES["generative"]["alive"] = True
+    hs.save_active_state()
+    assert seen == [True]
+    raw = open(os.path.join(tmp_config_dir, "active_models.json")).read()
+    assert '"alive"' not in raw
+    json.loads(raw)

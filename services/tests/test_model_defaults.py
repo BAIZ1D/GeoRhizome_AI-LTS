@@ -57,8 +57,8 @@ def test_legacy_defaults_from_catalog_and_migrate_env():
 def test_hardware_server_uses_shared_defaults():
     src = open(os.path.join(REPO, "services", "hardware_server.py"), encoding="utf-8").read()
     assert "model_defaults" in src
-    assert "Qwen3-0.6B" not in src
-    assert "huggingface-cli" not in src
+    assert "Qwen3" + "-0.6B" not in src
+    assert "huggingface" + "-cli" not in src
 
 
 def test_hardware_server_generative_fallback_and_catalog(tmp_config_dir, tmp_path, monkeypatch):

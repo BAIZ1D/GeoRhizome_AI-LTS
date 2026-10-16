@@ -3,7 +3,8 @@ const { reqBody } = require("../utils/http");
 function hardwareEndpoints(app) {
   if (!app) return;
 
-  const HARDWARE_SERVER_URL = process.env.HARDWARE_SERVER_URL || "http://127.0.0.1:8002";
+  const HARDWARE_SERVER_URL =
+    process.env.HARDWARE_SERVER_URL || "http://host.docker.internal:8002";
 
   // GET /api/hardware/detect
   app.get("/hardware/detect", async (request, response) => {
@@ -31,7 +32,9 @@ function hardwareEndpoints(app) {
   app.get("/hardware/hf-files", async (request, response) => {
     try {
       const { repo_id } = request.query;
-      const res = await fetch(`${HARDWARE_SERVER_URL}/hardware/hf-files?repo_id=${encodeURIComponent(repo_id || "")}`);
+      const res = await fetch(
+        `${HARDWARE_SERVER_URL}/hardware/hf-files?repo_id=${encodeURIComponent(repo_id || "")}`
+      );
       const data = await res.json();
       response.status(200).json(data);
     } catch (e) {
@@ -90,10 +93,13 @@ function hardwareEndpoints(app) {
   // POST /api/hardware/cancel_download
   app.post("/hardware/cancel_download", async (request, response) => {
     try {
-      const res = await fetch(`${HARDWARE_SERVER_URL}/hardware/cancel_download`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
+      const res = await fetch(
+        `${HARDWARE_SERVER_URL}/hardware/cancel_download`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        }
+      );
       const data = await res.json();
       response.status(200).json(data);
     } catch (e) {
@@ -141,9 +147,12 @@ function hardwareEndpoints(app) {
   app.delete("/hardware/downloaded/*", async (request, response) => {
     try {
       const filename = request.params[0];
-      const res = await fetch(`${HARDWARE_SERVER_URL}/hardware/downloaded/${encodeURIComponent(filename)}`, {
-        method: "DELETE"
-      });
+      const res = await fetch(
+        `${HARDWARE_SERVER_URL}/hardware/downloaded/${encodeURIComponent(filename)}`,
+        {
+          method: "DELETE",
+        }
+      );
       const data = await res.json();
       response.status(200).json(data);
     } catch (e) {

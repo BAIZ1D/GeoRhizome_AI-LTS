@@ -1,8 +1,4 @@
-const {
-  toChunks,
-  maximumChunkLength,
-  reportEmbeddingProgress,
-} = require("../../helpers");
+const { toChunks, reportEmbeddingProgress } = require("../../helpers");
 
 class GenericOpenAiEmbedder {
   constructor() {
@@ -13,22 +9,38 @@ class GenericOpenAiEmbedder {
     let config = {};
     try {
       const containerPath = "/config/app_config.json";
-      const localPath = path.resolve(__dirname, "../../../../../../config/app_config.json");
+      const localPath = path.resolve(
+        __dirname,
+        "../../../../../../config/app_config.json"
+      );
       if (fs.existsSync(containerPath)) {
-        config = JSON.parse(fs.readFileSync(containerPath, "utf-8"))?.embedding || {};
+        config =
+          JSON.parse(fs.readFileSync(containerPath, "utf-8"))?.embedding || {};
       } else if (fs.existsSync(localPath)) {
-        config = JSON.parse(fs.readFileSync(localPath, "utf-8"))?.embedding || {};
+        config =
+          JSON.parse(fs.readFileSync(localPath, "utf-8"))?.embedding || {};
       }
-    } catch (e) {}
+    } catch {}
 
-    this.basePath = process.env.EMBEDDING_BASE_PATH || config.base_url || "http://127.0.0.1:8000/v1";
+    this.basePath =
+      process.env.EMBEDDING_BASE_PATH ||
+      config.base_url ||
+      "http://host.docker.internal:8000/v1";
     this.openai = new OpenAIApi({
       baseURL: this.basePath,
-      apiKey: process.env.GENERIC_OPEN_AI_EMBEDDING_API_KEY ?? config.api_key ?? "sk-123abc",
+      apiKey:
+        process.env.GENERIC_OPEN_AI_EMBEDDING_API_KEY ??
+        config.api_key ??
+        "sk-123abc",
     });
-    this.model = process.env.EMBEDDING_MODEL_PREF ?? config.model_name ?? "BAAI/bge-m3";
-    this.dimension = Number(process.env.EMBEDDING_DIMENSION) || config.dimension || 1024;
-    this.embeddingMaxChunkLength = Number(process.env.EMBEDDING_MAX_CHUNK_LENGTH) || config.max_chunk_length || 1024;
+    this.model =
+      process.env.EMBEDDING_MODEL_PREF ?? config.model_name ?? "BAAI/bge-m3";
+    this.dimension =
+      Number(process.env.EMBEDDING_DIMENSION) || config.dimension || 1024;
+    this.embeddingMaxChunkLength =
+      Number(process.env.EMBEDDING_MAX_CHUNK_LENGTH) ||
+      config.max_chunk_length ||
+      1024;
     this.#cachedRuntimeDimension = null;
 
     this.log(`Initialized ${this.model}`, {
@@ -47,17 +59,22 @@ class GenericOpenAiEmbedder {
    * @returns {Promise<number>}
    */
   async getDimension() {
-    if (this.#cachedRuntimeDimension !== null) return this.#cachedRuntimeDimension;
+    if (this.#cachedRuntimeDimension !== null)
+      return this.#cachedRuntimeDimension;
     try {
       const vec = await this.embedTextInput("dimension_healthcheck");
       if (Array.isArray(vec) && vec.length > 0) {
         this.#cachedRuntimeDimension = vec.length;
         this.dimension = vec.length;
-        this.log(`Derived runtime vector dimension: ${this.#cachedRuntimeDimension}`);
+        this.log(
+          `Derived runtime vector dimension: ${this.#cachedRuntimeDimension}`
+        );
         return this.#cachedRuntimeDimension;
       }
     } catch (e) {
-      this.log(`Warning: Failed to derive dynamic vector dimension: ${e.message}`);
+      this.log(
+        `Warning: Failed to derive dynamic vector dimension: ${e.message}`
+      );
     }
     return this.dimension || 1024;
   }
@@ -99,12 +116,16 @@ class GenericOpenAiEmbedder {
 
   stripMetadataComments(text) {
     if (typeof text !== "string") return text;
-    return text.replace(/<!--[\s\S]*?-->/g, "").replace(/\n{3,}/g, "\n\n").trim();
+    return text
+      .replace(/<!--[\s\S]*?-->/g, "")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
   }
 
   async embedTextInput(textInput = "") {
     const cleaned = this.stripMetadataComments(textInput);
-    const normalized = typeof cleaned === "string" ? cleaned.normalize("NFKC") : cleaned;
+    const normalized =
+      typeof cleaned === "string" ? cleaned.normalize("NFKC") : cleaned;
     const res = await fetch(`${this.basePath}/embeddings`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

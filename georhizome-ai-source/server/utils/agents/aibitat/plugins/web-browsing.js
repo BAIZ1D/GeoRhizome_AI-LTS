@@ -7,7 +7,10 @@ const tiktoken = new TokenManager();
 function getAppConfig() {
   try {
     const containerPath = "/config/app_config.json";
-    const localPath = path.resolve(__dirname, "../../../../../../../config/app_config.json");
+    const localPath = path.resolve(
+      __dirname,
+      "../../../../../../../config/app_config.json"
+    );
     if (fs.existsSync(containerPath)) {
       return JSON.parse(fs.readFileSync(containerPath, "utf-8"));
     } else if (fs.existsSync(localPath)) {
@@ -991,17 +994,17 @@ const webBrowsing = {
               headers: {
                 "User-Agent":
                   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:128.0) Gecko/20100101 Firefox/128.0",
-                "Accept":
+                Accept:
                   "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
                 "Accept-Language": "ja,en-US;q=0.7,en;q=0.3",
-                "DNT": "1",
+                DNT: "1",
                 "Sec-GPC": "1",
                 "Upgrade-Insecure-Requests": "1",
                 "Sec-Fetch-Dest": "document",
                 "Sec-Fetch-Mode": "navigate",
                 "Sec-Fetch-Site": "none",
                 "Sec-Fetch-User": "?1",
-                "Priority": "u=1",
+                Priority: "u=1",
               },
             })
               .then((res) => {
@@ -1048,7 +1051,10 @@ const webBrowsing = {
 
               if (title && link && snippet) {
                 const maxLen = appConfig?.reranker?.snippet_max_length || 250;
-                const cleanSnippet = snippet.length > maxLen ? `${snippet.slice(0, maxLen)}...` : snippet;
+                const cleanSnippet =
+                  snippet.length > maxLen
+                    ? `${snippet.slice(0, maxLen)}...`
+                    : snippet;
                 data.push({ title, link, snippet: cleanSnippet });
                 if (data.length >= fetchK) break;
               }
@@ -1061,7 +1067,9 @@ const webBrowsing = {
             // Dual Cross-Encoder Reranking: Rerank web search snippets if reranker is enabled
             let rankedData = data;
             const rerankerEnabled = appConfig?.reranker?.enabled ?? true;
-            const rerankerUrl = appConfig?.reranker?.base_url || "http://127.0.0.1:8001/rerank";
+            const rerankerUrl =
+              appConfig?.reranker?.base_url ||
+              "http://host.docker.internal:8001/rerank";
 
             if (rerankerEnabled && data.length > topK) {
               try {
@@ -1085,7 +1093,9 @@ const webBrowsing = {
 
                 if (rerankRes.ok) {
                   const rerankJson = await rerankRes.json();
-                  const resultsArray = Array.isArray(rerankJson) ? rerankJson : rerankJson?.results;
+                  const resultsArray = Array.isArray(rerankJson)
+                    ? rerankJson
+                    : rerankJson?.results;
                   if (Array.isArray(resultsArray) && resultsArray.length > 0) {
                     rankedData = resultsArray
                       .slice(0, topK)
@@ -1093,7 +1103,9 @@ const webBrowsing = {
                   }
                 }
               } catch (e) {
-                this.super.handlerProps?.log?.(`[Reranker Warning] Web search rerank failed, fallback to original order: ${e.message}`);
+                this.super.handlerProps?.log?.(
+                  `[Reranker Warning] Web search rerank failed, fallback to original order: ${e.message}`
+                );
                 rankedData = data.slice(0, topK);
               }
             } else {

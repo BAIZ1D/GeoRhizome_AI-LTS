@@ -49,11 +49,11 @@ function Invoke-Native([string]$Step, [scriptblock]$Command) {
     if ($LASTEXITCODE -ne 0) { Fail "$Step (exit code $LASTEXITCODE)" }
 }
 
-function Get-Source([string]$Token, [string]$Destination) {
+function Get-Source([string]$Destination) {
     $Zip = "$INSTALL_DIR\repo.zip"
     $Tmp = "$INSTALL_DIR\temp_extract"
     try {
-        Invoke-RestMethod -Uri "https://api.github.com/repos/BAIZ1D/GeoRhizome_AI-LTS/zipball/main" -Headers @{ Authorization = "token $Token" } -OutFile $Zip
+        Invoke-RestMethod -Uri "https://api.github.com/repos/BAIZ1D/GeoRhizome_AI-LTS/zipball/main" -OutFile $Zip
         if (Test-Path $Tmp) { Remove-Item $Tmp -Recurse -Force }
         Expand-Archive -Path $Zip -DestinationPath $Tmp -Force
         $Extracted = Get-ChildItem $Tmp | Select-Object -First 1
@@ -102,19 +102,11 @@ foreach ($d in @($INSTALL_DIR, "$INSTALL_DIR\storage", $ModelsDir, $SourceDir, "
 }
 Write-Host "[STEP] インストールディレクトリを構成しています... ($INSTALL_DIR)" -ForegroundColor Gray
 
-# 4. Authentication (the admin replaces the placeholder before distribution; never commit a real token)
-$GHCR_READ_TOKEN = "REPLACE_ME_BEFORE_DISTRIBUTION"
-if ($GHCR_READ_TOKEN -like "REPLACE_ME*") {
-    Fail "GHCR_READ_TOKEN が設定されていません。管理者に配布用インストーラーを依頼してください。"
-}
-# Compose project .env: compose interpolates ${GHCR_READ_TOKEN}; the OTA updater reads it too.
-[System.IO.File]::WriteAllText("$INSTALL_DIR\.env", "GHCR_READ_TOKEN=$GHCR_READ_TOKEN`n", $Utf8NoBom)
-Write-Host "[STEP] セキュア・コンテナレジストリへ接続中..." -ForegroundColor Gray
-Invoke-Native "docker login に失敗しました" { $GHCR_READ_TOKEN | docker login ghcr.io -u BAIZ1D --password-stdin }
+# 4. The GHCR image and GitHub repo are public: no token or registry login needed.
 
 # 5. Download the source (services, config, installers)
 Write-Host "[STEP] ソースコードをダウンロードしています..." -ForegroundColor Gray
-Get-Source $GHCR_READ_TOKEN $SourceDir
+Get-Source $SourceDir
 if (Test-Path "$SourceDir\models") { Remove-Item "$SourceDir\models" -Recurse -Force }
 New-Item -ItemType Junction -Path "$SourceDir\models" -Target $ModelsDir | Out-Null
 
@@ -136,7 +128,6 @@ services:
       - ./source/georhizome-ai-source/server/.env:/app/server/.env
     environment:
       - NODE_ENV=production
-      - GHCR_READ_TOKEN=${GHCR_READ_TOKEN}
       - STORAGE_DIR=/app/server/storage
       - HARDWARE_SERVER_URL=http://host.docker.internal:8002
     restart: unless-stopped
@@ -198,12 +189,10 @@ function Check([string]$Step) { if ($LASTEXITCODE -ne 0) { throw "$Step failed (
 try {
     Write-Host "[INFO] GeoRhizome AI のアップデートを確認しています..."
     Set-Location $GR
-    $Token = ((Get-Content "$GR\.env" | Where-Object { $_ -like "GHCR_READ_TOKEN=*" }) -replace '^GHCR_READ_TOKEN=', '')
-    $Token | docker login ghcr.io -u BAIZ1D --password-stdin; Check "docker login"
     docker compose pull; Check "docker compose pull"
     Write-Host "[INFO] ネイティブAIエンジンのアップデートを確認しています..."
     $Zip = "$GR\repo.zip"; $Tmp = "$GR\temp_extract"
-    Invoke-RestMethod -Uri "https://api.github.com/repos/BAIZ1D/GeoRhizome_AI-LTS/zipball/main" -Headers @{ Authorization = "token $Token" } -OutFile $Zip
+    Invoke-RestMethod -Uri "https://api.github.com/repos/BAIZ1D/GeoRhizome_AI-LTS/zipball/main" -OutFile $Zip
     if (Test-Path $Tmp) { Remove-Item $Tmp -Recurse -Force }
     Expand-Archive -Path $Zip -DestinationPath $Tmp -Force
     $Extracted = Get-ChildItem $Tmp | Select-Object -First 1

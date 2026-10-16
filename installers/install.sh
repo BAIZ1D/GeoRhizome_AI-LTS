@@ -42,21 +42,11 @@ MODELS_DIR="$INSTALL_DIR/storage/models"
 mkdir -p "$INSTALL_DIR/storage" "$MODELS_DIR" "$SOURCE_DIR" "$INSTALL_DIR/logs"
 echo "[STEP] インストールディレクトリを構成しています... ($INSTALL_DIR)"
 
-# 4. Authentication (the admin replaces the placeholder before distribution; never commit a real token)
-GHCR_READ_TOKEN="REPLACE_ME_BEFORE_DISTRIBUTION"
-case "$GHCR_READ_TOKEN" in
-    REPLACE_ME*) fail "GHCR_READ_TOKEN が設定されていません。管理者に配布用インストーラーを依頼してください。" ;;
-esac
-# Compose project .env: compose interpolates ${GHCR_READ_TOKEN}; the OTA updater reads it too.
-umask 077
-printf 'GHCR_READ_TOKEN=%s\n' "$GHCR_READ_TOKEN" > "$INSTALL_DIR/.env"
-umask 022
-echo "[STEP] セキュア・コンテナレジストリへ接続中..."
-echo "$GHCR_READ_TOKEN" | docker login ghcr.io -u BAIZ1D --password-stdin || fail "docker login に失敗しました。"
+# 4. The GHCR image and GitHub repo are public: no token or registry login needed.
 
 # 5. Download the source (services, config, installers)
 echo "[STEP] ソースコードをダウンロードしています..."
-curl -fsSL -H "Authorization: token $GHCR_READ_TOKEN" https://api.github.com/repos/BAIZ1D/GeoRhizome_AI-LTS/tarball/main \
+curl -fsSL https://api.github.com/repos/BAIZ1D/GeoRhizome_AI-LTS/tarball/main \
     | tar -xz -C "$SOURCE_DIR" --strip-components=1
 rm -rf "$SOURCE_DIR/models"
 ln -s "$MODELS_DIR" "$SOURCE_DIR/models"
@@ -79,7 +69,6 @@ services:
       - ./source/georhizome-ai-source/server/.env:/app/server/.env
     environment:
       - NODE_ENV=production
-      - GHCR_READ_TOKEN=${GHCR_READ_TOKEN}
       - STORAGE_DIR=/app/server/storage
       - HARDWARE_SERVER_URL=http://host.docker.internal:8002
     restart: unless-stopped
@@ -139,11 +128,9 @@ GR="$HOME/.georhizome"
 echo "------------------------------------------------------------"
 echo "[INFO] GeoRhizome AI のアップデートを確認しています..."
 cd "$GR"
-GHCR_READ_TOKEN=$(sed -n 's/^GHCR_READ_TOKEN=//p' "$GR/.env")
-echo "$GHCR_READ_TOKEN" | docker login ghcr.io -u BAIZ1D --password-stdin
 docker compose pull
 echo "[INFO] ネイティブAIエンジンのアップデートを確認しています..."
-curl -fsSL -H "Authorization: token $GHCR_READ_TOKEN" https://api.github.com/repos/BAIZ1D/GeoRhizome_AI-LTS/tarball/main \
+curl -fsSL https://api.github.com/repos/BAIZ1D/GeoRhizome_AI-LTS/tarball/main \
     | tar -xz -C "$GR/source" --strip-components=1
 cp "$GR/source/installers/start_georhizome.command" "$GR/start_georhizome.command"
 chmod +x "$GR/start_georhizome.command"

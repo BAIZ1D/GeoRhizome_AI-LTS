@@ -71,6 +71,12 @@ def _helper_defaults() -> dict:
     return georhizome_setup.default_artifacts(os.path.join(REPO, "config"))
 
 
+def _token_hits(text: str) -> list:
+    """Installers must need no token: public GHCR image and public GitHub repo."""
+    pats = [r"GHCR_READ_TOKEN", r"docker\s+login", r"ghp_", r"Authorization\s*[:=]\s*\"?(token|Bearer)", r"\$Token\b"]
+    return [p for p in pats if re.search(p, text, re.IGNORECASE)]
+
+
 def checks() -> List[Tuple[str, Callable[[], bool]]]:
     sh, ps = _read(SH), _read(PS1)
     both = {"install.sh": sh, "install.ps1": ps}
@@ -124,7 +130,7 @@ def checks() -> List[Tuple[str, Callable[[], bool]]]:
         ("no stale default names / legacy hf CLI outside catalog data", stale_scan),
         ("macOS uses GGML_METAL (not LLAMA_METAL)", lambda: 'CMAKE_ARGS="-DGGML_METAL=on"' in sh and "LLAMA_METAL" not in sh),
         ("Python >=3.10 check in both", lambda: all(re.search(r"\(3,\s*10\)", t) for t in both.values())),
-        ("REPLACE_ME_BEFORE_DISTRIBUTION kept, no ghp_ token", lambda: all("REPLACE_ME_BEFORE_DISTRIBUTION" in t and "ghp_" not in t for t in both.values())),
+        ("no token handling (public image/repo)", lambda: all(not _token_hits(t) for t in both.values())),
         ("pinned set in both", lambda: all(p in t for p in PINS for t in both.values())),
         ("no unpinned hub upgrade", lambda: all(not re.search(r"pip install -U huggingface_hub", t) for t in both.values())),
         ("install.sh: no /dev/null on pip/download lines", lambda: not [l for l in sh.splitlines() if re.search(r"pip|georhizome_setup|curl", l) and "/dev/null" in l and "command -v" not in l]),

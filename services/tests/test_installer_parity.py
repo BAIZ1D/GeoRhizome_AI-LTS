@@ -20,3 +20,10 @@ def test_installer_parity_checks_all_pass():
         if not ok:
             failed.append(name)
     assert not failed, failed
+
+
+def test_installers_need_no_token():
+    for path in (cip.SH, cip.PS1):
+        text = open(path, encoding="utf-8-sig").read()
+        assert not cip._token_hits(text), (path, cip._token_hits(text))
+        assert "REPLACE_ME_BEFORE_DISTRIBUTION" not in text

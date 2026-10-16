@@ -21,6 +21,7 @@ from hwfit.hardware import detect_system
 from hwfit.fit import rank_models, analyze_model
 from core.platform_compat import kill_process_tree, pid_alive
 from core.config_io import CONFIG_LOCK, atomic_write_json, get_config_dir, read_json
+from core import model_defaults
 import reranker_state
 
 CONFIG_DIR = get_config_dir()
@@ -66,6 +67,20 @@ def load_active_state():
     if rer:
         out["reranker"] = {"model_id": rer, "name": rer, "port": 8001}
     return out
+
+def default_generative_model() -> str:
+    """Default LLM from app_config.json `llm.model_name` (fallback: model_defaults.FALLBACK_LLM)."""
+    return model_defaults.default_llm(read_json(os.path.join(CONFIG_DIR, "app_config.json")))["model_name"]
+
+
+def resolve_generative_target(model_id: Optional[str], quant: Optional[str]):
+    """(repo_id, filename) for a catalogued repo id or GGUF filename, else (None, None)."""
+    try:
+        catalog = read_json(CATALOG_PATH)
+    except Exception:
+        catalog = {}
+    return model_defaults.resolve_generative(model_id, quant, catalog)
+
 
 def save_active_state():
     """Persist ACTIVE_PROCESSES (without computed liveness) under CONFIG_LOCK, atomically."""
@@ -551,7 +566,8 @@ def download_model(req: DownloadRequest, bg_tasks: BackgroundTasks):
     }
 
     def _async_download():
-        target_fn = req.filename or f"{req.repo_id.split('/')[-1]}.Q4_K_M.gguf"
+        cat_repo, cat_file = resolve_generative_target(req.repo_id, req.quant)
+        target_fn = req.filename or cat_file or f"{req.repo_id.split('/')[-1]}.Q4_K_M.gguf"
         ACTIVE_DOWNLOAD_STATE["is_downloading"] = True
         ACTIVE_DOWNLOAD_STATE["filename"] = target_fn
         ACTIVE_DOWNLOAD_STATE["target_model"] = req.repo_id
@@ -559,7 +575,7 @@ def download_model(req: DownloadRequest, bg_tasks: BackgroundTasks):
         try:
             from huggingface_hub import hf_hub_download
             print(f"[HardwareServer] Downloading GGUF {target_fn} from HF {req.repo_id}...")
-            hf_hub_download(repo_id=req.repo_id, filename=target_fn if req.filename else None, local_dir=MODELS_CACHE_DIR)
+            hf_hub_download(repo_id=req.repo_id, filename=target_fn, local_dir=MODELS_CACHE_DIR)
             DOWNLOAD_JOBS[job_id]["status"] = "complete"
             DOWNLOAD_JOBS[job_id]["progress"] = 100
             DOWNLOAD_JOBS[job_id]["message"] = "Download complete!"
@@ -644,16 +660,11 @@ def serve_model(req: ServeRequest, background_tasks: BackgroundTasks):
         return {"status": "ok", "message": f"Successfully loaded embedder {req.model_id} on port 8000", "pid": p.pid}
 
     elif cat == "generative":
-        default_model = "Qwen3-0.6B-Q8_0.gguf"
-        app_cfg_path = os.path.join(CONFIG_DIR, "app_config.json")
-        if os.path.exists(app_cfg_path):
-            try:
-                with open(app_cfg_path, "r", encoding="utf-8") as f:
-                    cfg = json.load(f)
-                    default_model = cfg.get("llm", {}).get("model_name") or default_model
-            except Exception:
-                pass
+        default_model = default_generative_model()
         actual_model_id = req.model_id or req.repo_id or default_model
+        if not (req.model_id or req.repo_id):
+            req.model_id = actual_model_id
+            req.quant = None  # use the catalog default quant for the default model
         update_app_config_llm(actual_model_id, 16384)
         # Kill any old listener on port 8003
         try:
@@ -674,21 +685,9 @@ def serve_model(req: ServeRequest, background_tasks: BackgroundTasks):
         except Exception:
             pass
 
-        # Look up model filename in catalog if present and ensure local download
-        catalog_data = {}
-        if os.path.exists(CATALOG_PATH):
-            try:
-                with open(CATALOG_PATH, "r", encoding="utf-8") as f:
-                    catalog_data = json.load(f)
-            except Exception:
-                pass
-
-        target_file = None
-        for m in catalog_data.get("generative", []):
-            if m.get("repo_id") == actual_model_id:
-                quant_key = (req.quant or "").lower().replace("-", "_")
-                target_file = m.get("files", {}).get(quant_key) or m.get("files", {}).get("q4_k_m")
-                break
+        # Look up model filename in catalog (repo id or filename) before guessing
+        catalog_repo, target_file = resolve_generative_target(actual_model_id, req.quant)
+        download_repo = catalog_repo or actual_model_id
 
         if not target_file:
             try:
@@ -748,7 +747,7 @@ def serve_model(req: ServeRequest, background_tasks: BackgroundTasks):
                 return
 
             # 1. Check if model already exists locally in models/ directory
-            local_direct_path = os.path.join(models_dir, req.model_id)
+            local_direct_path = os.path.join(models_dir, actual_model_id)
             has_valid_weights = False
             if os.path.exists(local_direct_path):
                 if os.path.isfile(local_direct_path):
@@ -762,7 +761,7 @@ def serve_model(req: ServeRequest, background_tasks: BackgroundTasks):
 
             if has_valid_weights:
                 print(f"[HardwareServer] Serving existing local model file directly from {local_direct_path}...")
-                is_mlx_local = os.path.isdir(local_direct_path) or "mlx" in req.model_id.lower() or req.model_id.endswith(".safetensors")
+                is_mlx_local = os.path.isdir(local_direct_path) or "mlx" in actual_model_id.lower() or actual_model_id.endswith(".safetensors")
                 if is_mlx_local:
                     cmd = [sys.executable, "-m", "mlx_lm", "server", "--model", local_direct_path, "--port", "8003", "--host", "127.0.0.1"]
                 else:
@@ -785,7 +784,7 @@ def serve_model(req: ServeRequest, background_tasks: BackgroundTasks):
             if not target_file:
                 try:
                     import requests
-                    r = requests.get(f"https://huggingface.co/api/models/{req.model_id}", timeout=10)
+                    r = requests.get(f"https://huggingface.co/api/models/{download_repo}", timeout=10)
                     if r.status_code == 200:
                         siblings = r.json().get("siblings", [])
                         ggufs = [f["rfilename"] for f in siblings if f.get("rfilename", "").endswith(".gguf")]
@@ -797,7 +796,7 @@ def serve_model(req: ServeRequest, background_tasks: BackgroundTasks):
                     print(f"[HardwareServer] HF API resolution error: {e}")
 
             if not target_file:
-                target_file = f"{req.model_id.split('/')[-1]}.Q4_K_M.gguf"
+                target_file = f"{download_repo.split('/')[-1]}.Q4_K_M.gguf"
 
             model_path = os.path.join(models_dir, target_file)
             if os.path.exists(model_path):
@@ -824,7 +823,7 @@ def serve_model(req: ServeRequest, background_tasks: BackgroundTasks):
                 from huggingface_hub import hf_hub_download
                 print(f"[HardwareServer] Downloading single GGUF file {target_file} for {req.model_id}...")
                 hf_hub_download(
-                    repo_id=req.model_id,
+                    repo_id=download_repo,
                     filename=target_file,
                     local_dir=models_dir
                 )

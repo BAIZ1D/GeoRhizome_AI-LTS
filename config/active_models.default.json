@@ -1,7 +1,7 @@
 {
   "generative": {
-    "model_id": "Qwen3.5-0.8B-Japanese-SFT-v2-Q4_K_M.gguf",
-    "name": "Qwen3.5-0.8B-Japanese-SFT-v2-Q4_K_M.gguf",
+    "model_id": "Qwen2.5-1.5B-Instruct-Q3_K_M.gguf",
+    "name": "Qwen2.5-1.5B-Instruct-Q3_K_M.gguf",
     "port": 8003
   },
   "embedding": {

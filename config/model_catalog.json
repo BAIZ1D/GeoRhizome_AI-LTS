@@ -1,6 +1,18 @@
 {
   "generative": [
     {
+      "name": "Qwen2.5 1.5B Instruct Japanese imatrix (Default)",
+      "repo_id": "dahara1/Qwen2.5-1.5B-Instruct-gguf-japanese-imatrix-128K",
+      "use_case": "chat",
+      "description": "Default lightweight Japanese chat model (served with n_ctx 16384).",
+      "default_quant": "Q3_K_M",
+      "files": {
+        "q3_k_m": "Qwen2.5-1.5B-Instruct-Q3_K_M.gguf",
+        "q4_k_m": "Qwen2.5-1.5B-Instruct-Q4_K_M.gguf",
+        "q8_0": "Qwen2.5-1.5B-Instruct-Q8_0.gguf"
+      }
+    },
+    {
       "name": "Llama 3 Swallow 8B Instruct (Tokyo Tech Japanese)",
       "repo_id": "MCZK/Llama-3-Swallow-8B-Instruct-v0.1-GGUF",
       "use_case": "reasoning",
@@ -79,5 +91,12 @@
       "description": "High-accuracy multilingual & Japanese cross-encoder reranker (~2.2GB).",
       "default_quant": "FP16"
     }
-  ]
+  ],
+  "legacy_defaults": {
+    "generative": [
+      "Qwen3.5-0.8B-Japanese-SFT-v2-Q4_K_M.gguf",
+      "Qwen3-0.6B-Q8_0.gguf",
+      "Takenoko12345678/Qwen3.5-0.8B-Japanese-SFT-v2-GGUF"
+    ]
+  }
 }

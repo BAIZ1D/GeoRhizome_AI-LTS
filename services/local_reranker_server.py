@@ -1,155 +1,231 @@
 #!/usr/bin/env python3
 """
-Hardware-Adaptive Cross-Encoder Reranker Server (Phase 6).
-FastAPI service exposing POST /rerank endpoint.
-Dynamically detects hardware (RAM, MPS, CUDA) and loads appropriate reranker tier from config/reranker_tiers.yaml.
+Hardware-adaptive cross-encoder reranker server (:8001).
+
+- Binds immediately; the model loads lazily on the first POST /rerank and is
+  reused afterwards. It unloads after ``reranker.idle_unload_minutes`` of
+  idleness (<= 0 disables unloading) and frees MPS/CUDA caches.
+- Tier, device, precision and model are resolved by ``reranker_runtime`` from
+  config/reranker_tiers.yaml, config/app_config.json, config/active_models.json
+  and the RERANKER_MODEL_PREF env var.
+- Scores are raw logits (activation_fn=Identity); the tier batch_size is passed
+  to every predict().
+- A single-slot semaphore guards inference; a request that cannot get the slot
+  within ``reranker.timeout_ms`` gets HTTP 503.
 """
 
-import sys
+from __future__ import annotations
+
 import os
-import yaml
+import sys
+import threading
+import time
+from contextlib import asynccontextmanager
+from typing import Any, Callable, Dict, List, Optional
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 import psutil
-import torch
-from typing import List, Dict, Any, Optional
+import uvicorn
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-import uvicorn
-from sentence_transformers import CrossEncoder
 
-CONFIG_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config"))
-TIERS_PATH = os.path.join(CONFIG_DIR, "reranker_tiers.yaml")
+import reranker_runtime as rr
+from core.config_io import get_config_dir
 
-app = FastAPI(title="GeoRhizome Reranker Service", version="1.0.0")
+REAPER_TICK_S = 30.0
+
+# Injection hook for tests: a CrossEncoder-compatible factory (None = real CrossEncoder).
+CE_FACTORY: Optional[Callable[..., Any]] = None
+
 
 class Candidate(BaseModel):
     id: Optional[str] = None
     text: str
     metadata: Optional[Dict[str, Any]] = None
 
+
 class RerankRequest(BaseModel):
     query: str
     candidates: List[Candidate]
 
-class RerankerEngine:
-    def __init__(self):
-        self.tier_name = "medium"
-        self.model_name = "BAAI/bge-reranker-base"
-        self.device = "cpu"
-        self.model = None
-        self._initialize_hardware_and_model()
 
-    def _initialize_hardware_and_model(self):
-        # 1. Load config tiers
-        tiers_config = {}
-        if os.path.exists(TIERS_PATH):
-            try:
-                with open(TIERS_PATH, "r", encoding="utf-8") as f:
-                    tiers_config = yaml.safe_load(f).get("tiers", {})
-            except Exception as e:
-                print(f"[Reranker Warning] Failed to load {TIERS_PATH}: {e}")
+def _accel_memory() -> Dict[str, Optional[float]]:
+    out: Dict[str, Optional[float]] = {"mps_driver_allocated_mb": None, "cuda_allocated_mb": None}
+    try:
+        import torch
 
-        # 2. Hardware Detection
-        ram_gb = psutil.virtual_memory().total / (1024 ** 3)
-        has_mps = torch.backends.mps.is_available()
-        has_cuda = torch.cuda.is_available()
+        mps = getattr(torch, "mps", None)
+        if mps is not None and hasattr(mps, "driver_allocated_memory") and torch.backends.mps.is_available():
+            out["mps_driver_allocated_mb"] = round(mps.driver_allocated_memory() / 2**20, 1)
+        if torch.cuda.is_available():
+            out["cuda_allocated_mb"] = round(torch.cuda.memory_allocated() / 2**20, 1)
+    except Exception:  # noqa: BLE001
+        pass
+    return out
 
-        print(f"[Reranker Hardware Check] Total System RAM: {ram_gb:.2f} GB | MPS: {has_mps} | CUDA: {has_cuda}")
 
-        if has_cuda and ram_gb >= 16:
-            self.tier_name = "high"
-            self.device = "cuda"
-        elif ram_gb >= 8:
-            self.tier_name = "medium"
-            self.device = "cpu"
-        else:
-            self.tier_name = "low"
-            self.device = "cpu"
+class Engine:
+    def __init__(self) -> None:
+        self.config_dir = get_config_dir()
+        self.cfg: Dict[str, Any] = rr.load_reranker_config(self.config_dir)
+        self.model: Any = None
+        self.state = "unloaded"
+        self.last_used = 0.0
+        self.info: Dict[str, Any] = {}
+        self.error: Optional[str] = None
+        self._load_lock = threading.Lock()
+        self.infer_slot = threading.Semaphore(1)
 
-        tier_info = tiers_config.get(self.tier_name, {})
-        self.model_name = tier_info.get("model", "cl-nagoya/ruri-v3-reranker-310m")
-        self.device = tier_info.get("device", "cpu")
+    # ---- planning (no model load)
+    def _tier(self) -> Dict[str, Any]:
+        tiers = rr.load_tiers(self.config_dir)
+        ram, has_cuda, has_mps = rr.detect_ram_and_accel()
+        return tiers[rr.resolve_tier(tiers, ram, has_cuda or has_mps)]
 
-        # 2b. Check dynamic active model state override
-        active_state_path = os.path.join(CONFIG_DIR, "active_models.json")
-        if os.path.exists(active_state_path):
-            try:
-                import json
-                with open(active_state_path, "r", encoding="utf-8") as f:
-                    st = json.load(f)
-                    active_rerank = st.get("reranker", {}).get("model_id")
-                    if active_rerank and active_rerank != "Offloaded":
-                        self.model_name = active_rerank
-            except Exception as e:
-                print(f"[Reranker Warning] Failed loading active_models.json: {e}")
-
-        print(f"[Reranker Model Selection] Tier: '{self.tier_name}' | Dynamic Model: '{self.model_name}' | Device: '{self.device}'")
-
-        # 3. Load CrossEncoder model
+    def planned(self) -> Dict[str, Any]:
         try:
-            self.model = CrossEncoder(self.model_name, device=self.device)
-            print(f"[Reranker Engine] Successfully loaded {self.model_name} on {self.device}!")
-        except Exception as e:
-            print(f"[Reranker Error] Failed loading on {self.device}, falling back to CPU: {e}")
-            self.device = "cpu"
-            self.model = CrossEncoder(self.model_name, device="cpu")
+            tier = self._tier()
+            _, has_cuda, has_mps = rr.detect_ram_and_accel()
+            model, source = rr.resolve_model(dict(os.environ), rr.load_active(self.config_dir), tier.get("model"))
+            device = rr.resolve_device(tier.get("device", "auto"), has_cuda, has_mps)
+            precision, _ = rr.resolve_precision(tier.get("precision"), device)
+            return {"model": model, "source": source, "tier": tier.get("name"), "device": device,
+                    "precision": precision, "batch_size": tier.get("batch_size")}
+        except Exception as e:  # noqa: BLE001
+            return {"error": str(e)}
 
+    # ---- lifecycle
+    def ensure_loaded(self) -> None:
+        if self.model is not None:
+            return
+        with self._load_lock:
+            if self.model is not None:
+                return
+            self.state = "loading"
+            try:
+                self.cfg = rr.load_reranker_config(self.config_dir)
+                model, info = rr.build_reranker(self.cfg, self._tier(), factory=CE_FACTORY)
+            except Exception as e:  # noqa: BLE001
+                self.state = "degraded"
+                self.error = f"{type(e).__name__}: {e}"
+                print(f"[Reranker Error] load failed: {self.error}", flush=True)
+                raise
+            self.model, self.info = model, info
+            self.error = info.get("fallback")
+            self.state = "degraded" if info.get("fallback") else "ready"
+            print(f"[Reranker] {self.state}: {info}", flush=True)
+
+    def unload(self) -> None:
+        with self._load_lock:
+            self.model = None
+            rr._free_accel()
+            self.state = "unloaded"
+            print("[Reranker] model unloaded (idle)", flush=True)
+
+    def reap_if_idle(self, now: Optional[float] = None) -> bool:
+        minutes = float(self.cfg.get("idle_unload_minutes", rr.FALLBACK_IDLE_UNLOAD_MINUTES) or 0)
+        if minutes <= 0 or self.model is None:
+            return False
+        now = time.time() if now is None else now
+        if now - self.last_used <= minutes * 60:
+            return False
+        if not self.infer_slot.acquire(blocking=False):
+            return False  # inference in progress
+        try:
+            if self.model is None or now - self.last_used <= minutes * 60:
+                return False
+            self.unload()
+            return True
+        finally:
+            self.infer_slot.release()
+
+    # ---- inference
     def score_and_rank(self, query: str, candidates: List[Candidate]) -> List[Dict[str, Any]]:
-        if not candidates or not self.model:
-            return []
-
-        # Build pair inputs for CrossEncoder
-        pairs = [[query, cand.text] for cand in candidates]
-        scores = self.model.predict(pairs)
-
-        results = []
-        for cand, score in zip(candidates, scores):
-            results.append({
-                "id": cand.id,
-                "text": cand.text,
-                "score": float(score),
-                "metadata": cand.metadata or {}
-            })
-
-        # Sort descending by cross-encoder score
+        pairs = [(query, c.text) for c in candidates]
+        scores = rr.predict(self.model, self.info, pairs)
+        results = [
+            {"id": c.id, "text": c.text, "score": float(s), "metadata": c.metadata or {}}
+            for c, s in zip(candidates, scores)
+        ]
         results.sort(key=lambda x: x["score"], reverse=True)
         for rank, item in enumerate(results, start=1):
             item["rank"] = rank
-
         return results
 
-engine = None
+    def health(self) -> Dict[str, Any]:
+        base = self.info if self.model is not None else self.planned()
+        out = {
+            "status": "ok",
+            "state": self.state,
+            "model": base.get("model"),
+            "source": base.get("source"),
+            "tier": base.get("tier"),
+            "device": base.get("device"),
+            "precision": base.get("precision"),
+            "batch_size": base.get("batch_size"),
+            "max_length": self.cfg.get("max_length"),
+            "idle_unload_minutes": self.cfg.get("idle_unload_minutes"),
+            "selftest": self.info.get("selftest") if self.model is not None else None,
+            "error": self.error,
+            "rss_mb": round(psutil.Process().memory_info().rss / 2**20, 1),
+        }
+        out.update(_accel_memory())
+        return out
 
-@app.on_event("startup")
-def startup_event():
-    global engine
-    engine = RerankerEngine()
+
+engine = Engine()
+
+
+def _reaper(stop: threading.Event) -> None:
+    while not stop.wait(REAPER_TICK_S):
+        try:
+            engine.reap_if_idle()
+        except Exception as e:  # noqa: BLE001
+            print(f"[Reranker Warning] reaper: {e}", flush=True)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    stop = threading.Event()
+    t = threading.Thread(target=_reaper, args=(stop,), name="reranker-reaper", daemon=True)
+    t.start()
+    try:
+        yield
+    finally:
+        stop.set()
+
+
+app = FastAPI(title="GeoRhizome Reranker Service", version="2.0.0", lifespan=lifespan)
+
 
 @app.get("/health")
-def health():
-    if not engine:
-        raise HTTPException(status_code=503, detail="Reranker engine not initialized")
-    return {
-        "status": "ok",
-        "tier": engine.tier_name,
-        "model": engine.model_name,
-        "device": engine.device
-    }
+def health() -> Dict[str, Any]:
+    return engine.health()
+
 
 @app.post("/rerank")
 def rerank(req: RerankRequest):
-    if not engine:
-        raise HTTPException(status_code=503, detail="Reranker engine initializing")
     if not req.query or not req.candidates:
         return {"results": []}
+    timeout_s = float(engine.cfg.get("timeout_ms", rr.FALLBACK_TIMEOUT_MS)) / 1000.0
+    if not engine.infer_slot.acquire(timeout=timeout_s):
+        raise HTTPException(status_code=503, detail="reranker busy")
+    try:
+        try:
+            engine.ensure_loaded()
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(status_code=503, detail=f"reranker load failed: {e}")
+        cap = 2 * int(engine.cfg.get("wide_candidate_count") or 0)
+        candidates = req.candidates[:cap] if cap > 0 else req.candidates
+        ranked = engine.score_and_rank(req.query, candidates)
+        engine.last_used = time.time()
+        return {"query": req.query, "results": ranked, "count": len(ranked)}
+    finally:
+        engine.infer_slot.release()
 
-    ranked_results = engine.score_and_rank(req.query, req.candidates)
-    return {
-        "query": req.query,
-        "results": ranked_results,
-        "count": len(ranked_results)
-    }
 
 if __name__ == "__main__":
     port = int(os.getenv("RERANKER_PORT", "8001"))
-    print(f"🚀 Launching Local Reranker Server on http://127.0.0.1:{port} ...")
+    print(f"Launching Local Reranker Server on port {port} (lazy model load)", flush=True)
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")

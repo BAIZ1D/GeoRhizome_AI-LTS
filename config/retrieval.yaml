@@ -1,8 +1,16 @@
+# AGENT-ONLY / SYNC MIRROR. Retrieval parameters live ONLY in app_config.json
+# "reranker" (wide_candidate_count, final_top_k, min_reranker_score in logits,
+# timeout_ms, cold_timeout_ms). Every Node caller (RAG, chat history, agents)
+# reads them there via server/utils/rerankerClient.js. reranker_enabled and
+# reranker_model are written by services/reranker_state.update_retrieval_reranker();
+# the numeric keys below are unused mirrors kept aligned with app_config.
 retrieval:
+  _note: agent-only sync mirror; retrieval params are read from app_config.json reranker
   wide_candidate_count: 30
   final_top_k: 10
-  min_reranker_score: -10.0
+  min_reranker_score: -1.6
   reranker_server_url: http://host.docker.internal:8001/rerank
   reranker_enabled: true
-  timeout_ms: 3000
+  timeout_ms: 12000
+  cold_timeout_ms: 20000
   reranker_model: cl-nagoya/ruri-v3-reranker-310m

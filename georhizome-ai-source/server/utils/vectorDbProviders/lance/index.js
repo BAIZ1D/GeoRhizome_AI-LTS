@@ -5,8 +5,8 @@ const { SystemSettings } = require("../../../models/systemSettings");
 const { storeVectorResult, cachedVectorInformation } = require("../../files");
 const { v4: uuidv4 } = require("uuid");
 const { sourceIdentifier } = require("../../chats");
-const { NativeEmbeddingReranker } = require("../../EmbeddingRerankers/native");
 const { VectorDatabase } = require("../base");
+const rerankerClient = require("../../rerankerClient");
 const path = require("path");
 
 /**
@@ -74,10 +74,12 @@ class LanceDb extends VectorDatabase {
               `\x1b[33m[LanceDB Startup Warning] Table '${tableName}' schema dimension (${tableDim}) differs from live embedder dimension (${expectedDimension})! Version drift detected.\x1b[0m`
             );
           }
-        } catch (e) {}
+        } catch {}
       }
     } catch (err) {
-      console.warn(`[LanceDB Startup Warning] Could not perform dimension self-check: ${err.message}`);
+      console.warn(
+        `[LanceDB Startup Warning] Could not perform dimension self-check: ${err.message}`
+      );
     }
   }
 
@@ -121,50 +123,18 @@ class LanceDb extends VectorDatabase {
     topN = 5,
     similarityThreshold = 0.25,
     filterIdentifiers = [],
-    rerank = false,
+    // Accepted for caller compatibility only: Stage 2 is gated solely by
+    // app_config.reranker.enabled, whatever the workspace vectorSearchMode is.
+    rerank: _rerank = false,
   }) {
-    const fs = require("fs");
-    const path = require("path");
-    const yaml = require("js-yaml");
-
-    let retrievalCfg = {
-      wide_candidate_count: 30,
-      final_top_k: topN || 10,
-      min_reranker_score: -10.0,
-      reranker_server_url: "http://127.0.0.1:8001/rerank",
-      reranker_enabled: false,
-      timeout_ms: 3000,
-    };
-
-    try {
-      const containerPath = "/config/app_config.json";
-      const localPath = path.resolve(__dirname, "../../../../../../config/app_config.json");
-      let appConfig = null;
-      if (fs.existsSync(containerPath)) {
-        appConfig = JSON.parse(fs.readFileSync(containerPath, "utf-8"));
-      } else if (fs.existsSync(localPath)) {
-        appConfig = JSON.parse(fs.readFileSync(localPath, "utf-8"));
-      }
-
-      if (appConfig) {
-        if (appConfig.reranker) {
-          retrievalCfg.reranker_enabled = rerank && (appConfig.reranker.enabled !== false);
-          retrievalCfg.reranker_server_url = appConfig.reranker.base_url || retrievalCfg.reranker_server_url;
-        }
-        if (appConfig.similarity) {
-          retrievalCfg.final_top_k = topN || appConfig.similarity.default_top_n || 5;
-        }
-      } else {
-        retrievalCfg.reranker_enabled = rerank;
-      }
-    } catch (e) {
-      retrievalCfg.reranker_enabled = rerank;
-    }
+    const cfg = rerankerClient.loadRerankerConfig();
+    const finalLimit = cfg.final_top_k || topN || 10;
+    const wideCount = Math.max(finalLimit, cfg.wide_candidate_count || 30);
+    const empty = { contextTexts: [], sourceDocuments: [], scores: [] };
 
     const collection = await client.openTable(namespace);
-    const wideCount = Math.max(topN, retrievalCfg.wide_candidate_count || 30);
 
-    // Stage 1: Wide Cosine Candidate Search
+    // Stage 1: wide cosine candidate search
     let candidateRows = [];
     try {
       candidateRows = await collection
@@ -173,91 +143,61 @@ class LanceDb extends VectorDatabase {
         .limit(wideCount)
         .toArray();
     } catch (err) {
-      if (err.message && (err.message.includes("No vector column found") || err.message.includes("dimension"))) {
-        console.warn(`[LanceDb] Workspace table '${namespace}' vector dimension mismatch with query vector (${queryVector.length}-dim). Returning empty context.`);
-        return { contextTexts: [], sourceDocuments: [], scores: [] };
+      if (
+        err.message &&
+        (err.message.includes("No vector column found") ||
+          err.message.includes("dimension"))
+      ) {
+        console.warn(
+          `[LanceDb] Workspace table '${namespace}' vector dimension mismatch with query vector (${queryVector.length}-dim). Returning empty context.`
+        );
+        return empty;
       }
       throw err;
     }
+    if (!candidateRows || candidateRows.length === 0) return empty;
 
-    if (!candidateRows || candidateRows.length === 0) {
-      return { contextTexts: [], sourceDocuments: [], scores: [] };
-    }
-
-    // Stage 2: Rerank via Local Reranker FastAPI Server (if enabled)
-    let rerankedCandidates = null;
-    if (retrievalCfg.reranker_enabled !== false) {
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), retrievalCfg.timeout_ms || 3000);
-
-      const payload = {
-        query: query,
-        candidates: candidateRows.map((r, idx) => ({
-          id: r.id || String(idx),
-          text: r.text || "",
-          metadata: r,
-        })),
-      };
-
-      const res = await fetch(retrievalCfg.reranker_server_url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data?.results && Array.isArray(data.results)) {
-          rerankedCandidates = data.results;
-        }
-      }
-      } catch (err) {
-        console.warn(
-          `\x1b[33m[Reranker Warning] Local Reranker Server (${retrievalCfg.reranker_server_url}) unreachable: ${err.message}. Falling back to Stage-1 Cosine Search.\x1b[0m`
-        );
-      }
-    }
-
+    const unpinned = (row) =>
+      !filterIdentifiers.includes(sourceIdentifier(row));
     const result = { contextTexts: [], sourceDocuments: [], scores: [] };
-    const finalLimit = retrievalCfg.final_top_k || topN || 10;
+    const push = (row, score) => {
+      const { vector: _v, _distance: _d, ...rest } = row;
+      result.contextTexts.push(rest.text);
+      result.sourceDocuments.push({ ...rest, score });
+      result.scores.push(score);
+    };
 
-    if (rerankedCandidates && rerankedCandidates.length > 0) {
-      // Use Stage 2 Cross-Encoder Scores
-      const filtered = rerankedCandidates.filter(
-        (c) => c.score >= (retrievalCfg.min_reranker_score ?? -10.0)
-      );
-      const topItems = filtered.slice(0, finalLimit);
+    // Stage 2: cross-encoder rerank (logit scores). Slim payload: id + text.
+    const { results } = !cfg.enabled
+      ? { results: null }
+      : await rerankerClient.rerank({
+          query,
+          candidates: candidateRows.map((r, idx) => ({
+            id: String(idx),
+            text: r.text || "",
+          })),
+          cfg,
+          label: `workspace '${namespace}'`,
+        });
 
-      topItems.forEach((item) => {
-        const itemMeta = item.metadata || {};
-        if (filterIdentifiers.includes(sourceIdentifier(itemMeta))) return;
-        result.contextTexts.push(item.text);
-        result.sourceDocuments.push({
-          ...itemMeta,
-          score: item.score,
-        });
-        result.scores.push(item.score);
-      });
-    } else {
-      // Fallback: Stage 1 Cosine Results
-      const topItems = candidateRows.slice(0, finalLimit);
-      topItems.forEach((item) => {
-        const similarity = this.distanceToSimilarity(item._distance);
-        if (similarity < similarityThreshold) return;
-        if (filterIdentifiers.includes(sourceIdentifier(item))) return;
-        result.contextTexts.push(item.text);
-        result.sourceDocuments.push({
-          ...item,
-          score: similarity,
-        });
-        result.scores.push(similarity);
-      });
+    if (results) {
+      // Logit filter only; cosine scores are never mixed into this list.
+      results
+        .map((r) => ({ row: candidateRows[Number(r.id)], score: r.score }))
+        .filter(({ row, score }) => row && score >= cfg.min_reranker_score)
+        .filter(({ row }) => unpinned(row))
+        .slice(0, finalLimit)
+        .forEach(({ row, score }) => push(row, score));
+      return result;
     }
 
+    // Fallback: Stage 1 cosine order with the cosine similarity threshold.
+    candidateRows
+      .map((row) => ({ row, score: this.distanceToSimilarity(row._distance) }))
+      .filter(({ score }) => score >= similarityThreshold)
+      .filter(({ row }) => unpinned(row))
+      .slice(0, finalLimit)
+      .forEach(({ row, score }) => push(row, score));
     return result;
   }
 
@@ -295,8 +235,14 @@ class LanceDb extends VectorDatabase {
         .limit(topN)
         .toArray();
     } catch (err) {
-      if (err.message && (err.message.includes("No vector column found") || err.message.includes("dimension"))) {
-        console.warn(`[LanceDb] Workspace table '${namespace}' vector dimension mismatch with query vector (${queryVector.length}-dim). Returning empty context.`);
+      if (
+        err.message &&
+        (err.message.includes("No vector column found") ||
+          err.message.includes("dimension"))
+      ) {
+        console.warn(
+          `[LanceDb] Workspace table '${namespace}' vector dimension mismatch with query vector (${queryVector.length}-dim). Returning empty context.`
+        );
         return result;
       }
       throw err;
@@ -437,7 +383,10 @@ class LanceDb extends VectorDatabase {
     // Strip HTML metadata comments
     cleaned = cleaned.replace(/<!--[\s\S]*?-->/g, "");
     // Collapse whitespace between CJK/Kana characters
-    cleaned = cleaned.replace(/(?<=[\u4E00-\u9FFF\u3040-\u30FF])\s+(?=[\u4E00-\u9FFF\u3040-\u30FF])/g, "");
+    cleaned = cleaned.replace(
+      /(?<=[\u4E00-\u9FFF\u3040-\u30FF])\s+(?=[\u4E00-\u9FFF\u3040-\u30FF])/g,
+      ""
+    );
     // Collapse generic whitespace
     cleaned = cleaned.replace(/\s+/g, " ").trim();
     return cleaned;
@@ -509,11 +458,14 @@ class LanceDb extends VectorDatabase {
       if (existingTableExists) {
         try {
           const table = await client.openTable(namespace);
-          const existingRows = await table.search().select(["content_hash"]).toArray();
+          const existingRows = await table
+            .search()
+            .select(["content_hash"])
+            .toArray();
           existingRows.forEach((row) => {
             if (row.content_hash) existingHashes.add(row.content_hash);
           });
-        } catch (e) {}
+        } catch {}
       }
 
       const documentVectors = [];
@@ -525,11 +477,16 @@ class LanceDb extends VectorDatabase {
         for (const [i, vector] of vectorValues.entries()) {
           const textChunk = textChunks[i];
           const cleanHashInput = this.normalizeChunkForHash(textChunk);
-          const contentHash = crypto.createHash("sha256").update(cleanHashInput).digest("hex");
+          const contentHash = crypto
+            .createHash("sha256")
+            .update(cleanHashInput)
+            .digest("hex");
 
           // Skip exact duplicate chunk in the same workspace table
           if (existingHashes.has(contentHash)) {
-            this.logger(`[Deduplication] Skipping duplicate chunk hash ${contentHash.slice(0, 8)}...`);
+            this.logger(
+              `[Deduplication] Skipping duplicate chunk hash ${contentHash.slice(0, 8)}...`
+            );
             continue;
           }
 
@@ -537,9 +494,15 @@ class LanceDb extends VectorDatabase {
 
           // Infer block_type from text structure
           let block_type = "prose";
-          if (cleanHashInput.includes("|---|") || cleanHashInput.includes("| --- |")) {
+          if (
+            cleanHashInput.includes("|---|") ||
+            cleanHashInput.includes("| --- |")
+          ) {
             block_type = "table";
-          } else if (cleanHashInput.includes("目次") || cleanHashInput.includes("Table of Contents")) {
+          } else if (
+            cleanHashInput.includes("目次") ||
+            cleanHashInput.includes("Table of Contents")
+          ) {
             block_type = "toc";
           } else if (/^\s*[-*•\d+.]/m.test(cleanHashInput)) {
             block_type = "list";
@@ -555,7 +518,10 @@ class LanceDb extends VectorDatabase {
             text: textChunk,
             content_hash: contentHash,
             source_document_id: docId,
-            source_filename: metadata.title || metadata.name || (fullFilePath ? path.basename(fullFilePath) : "unknown"),
+            source_filename:
+              metadata.title ||
+              metadata.name ||
+              (fullFilePath ? path.basename(fullFilePath) : "unknown"),
             workspace_id: namespace,
             page_reference: metadata.page || metadata.page_number || 1,
             ocr_quality: metadata.ocr_quality || "pass",
@@ -624,8 +590,8 @@ class LanceDb extends VectorDatabase {
 
     const EmbedderEngine = getEmbeddingEngineSelection();
     const queryVector = await EmbedderEngine.embedTextInput(input);
-    
-    // Always execute two-stage retrieval (LanceDB Cosine Candidate Search -> Cross-Encoder Rerank)
+
+    // Two-stage retrieval (cosine candidates -> cross-encoder rerank), gated by app_config.reranker.enabled
     const result = await this.rerankedSimilarityResponse({
       client,
       namespace,

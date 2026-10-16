@@ -127,8 +127,8 @@ export default function CommunityHubAuthentication() {
             </div>
             <p className="text-xs leading-[18px] font-base text-theme-text-secondary">
               Connecting your GeoRhizome AI Community Hub account allows you to
-              access your <b>private</b> GeoRhizome AI Community Hub items as well
-              as upload your own items to the GeoRhizome AI Community Hub.
+              access your <b>private</b> GeoRhizome AI Community Hub items as
+              well as upload your own items to the GeoRhizome AI Community Hub.
             </p>
           </div>
 

@@ -60,11 +60,13 @@ class CollectorApi {
 
   async getUploadProgress(filename) {
     try {
-      const res = await fetch(`${this.endpoint}/upload-progress?filename=${encodeURIComponent(filename)}`);
+      const res = await fetch(
+        `${this.endpoint}/upload-progress?filename=${encodeURIComponent(filename)}`
+      );
       if (res.ok) {
         return await res.json();
       }
-    } catch(e) {}
+    } catch {}
     return { message: "Waiting for processor..." };
   }
 

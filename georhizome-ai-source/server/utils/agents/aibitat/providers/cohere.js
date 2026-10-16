@@ -222,6 +222,7 @@ class CohereProvider extends InheritMultiple([Provider, UnTooled]) {
         }
       }
 
+      let msgUUID = v4();
       if (!completion?.content) {
         eventHandler?.("reportStreamEvent", {
           type: "statusResponse",
@@ -232,7 +233,7 @@ class CohereProvider extends InheritMultiple([Provider, UnTooled]) {
         this.providerLog(
           "Will assume chat completion without tool call inputs."
         );
-        const msgUUID = v4();
+        msgUUID = v4();
         completion = { content: "" };
         const stream = await this.#handleFunctionCallStream({
           messages: this.cleanMsgs(messages),

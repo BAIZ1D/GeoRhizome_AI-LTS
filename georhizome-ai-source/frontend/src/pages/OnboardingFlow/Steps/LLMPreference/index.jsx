@@ -52,10 +52,16 @@ export default function LLMPreference({
       <form onSubmit={handleSubmit} className="w-full">
         <div className="w-full relative border-theme-chat-input-border shadow border-2 rounded-lg text-white p-8 bg-[#050609]/70 backdrop-blur-md flex flex-col items-center text-center space-y-4">
           <Brain size={48} className="text-[#7bbd34]" />
-          <h2 className="text-xl font-bold text-white tracking-tight">Model Selection is Automated</h2>
+          <h2 className="text-xl font-bold text-white tracking-tight">
+            Model Selection is Automated
+          </h2>
           <p className="text-zinc-400 text-sm max-w-md">
-            Model downloading, quantization, and execution are fully managed via the 
-            <strong className="text-[#7bbd34]"> GeoRhizome Local Model Hub </strong> 
+            Model downloading, quantization, and execution are fully managed via
+            the
+            <strong className="text-[#7bbd34]">
+              {" "}
+              GeoRhizome Local Model Hub{" "}
+            </strong>
             natively integrated into the chat interface.
           </p>
           <p className="text-zinc-500 text-xs">

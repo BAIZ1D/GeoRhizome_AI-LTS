@@ -6,7 +6,8 @@ const WorkspaceAgentInvocation = {
   // must start with @agent for now.
   parseAgents: function (promptString) {
     const trimmed = String(promptString).normalize("NFKC").trim();
-    if (/^[░@＠]search/i.test(trimmed) || /^@search/i.test(trimmed)) return ["@agent"];
+    if (/^[░@＠]search/i.test(trimmed) || /^@search/i.test(trimmed))
+      return ["@agent"];
     if (!trimmed.startsWith("@")) return [];
     return trimmed.split(/\s+/).filter((v) => v.startsWith("@"));
   },

@@ -29,18 +29,17 @@ function bootSSL(app, port = 3001) {
     const credentials = { key: privateKey, cert: certificate };
     const server = https.createServer(credentials, app);
 
-    server
-      .listen(port, async () => {
-        await markOnboarded();
-        await setupTelemetry();
-        new CommunicationKey(true);
-        new EncryptionManager();
-        new BackgroundService().boot();
-        await eagerLoadContextWindows();
-        await PushNotifications.setupPushNotificationService();
-        await TelegramBotService.bootIfActive();
-        console.log(`Primary server in HTTPS mode listening on port ${port}`);
-      });
+    server.listen(port, async () => {
+      await markOnboarded();
+      await setupTelemetry();
+      new CommunicationKey(true);
+      new EncryptionManager();
+      new BackgroundService().boot();
+      await eagerLoadContextWindows();
+      await PushNotifications.setupPushNotificationService();
+      await TelegramBotService.bootIfActive();
+      console.log(`Primary server in HTTPS mode listening on port ${port}`);
+    });
     server.setTimeout(1000 * 60 * 60 * 2);
     server.keepAliveTimeout = 1000 * 60 * 60 * 2;
     server.on("error", catchSigTerms);
@@ -64,21 +63,20 @@ function bootSSL(app, port = 3001) {
 function bootHTTP(app, port = 3001) {
   if (!app) throw new Error('No "app" defined - crashing!');
 
-  const server = app
-    .listen(port, async () => {
-      await markOnboarded();
-      await setupTelemetry();
-      new CommunicationKey(true);
-      new EncryptionManager();
-      new BackgroundService().boot();
-      await eagerLoadContextWindows();
-      await PushNotifications.setupPushNotificationService();
-      await TelegramBotService.bootIfActive();
-      console.log(`Primary server in HTTP mode listening on port ${port}`);
-    });
-    server.setTimeout(1000 * 60 * 60 * 2);
-    server.keepAliveTimeout = 1000 * 60 * 60 * 2;
-    server.on("error", catchSigTerms);
+  const server = app.listen(port, async () => {
+    await markOnboarded();
+    await setupTelemetry();
+    new CommunicationKey(true);
+    new EncryptionManager();
+    new BackgroundService().boot();
+    await eagerLoadContextWindows();
+    await PushNotifications.setupPushNotificationService();
+    await TelegramBotService.bootIfActive();
+    console.log(`Primary server in HTTP mode listening on port ${port}`);
+  });
+  server.setTimeout(1000 * 60 * 60 * 2);
+  server.keepAliveTimeout = 1000 * 60 * 60 * 2;
+  server.on("error", catchSigTerms);
 
   return { app, server };
 }

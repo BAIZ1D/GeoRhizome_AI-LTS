@@ -13,17 +13,14 @@ import {
   Plugs,
 } from "@phosphor-icons/react";
 import AgentIcon from "@/media/animations/agent-static.png";
-import CommunityHubIcon from "@/media/illustrations/community-hub.png";
 import useUser from "@/hooks/useUser";
 import { isMobile } from "react-device-detect";
 import Footer from "../Footer";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import showToast from "@/utils/toast";
-import System from "@/models/system";
 import Option from "./MenuOption";
 import { CanViewChatHistoryProvider } from "../CanViewChatHistory";
-import useAppVersion from "@/hooks/useAppVersion";
 
 export default function SettingsSidebar() {
   const { t } = useTranslation();
@@ -161,7 +158,6 @@ export default function SettingsSidebar() {
     </>
   );
 }
-
 
 const SidebarOptions = ({ user = null, t }) => (
   <CanViewChatHistoryProvider>
@@ -340,7 +336,6 @@ const SidebarOptions = ({ user = null, t }) => (
               flex: true,
               roles: ["admin", "manager"],
             },
-
           ]}
         />
         <Option
@@ -415,4 +410,3 @@ function HoldToReveal({ children, holdForMs = 3_000 }) {
   if (!showing) return null;
   return children;
 }
-

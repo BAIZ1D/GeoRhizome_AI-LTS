@@ -305,7 +305,9 @@ export default function TextSizeMenu() {
       <button
         type="button"
         onClick={() => setShowWindow(!showWindow)}
-        title={t("modelHub.titleFull", { defaultValue: "GeoRhizome Local Model Hub" })}
+        title={t("modelHub.titleFull", {
+          defaultValue: "GeoRhizome Local Model Hub",
+        })}
         className={`group border-none cursor-pointer flex items-center justify-center w-[36px] h-[36px] rounded-full transition-all duration-300 ${
           showWindow
             ? "bg-[#7bbd34]/20 border border-[#7bbd34]/40 shadow-lg shadow-[#7bbd34]/10"
@@ -342,19 +344,27 @@ export default function TextSizeMenu() {
               </div>
               <div>
                 <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-x-2">
-                  {t("modelHub.title", { defaultValue: "GeoRhizome Model Hub" })}
+                  {t("modelHub.title", {
+                    defaultValue: "GeoRhizome Model Hub",
+                  })}
                   <span className="text-[9px] px-2 py-0.5 rounded-full bg-[#7bbd34]/10 text-[#7bbd34] border border-[#7bbd34]/30 font-mono tracking-wider">
-                    {t("modelHub.hardwareAware", { defaultValue: "HARDWARE-AWARE" })}
+                    {t("modelHub.hardwareAware", {
+                      defaultValue: "HARDWARE-AWARE",
+                    })}
                   </span>
                 </h3>
                 <p className="text-[11px] text-zinc-400">
-                  {t("modelHub.subtitle", { defaultValue: "Model serving, 1-click downloads, and RAM/VRAM resource manager" })}
+                  {t("modelHub.subtitle", {
+                    defaultValue:
+                      "Model serving, 1-click downloads, and RAM/VRAM resource manager",
+                  })}
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-x-2">
               <span className="text-zinc-500 hover:text-zinc-300 text-[10px] flex items-center gap-x-1 font-mono">
-                <ArrowsOut size={12} /> {t("modelHub.dragResize", { defaultValue: "Drag / Resize" })}
+                <ArrowsOut size={12} />{" "}
+                {t("modelHub.dragResize", { defaultValue: "Drag / Resize" })}
               </span>
               <button
                 onClick={() => setShowWindow(false)}
@@ -393,7 +403,8 @@ export default function TextSizeMenu() {
                 </span>
               </div>
               <div className="text-zinc-400 flex items-center gap-x-1">
-                <Sparkle size={12} className="text-[#7bbd34]" /> {t("modelHub.topSpeed", { defaultValue: "TOP SPEED:" })}{" "}
+                <Sparkle size={12} className="text-[#7bbd34]" />{" "}
+                {t("modelHub.topSpeed", { defaultValue: "TOP SPEED:" })}{" "}
                 <strong className="text-white">~9.8 t/s</strong>
               </div>
             </div>
@@ -403,18 +414,44 @@ export default function TextSizeMenu() {
           <div className="flex flex-col border-b border-white/10 px-5 bg-[#050609]/30">
             <div className="flex overflow-x-auto">
               {[
-                { id: "current", label: t("modelHub.tabs.current", { defaultValue: "Current Models" }), icon: Lightning },
+                {
+                  id: "current",
+                  label: t("modelHub.tabs.current", {
+                    defaultValue: "Current Models",
+                  }),
+                  icon: Lightning,
+                },
                 {
                   id: "downloaded",
                   label: `${t("modelHub.tabs.downloaded", { defaultValue: "Downloaded Models" })} (${downloadedFiles.length})`,
                   icon: HardDrive,
                 },
-                { id: "generative", label: t("modelHub.tabs.chat", { defaultValue: "Chat & Reasoning" }), icon: Brain },
-                { id: "embedding", label: t("modelHub.tabs.embedder", { defaultValue: "Embedder" }), icon: Ruler },
-                { id: "reranker", label: t("modelHub.tabs.reranker", { defaultValue: "Reranker" }), icon: Target },
+                {
+                  id: "generative",
+                  label: t("modelHub.tabs.chat", {
+                    defaultValue: "Chat & Reasoning",
+                  }),
+                  icon: Brain,
+                },
+                {
+                  id: "embedding",
+                  label: t("modelHub.tabs.embedder", {
+                    defaultValue: "Embedder",
+                  }),
+                  icon: Ruler,
+                },
+                {
+                  id: "reranker",
+                  label: t("modelHub.tabs.reranker", {
+                    defaultValue: "Reranker",
+                  }),
+                  icon: Target,
+                },
                 {
                   id: "hf_search",
-                  label: t("modelHub.tabs.hfSearch", { defaultValue: "HuggingFace Search" }),
+                  label: t("modelHub.tabs.hfSearch", {
+                    defaultValue: "HuggingFace Search",
+                  }),
                   icon: MagnifyingGlass,
                 },
               ].map((tab) => {
@@ -447,7 +484,9 @@ export default function TextSizeMenu() {
                   <div className="relative flex-1">
                     <input
                       type="text"
-                      placeholder={t("modelHub.filter", { defaultValue: "Filter models..." })}
+                      placeholder={t("modelHub.filter", {
+                        defaultValue: "Filter models...",
+                      })}
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       className="w-full bg-white/5 border border-white/10 rounded-lg pl-8 pr-3 py-1 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#7bbd34]/50"
@@ -465,10 +504,26 @@ export default function TextSizeMenu() {
                       onChange={(e) => setSelectedQuant(e.target.value)}
                       className="bg-[#050609] border border-white/10 rounded-lg px-2 py-1 text-[11px] text-zinc-300 focus:outline-none focus:border-[#7bbd34]/50 font-mono cursor-pointer"
                     >
-                      <option value="">{t("modelHub.quants.all", { defaultValue: "All Quants" })}</option>
-                      <option value="Q4_K_M">{t("modelHub.quants.optimal", { defaultValue: "Q4_K_M (Optimal Fit)" })}</option>
-                      <option value="Q8_0">{t("modelHub.quants.high", { defaultValue: "Q8_0 (High Quality)" })}</option>
-                      <option value="Q2_K">{t("modelHub.quants.light", { defaultValue: "Q2_K (Ultra Light)" })}</option>
+                      <option value="">
+                        {t("modelHub.quants.all", {
+                          defaultValue: "All Quants",
+                        })}
+                      </option>
+                      <option value="Q4_K_M">
+                        {t("modelHub.quants.optimal", {
+                          defaultValue: "Q4_K_M (Optimal Fit)",
+                        })}
+                      </option>
+                      <option value="Q8_0">
+                        {t("modelHub.quants.high", {
+                          defaultValue: "Q8_0 (High Quality)",
+                        })}
+                      </option>
+                      <option value="Q2_K">
+                        {t("modelHub.quants.light", {
+                          defaultValue: "Q2_K (Ultra Light)",
+                        })}
+                      </option>
                       <option value="Q5_K_M">Q5_K_M</option>
                       <option value="FP16">FP16</option>
                     </select>
@@ -548,7 +603,10 @@ export default function TextSizeMenu() {
                           onClick={() => handleOffload("generative")}
                           className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 font-semibold text-xs rounded-xl flex items-center gap-x-1 transition-colors border-none cursor-pointer"
                         >
-                          <Stop size={13} /> {t("modelHub.actions.offloadModel", { defaultValue: "Offload Model" })}
+                          <Stop size={13} />{" "}
+                          {t("modelHub.actions.offloadModel", {
+                            defaultValue: "Offload Model",
+                          })}
                         </button>
                       )}
                   </div>
@@ -591,7 +649,10 @@ export default function TextSizeMenu() {
                           onClick={() => handleOffload("embedding")}
                           className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 font-semibold text-xs rounded-xl flex items-center gap-x-1 transition-colors border-none cursor-pointer"
                         >
-                          <Stop size={13} /> {t("modelHub.actions.offloadEmbedder", { defaultValue: "Offload Embedder" })}
+                          <Stop size={13} />{" "}
+                          {t("modelHub.actions.offloadEmbedder", {
+                            defaultValue: "Offload Embedder",
+                          })}
                         </button>
                       )}
                   </div>
@@ -630,7 +691,10 @@ export default function TextSizeMenu() {
                           onClick={() => handleOffload("reranker")}
                           className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 font-semibold text-xs rounded-xl flex items-center gap-x-1 transition-colors border-none cursor-pointer"
                         >
-                          <Stop size={13} /> {t("modelHub.actions.offloadReranker", { defaultValue: "Offload Reranker" })}
+                          <Stop size={13} />{" "}
+                          {t("modelHub.actions.offloadReranker", {
+                            defaultValue: "Offload Reranker",
+                          })}
                         </button>
                       )}
                   </div>
@@ -666,7 +730,10 @@ export default function TextSizeMenu() {
                       onClick={handlePurgeCache}
                       className="px-2.5 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-[11px] font-semibold rounded-lg flex items-center gap-x-1 transition-colors border-none cursor-pointer"
                     >
-                      <Trash size={12} /> {t("modelHub.actions.purge", { defaultValue: "Purge All Caches" })}
+                      <Trash size={12} />{" "}
+                      {t("modelHub.actions.purge", {
+                        defaultValue: "Purge All Caches",
+                      })}
                     </button>
                   </div>
                 </div>
@@ -706,7 +773,10 @@ export default function TextSizeMenu() {
                           }
                           className="px-3 py-1.5 bg-[#7bbd34] hover:bg-[#90d441] text-[#050609] font-bold text-xs rounded-xl flex items-center gap-x-1 transition-colors border-none cursor-pointer"
                         >
-                          <Play size={13} /> {t("modelHub.actions.onboardServe", { defaultValue: "Onboard & Serve" })}
+                          <Play size={13} />{" "}
+                          {t("modelHub.actions.onboardServe", {
+                            defaultValue: "Onboard & Serve",
+                          })}
                         </button>
                         <button
                           onClick={() =>
@@ -797,7 +867,10 @@ export default function TextSizeMenu() {
                             }
                             className="px-3 py-1.5 bg-white/10 hover:bg-[#7bbd34] hover:text-[#050609] text-white text-xs font-semibold rounded-lg flex items-center gap-x-1 transition-colors border-none cursor-pointer whitespace-nowrap"
                           >
-                            <DownloadSimple size={13} /> {t("modelHub.actions.downloadOnboard", { defaultValue: "Download & Onboard" })}
+                            <DownloadSimple size={13} />{" "}
+                            {t("modelHub.actions.downloadOnboard", {
+                              defaultValue: "Download & Onboard",
+                            })}
                           </button>
                         </div>
                       ))
@@ -910,8 +983,12 @@ export default function TextSizeMenu() {
                             >
                               <Play size={13} />{" "}
                               {isDownloaded
-                                ? t("modelHub.actions.onboardServe", { defaultValue: "Onboard & Serve" })
-                                : t("modelHub.actions.downloadOnboard", { defaultValue: "Download & Onboard" })}
+                                ? t("modelHub.actions.onboardServe", {
+                                    defaultValue: "Onboard & Serve",
+                                  })
+                                : t("modelHub.actions.downloadOnboard", {
+                                    defaultValue: "Download & Onboard",
+                                  })}
                             </button>
                           )}
                         </div>
@@ -924,7 +1001,11 @@ export default function TextSizeMenu() {
 
           {/* Window Footer */}
           <div className="px-5 py-2.5 border-t border-white/10 bg-[#050609]/60 flex items-center justify-between text-[11px] text-zinc-400 font-mono">
-            <span>{t("modelHub.footer", { defaultValue: "GeoRhizome AI Engine • Hardware-Aware" })}</span>
+            <span>
+              {t("modelHub.footer", {
+                defaultValue: "GeoRhizome AI Engine • Hardware-Aware",
+              })}
+            </span>
             <button
               onClick={() => setShowWindow(false)}
               className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white font-semibold text-xs rounded-lg transition-colors border-none cursor-pointer"

@@ -426,6 +426,7 @@ class OllamaProvider extends InheritMultiple([Provider, UnTooled]) {
         }
       }
 
+      let msgUUID = v4();
       if (!completion?.content) {
         eventHandler?.("reportStreamEvent", {
           type: "statusResponse",
@@ -435,7 +436,7 @@ class OllamaProvider extends InheritMultiple([Provider, UnTooled]) {
         this.providerLog(
           "Will assume chat completion without tool call inputs."
         );
-        const msgUUID = v4();
+        msgUUID = v4();
         completion = { content: "" };
         let reasoningText = "";
         let token = "";

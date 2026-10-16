@@ -1655,14 +1655,15 @@ const TRANSLATIONS = {
       parsing: "Parsing page {{current}} of {{total}}... (Tesseract OCR)",
       stage1: "Stage 1: PDF → Markdown OCR Conversion...",
       stage2: "Stage 2: Embedding Markdown into Workspace RAG...",
-      complete: "✅ 100% Converted & Embedded!"
-    }
+      complete: "✅ 100% Converted & Embedded!",
+    },
   },
   workspace: {
     embedding: {
-      progress: "Embedding chunk {{current}} of {{total}} into Workspace RAG...",
-      complete: "✅ 100% Embedded into Workspace!"
-    }
+      progress:
+        "Embedding chunk {{current}} of {{total}} into Workspace RAG...",
+      complete: "✅ 100% Embedded into Workspace!",
+    },
   },
   modelHub: {
     titleFull: "GeoRhizome Local Model Hub",
@@ -1683,13 +1684,13 @@ const TRANSLATIONS = {
       chat: "Chat & Reasoning",
       embedder: "Embedder",
       reranker: "Reranker",
-      hfSearch: "HuggingFace Search"
+      hfSearch: "HuggingFace Search",
     },
     quants: {
       all: "All Quants",
       optimal: "Q4_K_M (Optimal Fit)",
       high: "Q8_0 (High Quality)",
-      light: "Q2_K (Ultra Light)"
+      light: "Q2_K (Ultra Light)",
     },
     actions: {
       offloadModel: "Offload Model",
@@ -1699,8 +1700,8 @@ const TRANSLATIONS = {
       onboardServe: "Onboard & Serve",
       downloadOnboard: "Download & Onboard",
       delete: "Delete",
-      offload: "Offload"
-    }
+      offload: "Offload",
+    },
   },
 };
 

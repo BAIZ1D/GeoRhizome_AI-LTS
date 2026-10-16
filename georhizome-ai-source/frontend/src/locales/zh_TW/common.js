@@ -857,7 +857,8 @@ const TRANSLATIONS = {
   },
   privacy: {
     title: "隱私與資料處理",
-    description: "這裡設定已連線的第三方提供者與 GeoRhizome AI 會如何處理資料。",
+    description:
+      "這裡設定已連線的第三方提供者與 GeoRhizome AI 會如何處理資料。",
     anonymous: "已啟用匿名遙測",
   },
   connectors: {

@@ -66,7 +66,7 @@ export default function GeneralInfo({ slug }) {
       </form>
       <SuggestedChatMessages slug={workspace.slug} />
       <KnowledgeSync workspace={workspace} />
-        <DeleteWorkspace workspace={workspace} />
+      <DeleteWorkspace workspace={workspace} />
     </div>
   );
 }

@@ -1664,20 +1664,22 @@ const TRANSLATIONS = {
       parsing: "ページ {{current}}/{{total}} を解析中... (Tesseract OCR)",
       stage1: "ステージ 1: PDF → Markdown OCR 変換中...",
       stage2: "ステージ 2: Markdown をワークスペースRAGに埋め込み中...",
-      complete: "✅ 100% 変換および埋め込み完了！"
-    }
+      complete: "✅ 100% 変換および埋め込み完了！",
+    },
   },
   workspace: {
     embedding: {
-      progress: "チャンク {{current}}/{{total}} をワークスペースRAGに埋め込み中...",
-      complete: "✅ 100% ワークスペースに埋め込み完了！"
-    }
+      progress:
+        "チャンク {{current}}/{{total}} をワークスペースRAGに埋め込み中...",
+      complete: "✅ 100% ワークスペースに埋め込み完了！",
+    },
   },
   modelHub: {
     titleFull: "GeoRhizome ローカルモデルハブ",
     title: "GeoRhizome モデルハブ",
     hardwareAware: "ハードウェア対応",
-    subtitle: "モデルサービング、ワンクリックダウンロード、RAM/VRAMリソースマネージャー",
+    subtitle:
+      "モデルサービング、ワンクリックダウンロード、RAM/VRAMリソースマネージャー",
     dragResize: "ドラッグ / リサイズ",
     ram: "RAM:",
     vram: "VRAM:",
@@ -1692,13 +1694,13 @@ const TRANSLATIONS = {
       chat: "チャットと推論",
       embedder: "埋め込みモデル",
       reranker: "リランカー",
-      hfSearch: "HuggingFace 検索"
+      hfSearch: "HuggingFace 検索",
     },
     quants: {
       all: "すべての量子化",
       optimal: "Q4_K_M (最適フィット)",
       high: "Q8_0 (高品質)",
-      light: "Q2_K (超軽量)"
+      light: "Q2_K (超軽量)",
     },
     actions: {
       offloadModel: "モデルをオフロード",
@@ -1708,8 +1710,8 @@ const TRANSLATIONS = {
       onboardServe: "オンボード & 提供",
       downloadOnboard: "ダウンロード & オンボード",
       delete: "削除",
-      offload: "オフロード"
-    }
+      offload: "オフロード",
+    },
   },
 };
 

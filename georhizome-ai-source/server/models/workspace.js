@@ -15,11 +15,14 @@ function getAppConfig() {
   if (appConfigCache) return appConfigCache;
   try {
     const containerPath = "/config/app_config.json";
-    const localPath = path.resolve(__dirname, "../../../../config/app_config.json");
+    const localPath = path.resolve(
+      __dirname,
+      "../../../../config/app_config.json"
+    );
     if (fs.existsSync(containerPath)) {
-      appConfigCache = JSON.parse(fs.readFileSync(containerPath, 'utf8'));
+      appConfigCache = JSON.parse(fs.readFileSync(containerPath, "utf8"));
     } else if (fs.existsSync(localPath)) {
-      appConfigCache = JSON.parse(fs.readFileSync(localPath, 'utf8'));
+      appConfigCache = JSON.parse(fs.readFileSync(localPath, "utf8"));
     }
   } catch (e) {
     console.error("Failed to read app_config.json", e);
@@ -29,19 +32,26 @@ function getAppConfig() {
 
 function getDefaultThreshold() {
   const cfg = getAppConfig();
-  if (cfg && cfg.similarity && cfg.similarity.default_threshold !== undefined) return cfg.similarity.default_threshold;
+  if (cfg && cfg.similarity && cfg.similarity.default_threshold !== undefined)
+    return cfg.similarity.default_threshold;
   return 0.25;
 }
 
 function getDefaultTopN() {
   const cfg = getAppConfig();
-  if (cfg && cfg.similarity && cfg.similarity.default_top_n !== undefined) return cfg.similarity.default_top_n;
+  if (cfg && cfg.similarity && cfg.similarity.default_top_n !== undefined)
+    return cfg.similarity.default_top_n;
   return 5;
 }
 
 function getDefaultSearchMode() {
   const cfg = getAppConfig();
-  if (cfg && cfg.similarity && cfg.similarity.default_vector_search_mode !== undefined) return cfg.similarity.default_vector_search_mode;
+  if (
+    cfg &&
+    cfg.similarity &&
+    cfg.similarity.default_vector_search_mode !== undefined
+  )
+    return cfg.similarity.default_vector_search_mode;
   return "rerank";
 }
 

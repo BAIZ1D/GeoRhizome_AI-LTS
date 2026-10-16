@@ -47,10 +47,10 @@ export default function AgentSkill({ item, settings, setStep }) {
             </h1>
           </div>
           <p className="text-sm">
-            Agent skills can execute code on your GeoRhizome AI instance, so only
-            import agent skills from sources you trust. You should also review
-            the code before importing. If you are unsure about what a skill does
-            - don't import it!
+            Agent skills can execute code on your GeoRhizome AI instance, so
+            only import agent skills from sources you trust. You should also
+            review the code before importing. If you are unsure about what a
+            skill does - don't import it!
           </p>
         </div>
       </div>

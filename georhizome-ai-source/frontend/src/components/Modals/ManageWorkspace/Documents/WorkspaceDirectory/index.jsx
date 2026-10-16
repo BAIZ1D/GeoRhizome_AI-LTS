@@ -588,7 +588,9 @@ function EmbeddingFileRow({ filename, status: fileStatus, onRemove }) {
       <div className="flex flex-col p-3 rounded-xl bg-zinc-900/90 light:bg-white border border-white/15 light:border-gray-300 shadow-lg gap-y-2 mb-2 mx-2 mt-2">
         <div className="flex items-center justify-between gap-x-3">
           <div className="flex items-center gap-x-2">
-            <div className={`p-1 rounded-md ${status === 'complete' ? 'bg-green-500/20 text-green-400' : 'bg-emerald-500/20 text-emerald-400 animate-pulse'}`}>
+            <div
+              className={`p-1 rounded-md ${status === "complete" ? "bg-green-500/20 text-green-400" : "bg-emerald-500/20 text-emerald-400 animate-pulse"}`}
+            >
               {STATUS_STYLES[status]?.icon || STATUS_STYLES.pending.icon}
             </div>
             <span className="text-white light:text-gray-900 text-xs font-semibold">
@@ -596,22 +598,30 @@ function EmbeddingFileRow({ filename, status: fileStatus, onRemove }) {
             </span>
           </div>
           <span className="text-white/60 light:text-gray-500 text-[10px] font-mono">
-            {status === 'complete' ? '100%' : `${pct}%`}
+            {status === "complete" ? "100%" : `${pct}%`}
           </span>
         </div>
 
         <div className="w-full bg-zinc-800 light:bg-gray-200 h-2 rounded-full overflow-hidden relative">
           <div
-            className={`h-full transition-all duration-300 rounded-full ${status === 'complete' ? 'bg-emerald-500' : 'bg-gradient-to-r from-cyan-400 to-emerald-500 animate-pulse'}`}
-            style={{ width: `${status === 'complete' ? 100 : pct}%` }}
+            className={`h-full transition-all duration-300 rounded-full ${status === "complete" ? "bg-emerald-500" : "bg-gradient-to-r from-cyan-400 to-emerald-500 animate-pulse"}`}
+            style={{ width: `${status === "complete" ? 100 : pct}%` }}
           />
         </div>
 
         <div className="flex items-center justify-between text-[11px] font-medium">
-          <span className={`font-semibold ${status === 'complete' ? 'text-green-400' : 'text-emerald-400'}`}>
-            {status === 'complete' 
-              ? t("workspace.embedding.complete", { defaultValue: "✅ 100% Embedded into Workspace!" })
-              : t("workspace.embedding.progress", { current: chunksProcessed, total: totalChunks, defaultValue: `Embedding chunk ${chunksProcessed} of ${totalChunks} into Workspace RAG...` })}
+          <span
+            className={`font-semibold ${status === "complete" ? "text-green-400" : "text-emerald-400"}`}
+          >
+            {status === "complete"
+              ? t("workspace.embedding.complete", {
+                  defaultValue: "✅ 100% Embedded into Workspace!",
+                })
+              : t("workspace.embedding.progress", {
+                  current: chunksProcessed,
+                  total: totalChunks,
+                  defaultValue: `Embedding chunk ${chunksProcessed} of ${totalChunks} into Workspace RAG...`,
+                })}
           </span>
         </div>
       </div>

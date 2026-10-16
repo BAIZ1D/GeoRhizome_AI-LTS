@@ -57,17 +57,28 @@ function FileUploadProgressComponent({
       const API_BASE = import.meta.env.VITE_API_BASE || "/api";
       const pollTimer = setInterval(async () => {
         try {
-          const res = await fetch(`${API_BASE}/workspace/${slug}/upload-progress?filename=${encodeURIComponent(file.name)}`, {
-            headers: {
-              "Authorization": `Bearer ${window.localStorage.getItem("anythingllm_authToken")}`
+          const res = await fetch(
+            `${API_BASE}/workspace/${slug}/upload-progress?filename=${encodeURIComponent(file.name)}`,
+            {
+              headers: {
+                Authorization: `Bearer ${window.localStorage.getItem("anythingllm_authToken")}`,
+              },
             }
-          });
+          );
           if (res.ok) {
             const data = await res.json();
             if (data.message) {
-              const parseMatch = data.message.match(/Parsing page (\d+) of (\d+)\.\.\. \(Tesseract OCR\)/);
+              const parseMatch = data.message.match(
+                /Parsing page (\d+) of (\d+)\.\.\. \(Tesseract OCR\)/
+              );
               if (parseMatch) {
-                setOcrMessage(t('upload.progress.parsing', { current: parseMatch[1], total: parseMatch[2], defaultValue: `Parsing page ${parseMatch[1]} of ${parseMatch[2]}... (Tesseract OCR)` }));
+                setOcrMessage(
+                  t("upload.progress.parsing", {
+                    current: parseMatch[1],
+                    total: parseMatch[2],
+                    defaultValue: `Parsing page ${parseMatch[1]} of ${parseMatch[2]}... (Tesseract OCR)`,
+                  })
+                );
               } else {
                 setOcrMessage(data.message);
               }
@@ -225,17 +236,25 @@ function FileUploadProgressComponent({
         <span className="text-white/80 light:text-gray-700 flex items-center gap-x-1">
           {stage === "converting" && (
             <span className="text-blue-400 font-semibold">
-              {ocrMessage || t("upload.progress.stage1", { defaultValue: "Stage 1: PDF → Markdown OCR Conversion..." })}
+              {ocrMessage ||
+                t("upload.progress.stage1", {
+                  defaultValue: "Stage 1: PDF → Markdown OCR Conversion...",
+                })}
             </span>
           )}
           {stage === "embedding" && (
             <span className="text-emerald-400 font-semibold">
-              {t("upload.progress.stage2", { defaultValue: "Stage 2: Embedding Markdown into Workspace RAG..." })}
+              {t("upload.progress.stage2", {
+                defaultValue:
+                  "Stage 2: Embedding Markdown into Workspace RAG...",
+              })}
             </span>
           )}
           {stage === "complete" && (
             <span className="text-green-400 font-semibold">
-              {t("upload.progress.complete", { defaultValue: "✅ 100% Converted & Embedded!" })}
+              {t("upload.progress.complete", {
+                defaultValue: "✅ 100% Converted & Embedded!",
+              })}
             </span>
           )}
         </span>

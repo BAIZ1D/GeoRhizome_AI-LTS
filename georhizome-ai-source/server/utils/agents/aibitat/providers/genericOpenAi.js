@@ -25,7 +25,10 @@ class GenericOpenAiProvider extends InheritMultiple([Provider, UnTooled]) {
         const path = require("path");
         const fs = require("fs");
         const containerActivePath = "/config/active_models.json";
-        const activePath = path.resolve(__dirname, "../../../../../config/active_models.json");
+        const activePath = path.resolve(
+          __dirname,
+          "../../../../../config/active_models.json"
+        );
         if (fs.existsSync(containerActivePath)) {
           const act = JSON.parse(fs.readFileSync(containerActivePath, "utf-8"));
           if (act.generative?.model_id) model = act.generative.model_id;
@@ -35,16 +38,21 @@ class GenericOpenAiProvider extends InheritMultiple([Provider, UnTooled]) {
         }
         if (!model) {
           const containerAppCfgPath = "/config/app_config.json";
-          const appCfgPath = path.resolve(__dirname, "../../../../../config/app_config.json");
+          const appCfgPath = path.resolve(
+            __dirname,
+            "../../../../../config/app_config.json"
+          );
           if (fs.existsSync(containerAppCfgPath)) {
-            const cfg = JSON.parse(fs.readFileSync(containerAppCfgPath, "utf-8"));
+            const cfg = JSON.parse(
+              fs.readFileSync(containerAppCfgPath, "utf-8")
+            );
             if (cfg.llm?.model_name) model = cfg.llm.model_name;
           } else if (fs.existsSync(appCfgPath)) {
             const cfg = JSON.parse(fs.readFileSync(appCfgPath, "utf-8"));
             if (cfg.llm?.model_name) model = cfg.llm.model_name;
           }
         }
-      } catch (e) {}
+      } catch {}
       if (!model) model = process.env.GENERIC_OPEN_AI_MODEL_PREF || "default";
     }
     const client = new OpenAI({

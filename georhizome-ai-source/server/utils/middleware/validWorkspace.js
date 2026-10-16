@@ -37,10 +37,14 @@ async function validWorkspaceAndThreadSlug(request, response, next) {
     user_id: user?.id || null,
   });
   if (!thread) {
-    const { thread: newThread } = await WorkspaceThread.new(workspace, user?.id || null, {
-      name: "New Thread",
-      slug: threadSlug,
-    });
+    const { thread: newThread } = await WorkspaceThread.new(
+      workspace,
+      user?.id || null,
+      {
+        name: "New Thread",
+        slug: threadSlug,
+      }
+    );
     thread = newThread;
   }
 

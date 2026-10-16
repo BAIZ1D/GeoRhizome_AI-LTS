@@ -342,14 +342,16 @@ export default function ChatContainer({
             // FAST REFRESH BACKGROUND SYNC:
             // Fetch the chat history directly from the DB so any late-arriving citations or metadata are perfectly synced
             // just as if the user hit Cmd+R, but seamlessly in the background.
-            const fetcher = threadSlug 
-              ? Workspace.threads.chatHistory(workspace?.slug, threadSlug) 
+            const fetcher = threadSlug
+              ? Workspace.threads.chatHistory(workspace?.slug, threadSlug)
               : Workspace.chatHistory(workspace?.slug);
-            fetcher.then((history) => {
-              if (history && Array.isArray(history)) {
-                setChatHistory(history);
-              }
-            }).catch(() => null);
+            fetcher
+              .then((history) => {
+                if (history && Array.isArray(history)) {
+                  setChatHistory(history);
+                }
+              })
+              .catch(() => null);
           }
           setLoadingResponse(false);
           setWebsocket(null);

@@ -173,21 +173,38 @@ ${JSON.stringify(def.parameters.properties, null, 4)}\n`;
 
     // Fast-path: Check if user explicitly asked for internet search (e.g. via @search or explicit Search the internet)
     const lastUserMsg = history[history.length - 1];
-    const userText = typeof lastUserMsg?.content === "string" ? lastUserMsg.content : "";
+    const userText =
+      typeof lastUserMsg?.content === "string" ? lastUserMsg.content : "";
     const webBrowsingFunc = functions.find((f) => f.name === "web-browsing");
-    if (webBrowsingFunc && /^(?:@agent\s+)?search\s+the\s+internet\s+for\s+(.+)/i.test(userText.trim())) {
-      const match = userText.trim().match(/^(?:@agent\s+)?search\s+the\s+internet\s+for\s+(.+)/i);
+    if (
+      webBrowsingFunc &&
+      /^(?:@agent\s+)?search\s+the\s+internet\s+for\s+(.+)/i.test(
+        userText.trim()
+      )
+    ) {
+      const match = userText
+        .trim()
+        .match(/^(?:@agent\s+)?search\s+the\s+internet\s+for\s+(.+)/i);
       const query = match[1]?.trim();
-      if (query && !this.deduplicator.isDuplicate("web-browsing", { query }).isDuplicate) {
+      if (
+        query &&
+        !this.deduplicator.isDuplicate("web-browsing", { query }).isDuplicate
+      ) {
         this.providerLog(`Direct routing web search query: "${query}"`);
-        return { toolCall: { name: "web-browsing", arguments: { query } }, text: null };
+        return {
+          toolCall: { name: "web-browsing", arguments: { query } },
+          text: null,
+        };
       }
     }
 
     const historyMessages = this.buildToolCallMessages(messages, functions);
     const response = await chatCb({ messages: historyMessages });
 
-    const cleanText = typeof response === "string" ? response.replace(/<think>[\s\S]*?<\/think>/gi, "").trim() : response;
+    const cleanText =
+      typeof response === "string"
+        ? response.replace(/<think>[\s\S]*?<\/think>/gi, "").trim()
+        : response;
     const call = safeJsonParse(cleanText, null);
     if (call === null) return { toolCall: null, text: response }; // failed to parse, so must be text.
 
@@ -198,7 +215,9 @@ ${JSON.stringify(def.parameters.properties, null, 4)}\n`;
     }
 
     const skipDedupeTools = ["web-browsing", "web-scraping", "rag-memory"];
-    const { isDuplicate, reason: duplicateReason } = skipDedupeTools.includes(call.name)
+    const { isDuplicate, reason: duplicateReason } = skipDedupeTools.includes(
+      call.name
+    )
       ? { isDuplicate: false, reason: "" }
       : this.deduplicator.isDuplicate(call.name, call.arguments);
     if (isDuplicate) {
@@ -226,19 +245,34 @@ ${JSON.stringify(def.parameters.properties, null, 4)}\n`;
 
     // Fast-path: Check if user explicitly asked for internet search (e.g. via @search or explicit Search the internet)
     const lastUserMsg = history[history.length - 1];
-    const userText = typeof lastUserMsg?.content === "string" ? lastUserMsg.content : "";
+    const userText =
+      typeof lastUserMsg?.content === "string" ? lastUserMsg.content : "";
     const webBrowsingFunc = functions.find((f) => f.name === "web-browsing");
-    if (webBrowsingFunc && /^(?:@agent\s+)?search\s+the\s+internet\s+for\s+(.+)/i.test(userText.trim())) {
-      const match = userText.trim().match(/^(?:@agent\s+)?search\s+the\s+internet\s+for\s+(.+)/i);
+    if (
+      webBrowsingFunc &&
+      /^(?:@agent\s+)?search\s+the\s+internet\s+for\s+(.+)/i.test(
+        userText.trim()
+      )
+    ) {
+      const match = userText
+        .trim()
+        .match(/^(?:@agent\s+)?search\s+the\s+internet\s+for\s+(.+)/i);
       const query = match[1]?.trim();
-      if (query && !this.deduplicator.isDuplicate("web-browsing", { query }).isDuplicate) {
+      if (
+        query &&
+        !this.deduplicator.isDuplicate("web-browsing", { query }).isDuplicate
+      ) {
         this.providerLog(`Direct routing web search query: "${query}"`);
         eventHandler?.("reportStreamEvent", {
           uuid: msgUUID,
           type: "toolCallInvocation",
           content: `Parsed Tool Call: web-browsing(${JSON.stringify({ query })})`,
         });
-        return { toolCall: { name: "web-browsing", arguments: { query } }, text: null, uuid: msgUUID };
+        return {
+          toolCall: { name: "web-browsing", arguments: { query } },
+          text: null,
+          uuid: msgUUID,
+        };
       }
     }
 
@@ -262,8 +296,13 @@ ${JSON.stringify(def.parameters.properties, null, 4)}\n`;
     }
 
     // Robustly extract JSON object if model outputs reasoning or markdown codeblocks
-    let cleanText = textResponse.replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, "").trim();
-    cleanText = cleanText.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+    let cleanText = textResponse
+      .replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, "")
+      .trim();
+    cleanText = cleanText
+      .replace(/```json\s*/g, "")
+      .replace(/```\s*/g, "")
+      .trim();
     let call = safeJsonParse(cleanText, null);
     if (!call && (textResponse.includes("{") || cleanText.includes("{"))) {
       call = safeJsonParse(textResponse, null);
@@ -284,7 +323,9 @@ ${JSON.stringify(def.parameters.properties, null, 4)}\n`;
     }
 
     const skipDedupeTools = ["web-browsing", "web-scraping", "rag-memory"];
-    const { isDuplicate, reason: duplicateReason } = skipDedupeTools.includes(call.name)
+    const { isDuplicate, reason: duplicateReason } = skipDedupeTools.includes(
+      call.name
+    )
       ? { isDuplicate: false, reason: "" }
       : this.deduplicator.isDuplicate(call.name, call.arguments);
     if (isDuplicate) {
@@ -329,7 +370,7 @@ ${JSON.stringify(def.parameters.properties, null, 4)}\n`;
     try {
       let completion = { content: "" };
       let globalMsgUUID = v4();
-      
+
       if (functions.length > 0) {
         const {
           toolCall,
@@ -393,7 +434,7 @@ ${JSON.stringify(def.parameters.properties, null, 4)}\n`;
         );
         const msgUUID = v4();
         globalMsgUUID = msgUUID;
-        
+
         completion = { content: "" };
         const stream = await chatCallback({
           messages: this.cleanMsgs(messages),

@@ -809,7 +809,8 @@ const TRANSLATIONS = {
   },
   api: {
     title: "API 密钥",
-    description: "API 密钥允许持有者以编程方式访问和管理此 GeoRhizome AI 实例。",
+    description:
+      "API 密钥允许持有者以编程方式访问和管理此 GeoRhizome AI 实例。",
     link: "阅读 API 文档",
     generate: "生成新的 API 密钥",
     empty: "未找到 API 密钥",
@@ -822,7 +823,8 @@ const TRANSLATIONS = {
       cancel: "取消",
       close: "关闭",
       create: "创建 API 密钥",
-      helper: "创建后，API 密钥可用于以编程方式访问并配置此 GeoRhizome AI 实例。",
+      helper:
+        "创建后，API 密钥可用于以编程方式访问并配置此 GeoRhizome AI 实例。",
       name: {
         label: "名称",
         placeholder: "生产环境集成",

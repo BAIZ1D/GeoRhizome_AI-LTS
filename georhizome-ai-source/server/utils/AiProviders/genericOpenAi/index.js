@@ -32,8 +32,8 @@ class GenericOpenAiLLM {
     this._modelPreference = modelPreference;
     this.limits = {
       history: this.promptWindowLimit() * 0.15,
-      system: this.promptWindowLimit() * 0.70,
-      user: this.promptWindowLimit() * 0.70,
+      system: this.promptWindowLimit() * 0.7,
+      user: this.promptWindowLimit() * 0.7,
     };
 
     this.embedder = embedder ?? new NativeEmbedder();
@@ -46,7 +46,10 @@ class GenericOpenAiLLM {
       const path = require("path");
       const fs = require("fs");
       const containerActivePath = "/config/active_models.json";
-      const activePath = path.resolve(__dirname, "../../../../../config/active_models.json");
+      const activePath = path.resolve(
+        __dirname,
+        "../../../../../config/active_models.json"
+      );
       if (fs.existsSync(containerActivePath)) {
         const act = JSON.parse(fs.readFileSync(containerActivePath, "utf-8"));
         if (act.generative?.model_id) return act.generative.model_id;
@@ -55,7 +58,10 @@ class GenericOpenAiLLM {
         if (act.generative?.model_id) return act.generative.model_id;
       }
       const containerAppCfgPath = "/config/app_config.json";
-      const appCfgPath = path.resolve(__dirname, "../../../../../config/app_config.json");
+      const appCfgPath = path.resolve(
+        __dirname,
+        "../../../../../config/app_config.json"
+      );
       if (fs.existsSync(containerAppCfgPath)) {
         const cfg = JSON.parse(fs.readFileSync(containerAppCfgPath, "utf-8"));
         if (cfg.llm?.model_name) return cfg.llm.model_name;
@@ -66,10 +72,12 @@ class GenericOpenAiLLM {
       const envPath = path.resolve(__dirname, "../../../.env");
       if (fs.existsSync(envPath)) {
         const content = fs.readFileSync(envPath, "utf-8");
-        const match = content.match(/^GENERIC_OPEN_AI_MODEL_PREF=['"]?([^'"\r\n]+)['"]?/m);
+        const match = content.match(
+          /^GENERIC_OPEN_AI_MODEL_PREF=['"]?([^'"\r\n]+)['"]?/m
+        );
         if (match && match[1]) return match[1];
       }
-    } catch (e) {}
+    } catch {}
     return process.env.GENERIC_OPEN_AI_MODEL_PREF ?? "default";
   }
 

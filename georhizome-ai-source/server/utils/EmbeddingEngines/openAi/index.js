@@ -52,7 +52,10 @@ class OpenAiEmbedder {
       } catch (e) {
         chunksProcessed += chunk.length;
         reportEmbeddingProgress(chunksProcessed, textChunks.length);
-        e.type = e?.response?.data?.error?.code || e?.response?.status || "failed_to_embed";
+        e.type =
+          e?.response?.data?.error?.code ||
+          e?.response?.status ||
+          "failed_to_embed";
         e.message = e?.response?.data?.error?.message || e.message;
         error = `[${e.type}]: ${e.message}`;
         break; // Abort on first error

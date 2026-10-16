@@ -255,7 +255,9 @@ function getLLMProvider({ provider = null, model = null } = {}) {
  * @returns {BaseEmbedderProvider}
  */
 function getEmbeddingEngineSelection() {
-  const { GenericOpenAiEmbedder } = require("../EmbeddingEngines/genericOpenAi");
+  const {
+    GenericOpenAiEmbedder,
+  } = require("../EmbeddingEngines/genericOpenAi");
   return new GenericOpenAiEmbedder();
 }
 

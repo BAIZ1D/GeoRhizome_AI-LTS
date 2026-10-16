@@ -2,7 +2,12 @@ process.on("uncaughtException", (err) => {
   console.error("[NodeServer] Uncaught Exception:", err);
 });
 process.on("unhandledRejection", (reason, promise) => {
-  console.error("[NodeServer] Unhandled Rejection at:", promise, "reason:", reason);
+  console.error(
+    "[NodeServer] Unhandled Rejection at:",
+    promise,
+    "reason:",
+    reason
+  );
 });
 
 process.env.NODE_ENV === "development"

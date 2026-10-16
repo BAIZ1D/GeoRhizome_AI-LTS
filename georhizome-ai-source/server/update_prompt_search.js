@@ -1,4 +1,4 @@
-const { PrismaClient } = require('@prisma/client');
+const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
 async function main() {
@@ -18,7 +18,7 @@ async function main() {
 
   const updated = await prisma.workspaces.update({
     where: { id: 1 },
-    data: { openAiPrompt: updatedPrompt }
+    data: { openAiPrompt: updatedPrompt },
   });
   console.log("SUCCESS:", updated.openAiPrompt);
 }

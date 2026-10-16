@@ -118,7 +118,7 @@ function workspaceEndpoints(app) {
         const Collector = new CollectorApi();
         const data = await Collector.getUploadProgress(filename);
         response.status(200).json(data);
-      } catch (e) {
+      } catch {
         response.status(200).json({ message: "Waiting for processor..." });
       }
     }

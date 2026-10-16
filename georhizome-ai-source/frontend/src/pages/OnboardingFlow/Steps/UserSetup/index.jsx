@@ -153,7 +153,7 @@ const JustMe = ({
     window.localStorage.setItem(AUTH_TOKEN, token);
 
     await System.markOnboardingComplete();
-      navigate(paths.home());
+    navigate(paths.home());
   };
 
   const setNewPassword = (e) => setPassword(e.target.value);
@@ -266,7 +266,7 @@ const MyTeam = ({ setMultiUserLoginValid, myTeamSubmitRef, navigate }) => {
     }
 
     await System.markOnboardingComplete();
-      navigate(paths.home());
+    navigate(paths.home());
     // Auto-request token with credentials that was just set so they
     // are not redirected to login after completion.
     const { user, token } = await System.requestToken(data);

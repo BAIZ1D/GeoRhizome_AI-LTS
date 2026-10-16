@@ -793,7 +793,8 @@ const TRANSLATIONS = {
   customization: {
     interface: {
       title: "Preferencje interfejsu użytkownika",
-      description: "Ustaw preferencje interfejsu użytkownika dla GeoRhizome AI.",
+      description:
+        "Ustaw preferencje interfejsu użytkownika dla GeoRhizome AI.",
     },
     branding: {
       title: "Branding i white-labeling",

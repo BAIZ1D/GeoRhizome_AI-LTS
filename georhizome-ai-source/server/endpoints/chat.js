@@ -26,7 +26,11 @@ function chatEndpoints(app) {
     async (request, response) => {
       try {
         const user = await userFromSession(request, response);
-        const { message, attachments = [], answerLength = "default" } = reqBody(request);
+        const {
+          message,
+          attachments = [],
+          answerLength = "default",
+        } = reqBody(request);
         const workspace = response.locals.workspace;
 
         if (typeof message !== "string" || message.trim().length === 0) {
@@ -113,7 +117,11 @@ function chatEndpoints(app) {
     async (request, response) => {
       try {
         const user = await userFromSession(request, response);
-        const { message, attachments = [], answerLength = "default" } = reqBody(request);
+        const {
+          message,
+          attachments = [],
+          answerLength = "default",
+        } = reqBody(request);
         const workspace = response.locals.workspace;
         const thread = response.locals.thread;
 
@@ -199,9 +207,14 @@ function chatEndpoints(app) {
         console.error("Chat Error:", e);
         let friendlyError = e.message;
         if (e.status === 404 || e.message?.includes("404")) {
-          friendlyError = "Chat model endpoint returned 404. Please check that your local Chat & Reasoning model (e.g. Swallow 8B / Qwen3) is active in GeoRhizome Model Hub.";
-        } else if (e.code === "ECONNREFUSED" || e.message?.includes("ECONNREFUSED")) {
-          friendlyError = "Could not connect to local Chat LLM server. Please make sure your local LLM inference server is running.";
+          friendlyError =
+            "Chat model endpoint returned 404. Please check that your local Chat & Reasoning model (e.g. Swallow 8B / Qwen3) is active in GeoRhizome Model Hub.";
+        } else if (
+          e.code === "ECONNREFUSED" ||
+          e.message?.includes("ECONNREFUSED")
+        ) {
+          friendlyError =
+            "Could not connect to local Chat LLM server. Please make sure your local LLM inference server is running.";
         }
 
         writeResponseChunk(response, {

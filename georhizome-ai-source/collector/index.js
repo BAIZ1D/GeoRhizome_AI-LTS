@@ -178,20 +178,23 @@ app.post(
 
 extensions(app);
 
-
 app.get("/upload-progress", function (request, response) {
   const fs = require("fs");
   const path = require("path");
   const filename = request.query.filename;
   if (!filename) return response.json({ message: "No filename provided" });
-  
+
   // The python script writes to: hotdir/Filename.pdf.progress
-  const progressFile = path.resolve(__dirname, "hotdir", `${filename}.progress`);
+  const progressFile = path.resolve(
+    __dirname,
+    "hotdir",
+    `${filename}.progress`
+  );
   if (fs.existsSync(progressFile)) {
     try {
       const data = JSON.parse(fs.readFileSync(progressFile, "utf-8"));
       return response.json(data);
-    } catch(e) {
+    } catch {
       return response.json({ message: "Parsing..." });
     }
   }
@@ -206,18 +209,17 @@ app.all("*", function (_, response) {
   response.sendStatus(200);
 });
 
-const server = app
-  .listen(8888, async () => {
-    await wipeCollectorStorage();
-    console.log(`Document processor app listening on port 8888`);
+const server = app.listen(8888, async () => {
+  await wipeCollectorStorage();
+  console.log(`Document processor app listening on port 8888`);
+});
+server.setTimeout(1000 * 60 * 60 * 2);
+server.keepAliveTimeout = 1000 * 60 * 60 * 2;
+server.on("error", function (_) {
+  process.once("SIGUSR2", function () {
+    process.kill(process.pid, "SIGUSR2");
   });
-  server.setTimeout(1000 * 60 * 60 * 2);
-  server.keepAliveTimeout = 1000 * 60 * 60 * 2;
-  server.on("error", function (_) {
-    process.once("SIGUSR2", function () {
-      process.kill(process.pid, "SIGUSR2");
-    });
-    process.on("SIGINT", function () {
-      process.kill(process.pid, "SIGINT");
-    });
+  process.on("SIGINT", function () {
+    process.kill(process.pid, "SIGINT");
   });
+});

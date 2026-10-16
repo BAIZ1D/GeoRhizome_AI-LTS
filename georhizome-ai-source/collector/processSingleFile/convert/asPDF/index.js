@@ -29,7 +29,7 @@ async function asPdf({
   metadata = {},
 }) {
   console.log(`-- Working ${filename} --`);
-  
+
   let content = "";
   let docs = [];
   let parsedViaMarkItDown = false;
@@ -38,18 +38,28 @@ async function asPdf({
 
   try {
     const pythonPath = resolvePythonExecutable();
-    const scriptPath = path.resolve(__dirname, "../../../utils/markitdown_ocr_pipeline.py");
+    const scriptPath = path.resolve(
+      __dirname,
+      "../../../utils/markitdown_ocr_pipeline.py"
+    );
     const command = `"${pythonPath}" "${scriptPath}" "${fullFilePath}"`;
-    console.log(`[asPDF] Attempting conversion via MarkItDown + Tesseract OCR Pipeline: ${command}`);
+    console.log(
+      `[asPDF] Attempting conversion via MarkItDown + Tesseract OCR Pipeline: ${command}`
+    );
     const { exec } = require("child_process");
     const util = require("util");
     const execPromise = util.promisify(exec);
-    const { stdout } = await execPromise(command, { maxBuffer: 1024 * 1024 * 200 });
+    const { stdout } = await execPromise(command, {
+      maxBuffer: 1024 * 1024 * 200,
+    });
     if (stdout && stdout.trim().length > 0) {
       content = stdout;
       parsedViaMarkItDown = true;
-      docDescription = "Parsed via MarkItDown + Tesseract Japanese OCR Pipeline.";
-      console.log(`[asPDF] MarkItDown + Tesseract Japanese OCR conversion successful.`);
+      docDescription =
+        "Parsed via MarkItDown + Tesseract Japanese OCR Pipeline.";
+      console.log(
+        `[asPDF] MarkItDown + Tesseract Japanese OCR conversion successful.`
+      );
     }
   } catch (error) {
     console.warn(
@@ -83,9 +93,10 @@ async function asPdf({
       pageContent.push(doc.pageContent);
     }
     content = pageContent.join("");
-    
+
     docAuthor = docs[0]?.metadata?.pdf?.info?.Creator || "no author found";
-    docDescription = docs[0]?.metadata?.pdf?.info?.Title || "No description found.";
+    docDescription =
+      docs[0]?.metadata?.pdf?.info?.Title || "No description found.";
   }
 
   if (!content.trim().length) {
@@ -121,9 +132,15 @@ async function asPdf({
 
   // Also write a raw .md file for the user to keep
   try {
-    const mdDestination = path.resolve(__dirname, "../../../../server/storage/documents/custom-documents", safeFilename + ".md");
+    const mdDestination = path.resolve(
+      __dirname,
+      "../../../../server/storage/documents/custom-documents",
+      safeFilename + ".md"
+    );
     fs.writeFileSync(mdDestination, content, "utf8");
-    console.log(`[asPDF] Successfully wrote raw markdown export to: ${mdDestination}`);
+    console.log(
+      `[asPDF] Successfully wrote raw markdown export to: ${mdDestination}`
+    );
   } catch (e) {
     console.error(`[asPDF] Failed to write raw markdown export: ${e.message}`);
   }

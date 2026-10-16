@@ -812,7 +812,8 @@ const TRANSLATIONS = {
     },
     chat: {
       title: "Xat",
-      description: "Estableix les teves preferències de xat per a GeoRhizome AI.",
+      description:
+        "Estableix les teves preferències de xat per a GeoRhizome AI.",
       auto_submit: {
         title: "Envia automàticament l'entrada de veu",
         description:

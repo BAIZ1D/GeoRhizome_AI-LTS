@@ -123,10 +123,14 @@ export default function handleSocketResponse(socket, event, setChatHistory) {
             ];
           }
 
-          const existingMsg = prev.find((msg) => msg.uuid === data.content.uuid);
+          const existingMsg = prev.find(
+            (msg) => msg.uuid === data.content.uuid
+          );
           return [
             ...prev.filter(
-              (msg) => (!!msg.content || !!msg.userMessage || msg.pending) && msg.uuid !== data.content.uuid
+              (msg) =>
+                (!!msg.content || !!msg.userMessage || msg.pending) &&
+                msg.uuid !== data.content.uuid
             ),
             {
               uuid: data.content.uuid,
@@ -175,10 +179,14 @@ export default function handleSocketResponse(socket, event, setChatHistory) {
             ];
           }
 
-          const existingMsg = prev.find((msg) => msg.uuid === data.content.uuid);
+          const existingMsg = prev.find(
+            (msg) => msg.uuid === data.content.uuid
+          );
           return [
             ...prev.filter(
-              (msg) => (!!msg.content || !!msg.userMessage || msg.pending) && msg.uuid !== data.content.uuid
+              (msg) =>
+                (!!msg.content || !!msg.userMessage || msg.pending) &&
+                msg.uuid !== data.content.uuid
             ),
             {
               uuid: data.content.uuid,
@@ -255,7 +263,9 @@ export default function handleSocketResponse(socket, event, setChatHistory) {
           const msgExists = prev.some((msg) => msg.uuid === uuid);
           if (!msgExists) {
             return [
-              ...prev.filter((msg) => !!msg.content || !!msg.userMessage || msg.pending),
+              ...prev.filter(
+                (msg) => !!msg.content || !!msg.userMessage || msg.pending
+              ),
               {
                 uuid,
                 type: "textResponse",
@@ -267,26 +277,26 @@ export default function handleSocketResponse(socket, event, setChatHistory) {
                 animate: false,
                 pending: false,
                 metrics: data.content.metrics,
-              }
+              },
             ];
           }
 
           return prev.map((msg) =>
-            msg.uuid === uuid
-              ? { ...msg, metrics: data.content.metrics }
-              : msg
+            msg.uuid === uuid ? { ...msg, metrics: data.content.metrics } : msg
           );
         }
 
         if (type === "citations") {
           if (!data.content.citations) return prev;
           const msgExists = prev.some((msg) => msg.uuid === uuid);
-          
+
           if (!msgExists) {
             // The citations arrived before the textResponseChunk created the bubble!
             // Create a pending text bubble with the citations attached.
             return [
-              ...prev.filter((msg) => !!msg.content || !!msg.userMessage || msg.pending),
+              ...prev.filter(
+                (msg) => !!msg.content || !!msg.userMessage || msg.pending
+              ),
               {
                 uuid,
                 type: "textResponse",
@@ -298,7 +308,7 @@ export default function handleSocketResponse(socket, event, setChatHistory) {
                 animate: false,
                 pending: false,
                 metrics: {},
-              }
+              },
             ];
           }
 
@@ -319,7 +329,9 @@ export default function handleSocketResponse(socket, event, setChatHistory) {
 
           if (!msgExists) {
             return [
-              ...prev.filter((msg) => !!msg.content || !!msg.userMessage || msg.pending),
+              ...prev.filter(
+                (msg) => !!msg.content || !!msg.userMessage || msg.pending
+              ),
               {
                 uuid,
                 type: "textResponse",
@@ -332,7 +344,7 @@ export default function handleSocketResponse(socket, event, setChatHistory) {
                 pending: false,
                 metrics: {},
                 chatId: data.content.chatId,
-              }
+              },
             ];
           }
 

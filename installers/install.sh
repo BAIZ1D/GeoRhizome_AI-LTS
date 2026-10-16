@@ -1,5 +1,11 @@
 #!/bin/bash
 # GeoRhizome AI - Mac/Linux Installer
+# Default models (LLM, embedder, reranker) come from config/app_config.json via
+# installers/georhizome_setup.py; nothing model-specific is hardcoded here.
+set -eo pipefail
+
+fail() { echo "[ERROR] $*" >&2; exit 1; }
+trap 'echo "[ERROR] インストールが失敗しました (line $LINENO)。上記のエラー出力を確認してください。" >&2' ERR
 
 echo "============================================================"
 echo "  GeoRhizome AI Enterprise Edition - System Installer"
@@ -25,43 +31,38 @@ else
     RAM_BYTES=$(awk '/MemTotal/ {printf "%d \n", $2 * 1024}' /proc/meminfo)
 fi
 RAM_GB=$((RAM_BYTES / 1024 / 1024 / 1024))
-
 echo "[SYSTEM] 物理メモリ (RAM): ${RAM_GB} GB"
-
-if [ "$RAM_GB" -lt 16 ]; then
-    RECOMMENDATION="Q2_K (超軽量版)"
-elif [ "$RAM_GB" -lt 32 ]; then
-    RECOMMENDATION="Q4_K_M (最適構成)"
-else
-    RECOMMENDATION="Q8_0 (高品質版)"
-fi
-
-echo "[INFO] 推奨推論モデル: ${RECOMMENDATION}"
-echo "[NOTICE] インストール完了後、画面右上の「GeoRhizome モデルハブ」を開き、"
-echo "         上記の推奨モデルを選択してセットアップを完了してください。"
+echo "[NOTICE] 既定モデルは自動でダウンロードされます。変更は「GeoRhizome モデルハブ」から行えます。"
 echo "------------------------------------------------------------"
 
 # 3. Setup Directories
 INSTALL_DIR="$HOME/.georhizome"
-mkdir -p "$INSTALL_DIR/models"
-mkdir -p "$INSTALL_DIR/storage"
+SOURCE_DIR="$INSTALL_DIR/source"
+MODELS_DIR="$INSTALL_DIR/storage/models"
+mkdir -p "$INSTALL_DIR/storage" "$MODELS_DIR" "$SOURCE_DIR" "$INSTALL_DIR/logs"
 echo "[STEP] インストールディレクトリを構成しています... ($INSTALL_DIR)"
 
-# 4. Authentication (Admin will replace <TOKEN>)
-# Construct read-only token dynamically to evade static secret scanners
-P1="ghp_zwKPN"
-P2="HVpezyn8MUI5"
-P3="LZxgqxT7j9Sxx"
-P4="0qhTqX"
-GHCR_READ_TOKEN="${P1}${P2}${P3}${P4}"
-    echo "$GHCR_READ_TOKEN" | docker login ghcr.io -u BAIZ1D --password-stdin > /dev/null 2>&1
+# 4. Authentication (the admin replaces the placeholder before distribution; never commit a real token)
+GHCR_READ_TOKEN="REPLACE_ME_BEFORE_DISTRIBUTION"
+case "$GHCR_READ_TOKEN" in
+    REPLACE_ME*) fail "GHCR_READ_TOKEN が設定されていません。管理者に配布用インストーラーを依頼してください。" ;;
+esac
+# Compose project .env: compose interpolates ${GHCR_READ_TOKEN}; the OTA updater reads it too.
+umask 077
+printf 'GHCR_READ_TOKEN=%s\n' "$GHCR_READ_TOKEN" > "$INSTALL_DIR/.env"
+umask 022
 echo "[STEP] セキュア・コンテナレジストリへ接続中..."
+echo "$GHCR_READ_TOKEN" | docker login ghcr.io -u BAIZ1D --password-stdin || fail "docker login に失敗しました。"
 
-# 5. Generate Core Files
-echo "[STEP] コア・システム構成ファイルを生成中..."
+# 5. Download the source (services, config, installers)
+echo "[STEP] ソースコードをダウンロードしています..."
+curl -fsSL -H "Authorization: token $GHCR_READ_TOKEN" https://api.github.com/repos/BAIZ1D/GeoRhizome_AI-LTS/tarball/main \
+    | tar -xz -C "$SOURCE_DIR" --strip-components=1
+rm -rf "$SOURCE_DIR/models"
+ln -s "$MODELS_DIR" "$SOURCE_DIR/models"
 
+# 6. Compose file (model preferences live in server/.env, which the Model Hub updates)
 cat << 'EOF_COMPOSE' > "$INSTALL_DIR/docker-compose.yml"
-version: '3.8'
 services:
   georhizome-core:
     image: ghcr.io/baiz1d/georhizome_ai-lts:latest
@@ -78,157 +79,88 @@ services:
       - ./source/georhizome-ai-source/server/.env:/app/server/.env
     environment:
       - NODE_ENV=production
-      - GHCR_READ_TOKEN=$GHCR_READ_TOKEN
+      - GHCR_READ_TOKEN=${GHCR_READ_TOKEN}
       - STORAGE_DIR=/app/server/storage
-      - LLM_PROVIDER=generic-openai
-      - GENERIC_OPEN_AI_API_KEY=sk-local
-      - GENERIC_OPEN_AI_MODEL_PREF=Qwen3.5-0.8B-Japanese-SFT-v2-Q4_K_M.gguf
-      - EMBEDDING_ENGINE=generic-openai
-      - EMBEDDING_MODEL_PREF=cl-nagoya/ruri-v3-310m
-      - VECTOR_DB=lancedb
       - HARDWARE_SERVER_URL=http://host.docker.internal:8002
-      - GENERIC_OPEN_AI_BASE_PATH=http://host.docker.internal:8003/v1
-      - EMBEDDING_BASE_PATH=http://host.docker.internal:8000/v1
     restart: unless-stopped
-    
 EOF_COMPOSE
 
-cat << 'EOF_START' > "$INSTALL_DIR/start_georhizome.command"
-#!/bin/bash
-export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
-echo "============================================================"
-echo "  GeoRhizome AI Enterprise Edition - 起動ツール"
-echo "============================================================"
-cd "$HOME/.georhizome"
+# 7. Python runtime (torch==2.5.1 ships wheels for Python 3.10-3.12 only)
+echo "[STEP] AI推論エンジンのネイティブ環境を構築中 (Python / Metal API)..."
+PYTHON_BIN=""
+for cand in python3.12 python3.11 python3.10 python3; do
+    if command -v "$cand" > /dev/null 2>&1 && "$cand" -c "import sys; sys.exit(0 if (3, 10) <= sys.version_info[:2] < (3, 13) else 1)"; then
+        PYTHON_BIN="$cand"
+        break
+    fi
+done
+[ -n "$PYTHON_BIN" ] || fail "Python 3.10〜3.12 が見つかりません (Python 3.10 以上が必要、torch 2.5.1 は 3.13 以降未対応)。例: brew install python@3.12"
+echo "[INFO] Python: $("$PYTHON_BIN" --version)"
 
-if [ ! -s "$HOME/.georhizome/source/georhizome-ai-source/server/.env" ]; then
-cat << 'ENV_EOF' > "$HOME/.georhizome/source/georhizome-ai-source/server/.env"
-LLM_PROVIDER=generic-openai
-GENERIC_OPEN_AI_BASE_PATH=http://host.docker.internal:8003/v1
-GENERIC_OPEN_AI_API_KEY=sk-local
-GENERIC_OPEN_AI_MODEL_PREF=Qwen3.5-0.8B-Japanese-SFT-v2-Q4_K_M.gguf
-EMBEDDING_ENGINE=generic-openai
-EMBEDDING_BASE_PATH=http://host.docker.internal:8000/v1
-EMBEDDING_MODEL_PREF=cl-nagoya/ruri-v3-310m
-VECTOR_DB=lancedb
-ENV_EOF
+cd "$SOURCE_DIR"
+if [ -x .venv/bin/python3 ] && ! .venv/bin/python3 -c "import sys; sys.exit(0 if (3, 10) <= sys.version_info[:2] < (3, 13) else 1)"; then
+    echo "[INFO] 既存の .venv は非対応の Python のため再作成します。"
+    rm -rf .venv
 fi
+"$PYTHON_BIN" -m venv .venv
+VENV_PYTHON="$SOURCE_DIR/.venv/bin/python3"
+HELPER="$SOURCE_DIR/installers/georhizome_setup.py"
 
-echo "[INFO] GeoRhizome AI を起動しています..."
-echo "[INFO] ネイティブAI推論サーバーを起動しています..."
-VENV_PYTHON="$HOME/.georhizome/source/.venv/bin/python3"
-nohup "$VENV_PYTHON" "$HOME/.georhizome/source/services/local_bge_server.py" > "$HOME/.georhizome/bge.log" 2>&1 &
-nohup "$VENV_PYTHON" "$HOME/.georhizome/source/services/local_reranker_server.py" > "$HOME/.georhizome/reranker.log" 2>&1 &
-nohup "$VENV_PYTHON" "$HOME/.georhizome/source/services/hardware_server.py" > "$HOME/.georhizome/hardware.log" 2>&1 &
-
-# Determine and start Chat LLM Server on Port 8003
-DEFAULT_MODEL=$("$VENV_PYTHON" -c "import json; print(json.load(open('$HOME/.georhizome/source/config/app_config.json')).get('llm', {}).get('model_name', 'Qwen3.5-0.8B-Japanese-SFT-v2-Q4_K_M.gguf'))" 2>/dev/null)
-ACTIVE_CHAT_MODEL="${DEFAULT_MODEL:-Qwen3.5-0.8B-Japanese-SFT-v2-Q4_K_M.gguf}"
-if [ -f "$HOME/.georhizome/source/config/active_models.json" ]; then
-  FOUND_MODEL=$("$VENV_PYTHON" -c "import json; print(json.load(open('$HOME/.georhizome/source/config/active_models.json')).get('generative', {}).get('model_id', ''))" 2>/dev/null)
-  if [ -n "$FOUND_MODEL" ] && [ "$FOUND_MODEL" != "Offloaded" ]; then
-    ACTIVE_CHAT_MODEL="$FOUND_MODEL"
-  fi
+echo "   依存パッケージをインストールしています (数分かかる場合があります)..."
+"$VENV_PYTHON" -m pip install --upgrade pip
+"$VENV_PYTHON" -m pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1
+if [ "$OS_TYPE" = "Darwin" ]; then
+    CMAKE_ARGS="-DGGML_METAL=on" "$VENV_PYTHON" -m pip install "llama-cpp-python[server]==0.3.4"
+else
+    "$VENV_PYTHON" -m pip install "llama-cpp-python[server]==0.3.4"
 fi
-if [ "$ACTIVE_CHAT_MODEL" != "Offloaded" ]; then
-  echo "[INFO] Chat LLM Server ($ACTIVE_CHAT_MODEL) をポート 8003 で起動しています..."
-  if [[ "$ACTIVE_CHAT_MODEL" == *.gguf ]]; then
-    nohup "$VENV_PYTHON" -m llama_cpp.server --model "$HOME/.georhizome/storage/models/$ACTIVE_CHAT_MODEL" --n_ctx 16384 --n_gpu_layers -1 --port 8003 --host 127.0.0.1 > "$HOME/.georhizome/chat.log" 2>&1 &
-  else
-    nohup "$VENV_PYTHON" -m llama_cpp.server --hf_model_repo_id "$ACTIVE_CHAT_MODEL" --n_ctx 16384 --n_gpu_layers -1 --port 8003 --host 127.0.0.1 > "$HOME/.georhizome/chat.log" 2>&1 &
-  fi
-fi
+"$VENV_PYTHON" -m pip install "transformers==5.18.0" "sentence-transformers==6.1.0" "huggingface_hub>=1.31,<2" \
+    fastapi uvicorn psutil pyyaml requests
+echo "   ネイティブAI環境の構築が完了しました。"
 
-nohup docker compose up -d > "$HOME/.georhizome/docker.log" 2>&1 &
-sleep 3
-docker exec georhizome-core pip3 install --break-system-packages PyMuPDF pymupdf4llm markitdown pytesseract >/dev/null 2>&1
+# 8. server/.env (created if missing) + legacy-default migration on re-install
+SERVER_ENV="$SOURCE_DIR/georhizome-ai-source/server/.env"
+"$VENV_PYTHON" "$HELPER" write-env --env "$SERVER_ENV"
+"$VENV_PYTHON" "$HELPER" migrate --env "$SERVER_ENV"
 
-sleep 5
-open http://localhost:3001
-echo "[SUCCESS] 全てのシステムが起動しました！"
-echo "------------------------------------------------------------"
-echo "[NOTICE] ⚠️ 注意: 作業中はウィンドウを閉じないでください。"
-echo "[NOTICE] 終了する場合はこのウィンドウを閉じてください。"
-echo "============================================================"
+# 9. Default models: LLM GGUF -> storage/models, embedder + reranker -> default HF cache
+echo "[STEP] デフォルトのAIモデルをダウンロードしています (初期化用)..."
+"$VENV_PYTHON" "$SOURCE_DIR/installers/georhizome_setup.py" download --models-dir "$MODELS_DIR"
 
-cleanup() {
-    echo "[INFO] GeoRhizome AI をシャットダウンしています..."
-    docker compose down
-    pkill -f local_bge_server.py
-    pkill -f local_reranker_server.py
-    pkill -f hardware_server.py
-    pkill -f llama_cpp.server
-    echo "[SUCCESS] シャットダウンが完了しました。"
-    exit 0
-}
-trap cleanup EXIT INT TERM
-while true; do sleep 1; done
-
-EOF_START
-
+# 10. Launcher + OTA updater
+cp "$SOURCE_DIR/installers/start_georhizome.command" "$INSTALL_DIR/start_georhizome.command"
 chmod +x "$INSTALL_DIR/start_georhizome.command"
 
-# 5b. Generate OTA Update Shortcut
 cat << 'EOF_UPDATE' > "$INSTALL_DIR/update_georhizome.command"
 #!/bin/bash
+set -eo pipefail
+trap 'echo "[ERROR] アップデートに失敗しました (line $LINENO)。" >&2; sleep 10' ERR
+GR="$HOME/.georhizome"
 echo "------------------------------------------------------------"
 echo "[INFO] GeoRhizome AI のアップデートを確認しています..."
-cd "$HOME/.georhizome"
-echo "$GHCR_READ_TOKEN" | docker login ghcr.io -u BAIZ1D --password-stdin > /dev/null 2>&1
+cd "$GR"
+GHCR_READ_TOKEN=$(sed -n 's/^GHCR_READ_TOKEN=//p' "$GR/.env")
+echo "$GHCR_READ_TOKEN" | docker login ghcr.io -u BAIZ1D --password-stdin
 docker compose pull
 echo "[INFO] ネイティブAIエンジンのアップデートを確認しています..."
-curl -s -H "Authorization: token $GHCR_READ_TOKEN" -L https://api.github.com/repos/BAIZ1D/GeoRhizome_AI-LTS/tarball/main | tar -xz -C "$HOME/.georhizome/source" --strip-components=1
-
+curl -fsSL -H "Authorization: token $GHCR_READ_TOKEN" https://api.github.com/repos/BAIZ1D/GeoRhizome_AI-LTS/tarball/main \
+    | tar -xz -C "$GR/source" --strip-components=1
+cp "$GR/source/installers/start_georhizome.command" "$GR/start_georhizome.command"
+chmod +x "$GR/start_georhizome.command"
+"$GR/source/.venv/bin/python3" "$GR/source/installers/georhizome_setup.py" migrate --env "$GR/source/georhizome-ai-source/server/.env"
 echo ""
 echo "[SUCCESS] アップデートが完了しました！"
 echo "最新の機能を利用するには、現在開いている GeoRhizome AI を一度閉じて、再度起動してください。"
 echo "------------------------------------------------------------"
 sleep 5
 EOF_UPDATE
-
 chmod +x "$INSTALL_DIR/update_georhizome.command"
 
-
-# 6. Desktop Shortcut
-
-echo "------------------------------------------------------------"
-echo "[STEP] AI推論エンジンのネイティブ環境を構築中 (Python / Metal API)..."
-
-# Download the python source code natively
-mkdir -p "$INSTALL_DIR/source"
-mkdir -p "$INSTALL_DIR/storage/models"
-
-echo "$GHCR_READ_TOKEN" > "$INSTALL_DIR/git_token.txt"
-curl -s -H "Authorization: token $(cat "$INSTALL_DIR/git_token.txt")" -L https://api.github.com/repos/BAIZ1D/GeoRhizome_AI-LTS/tarball/main | tar -xz -C "$INSTALL_DIR/source" --strip-components=1
-rm "$INSTALL_DIR/git_token.txt"
-
-# Ensure Python is installed
-if ! command -v python3 > /dev/null 2>&1; then
-    echo "[ERROR] Python3 が見つかりません。Homebrew等でインストールしてください。"
-    exit 1
-fi
-
-
-rm -rf "$INSTALL_DIR/source/models"
-ln -s "$INSTALL_DIR/storage/models" "$INSTALL_DIR/source/models"
-cd "$INSTALL_DIR/source"
-
-python3 -m venv .venv
-source .venv/bin/activate
-pip install --upgrade pip > /dev/null 2>&1
-echo "   🟢 依存パッケージをインストールしています (数分かかる場合があります)..."
-pip install torch torchvision torchaudio > /dev/null 2>&1
-CMAKE_ARGS="-DLLAMA_METAL=on" pip install "llama-cpp-python[server]" > /dev/null 2>&1
-pip install fastapi uvicorn sentence-transformers psutil pyyaml > /dev/null 2>&1
-echo "   🟢 ネイティブAI環境の構築が完了しました！"
-
-
+# 11. Desktop shortcuts
 echo "[STEP] デスクトップにショートカットを作成しています..."
 if [ "$OS_TYPE" = "Darwin" ]; then
-    osacompile -e "do shell script \"open \\\"$INSTALL_DIR/start_georhizome.command\\\"\"" -o "$HOME/Desktop/GeoRhizome AI.app" > /dev/null 2>&1
-
-    osacompile -e "do shell script \"open \\\"$INSTALL_DIR/update_georhizome.command\\\"\"" -o "$HOME/Desktop/Update GeoRhizome AI.app" > /dev/null 2>&1
-
+    osacompile -e "do shell script \"open \\\"$INSTALL_DIR/start_georhizome.command\\\"\"" -o "$HOME/Desktop/GeoRhizome AI.app"
+    osacompile -e "do shell script \"open \\\"$INSTALL_DIR/update_georhizome.command\\\"\"" -o "$HOME/Desktop/Update GeoRhizome AI.app"
 else
     cat << 'EOF_LINUX' > "$HOME/Desktop/GeoRhizome_AI.desktop"
 [Desktop Entry]
@@ -249,29 +181,10 @@ EOF_LINUX_UPD
     chmod +x "$HOME/Desktop/Update_GeoRhizome_AI.desktop"
 fi
 
+# 12. Container image
 echo "[STEP] クラスタの初期化とコンテナのダウンロードを開始します..."
 cd "$INSTALL_DIR"
-echo "$GHCR_READ_TOKEN" | docker login ghcr.io -u BAIZ1D --password-stdin > /dev/null 2>&1
 docker compose pull
-echo "[INFO] ネイティブAIエンジンのアップデートを確認しています..."
-curl -s -H "Authorization: token $GHCR_READ_TOKEN" -L https://api.github.com/repos/BAIZ1D/GeoRhizome_AI-LTS/tarball/main | tar -xz -C "$HOME/.georhizome/source" --strip-components=1
-
-
-echo "[STEP] デフォルトのAIモデルをダウンロードしています (初期化用)..."
-VENV_PYTHON="$INSTALL_DIR/source/.venv/bin/python3"
-"$VENV_PYTHON" -m pip install -U huggingface_hub
-"$VENV_PYTHON" -c "
-from huggingface_hub import hf_hub_download, snapshot_download
-import os
-models_dir = os.path.expanduser('~/.georhizome/storage/models')
-os.makedirs(models_dir, exist_ok=True)
-print('-> Downloading Embedder: cl-nagoya/ruri-v3-310m ...')
-snapshot_download('cl-nagoya/ruri-v3-310m')
-print('-> Downloading Reranker: cl-nagoya/ruri-v3-reranker-310m ...')
-snapshot_download('cl-nagoya/ruri-v3-reranker-310m')
-print('-> Downloading LLM: Takenoko12345678/Qwen3.5-0.8B-Japanese-SFT-v2-GGUF (Q4) ...')
-hf_hub_download(repo_id='Takenoko12345678/Qwen3.5-0.8B-Japanese-SFT-v2-GGUF', filename='Qwen3.5-0.8B-Japanese-SFT-v2-Q4_K_M.gguf', local_dir=models_dir)
-"
 
 echo "------------------------------------------------------------"
 echo "[SUCCESS] GeoRhizome AI のインストールが正常に完了しました。"

@@ -1,4 +1,4 @@
-# GeoRhizome AI - Windows Installer
+﻿# GeoRhizome AI - Windows Installer
 $Code = @"
 using System;
 using System.Runtime.InteropServices;
@@ -31,6 +31,47 @@ try {
     [ConsoleFont]::SetFont("MS Gothic")
 } catch {}
 
+# Default models (LLM, embedder, reranker) come from config\app_config.json via
+# installers\georhizome_setup.py; nothing model-specific is hardcoded here.
+$ErrorActionPreference = "Stop"
+$Utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+
+function Fail([string]$Message) {
+    Write-Host "[ERROR] $Message" -ForegroundColor Red
+    Write-Host "Press any key to exit..." -ForegroundColor Cyan
+    $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+    exit 1
+}
+
+# Run a native command and stop with a visible error when it exits non-zero.
+function Invoke-Native([string]$Step, [scriptblock]$Command) {
+    & $Command
+    if ($LASTEXITCODE -ne 0) { Fail "$Step (exit code $LASTEXITCODE)" }
+}
+
+function Get-Source([string]$Token, [string]$Destination) {
+    $Zip = "$INSTALL_DIR\repo.zip"
+    $Tmp = "$INSTALL_DIR\temp_extract"
+    try {
+        Invoke-RestMethod -Uri "https://api.github.com/repos/BAIZ1D/GeoRhizome_AI-LTS/zipball/main" -Headers @{ Authorization = "token $Token" } -OutFile $Zip
+        if (Test-Path $Tmp) { Remove-Item $Tmp -Recurse -Force }
+        Expand-Archive -Path $Zip -DestinationPath $Tmp -Force
+        $Extracted = Get-ChildItem $Tmp | Select-Object -First 1
+        Copy-Item -Path "$($Extracted.FullName)\*" -Destination $Destination -Recurse -Force
+    } catch {
+        Fail "ソースコードのダウンロードに失敗しました: $($_.Exception.Message)"
+    } finally {
+        if (Test-Path $Zip) { Remove-Item $Zip -Force }
+        if (Test-Path $Tmp) { Remove-Item $Tmp -Recurse -Force }
+    }
+}
+
+# Copy a .bat from the source tree with CRLF line endings (cmd.exe labels need CRLF).
+function Copy-Bat([string]$From, [string]$To) {
+    $Text = [System.IO.File]::ReadAllText($From) -replace "`r?`n", "`r`n"
+    [System.IO.File]::WriteAllText($To, $Text, $Utf8NoBom)
+}
+
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host "  GeoRhizome AI Enterprise Edition - System Installer" -ForegroundColor White
 Write-Host "============================================================" -ForegroundColor Cyan
@@ -38,51 +79,47 @@ Write-Host "============================================================" -Foreg
 # 1. Check Docker
 Write-Host "[INFO] 実行環境を確認しています..." -ForegroundColor Gray
 if (-Not (Get-Command "docker" -ErrorAction SilentlyContinue)) {
-    Write-Host "[ERROR] Docker Desktop が起動していないか、インストールされていません。" -ForegroundColor Red
-    Exit
+    Fail "Docker Desktop がインストールされていません。https://www.docker.com/products/docker-desktop/"
 }
+Invoke-Native "Docker Desktop が起動していません" { docker info --format "{{.ServerVersion}}" }
 Write-Host "[SUCCESS] Docker Desktop の稼働を確認しました。" -ForegroundColor Green
 
-Write-Host ""
 # 2. Hardware Detection
+Write-Host ""
 Write-Host "[SYSTEM] ハードウェア・プロファイリングを実行中..." -ForegroundColor Gray
 $ComputerInfo = Get-CimInstance Win32_ComputerSystem
 $RAM_GB = [math]::Round($ComputerInfo.TotalPhysicalMemory / 1GB)
 Write-Host "[SYSTEM] 物理メモリ (RAM): ${RAM_GB} GB" -ForegroundColor White
-
-if ($RAM_GB -lt 16) {
-    $RECOMMENDATION = "Q2_K (超軽量版)"
-} elseif ($RAM_GB -lt 32) {
-    $RECOMMENDATION = "Q4_K_M (最適構成)"
-} else {
-    $RECOMMENDATION = "Q8_0 (高品質版)"
-}
-
-Write-Host "[INFO] 推奨推論モデル: ${RECOMMENDATION}" -ForegroundColor Yellow
-
+Write-Host "[NOTICE] 既定モデルは自動でダウンロードされます。変更は「GeoRhizome モデルハブ」から行えます。" -ForegroundColor Yellow
 Write-Host "------------------------------------------------------------" -ForegroundColor Cyan
 
 # 3. Setup Directories
 $INSTALL_DIR = "$env:USERPROFILE\.georhizome"
-New-Item -ItemType Directory -Force -Path "$INSTALL_DIR\models" | Out-Null
-New-Item -ItemType Directory -Force -Path "$INSTALL_DIR\storage" | Out-Null
+$SourceDir = "$INSTALL_DIR\source"
+$ModelsDir = "$INSTALL_DIR\storage\models"
+foreach ($d in @($INSTALL_DIR, "$INSTALL_DIR\storage", $ModelsDir, $SourceDir, "$INSTALL_DIR\logs")) {
+    New-Item -ItemType Directory -Force -Path $d | Out-Null
+}
 Write-Host "[STEP] インストールディレクトリを構成しています... ($INSTALL_DIR)" -ForegroundColor Gray
 
-# 4. Authentication (Admin will replace <TOKEN>)
+# 4. Authentication (the admin replaces the placeholder before distribution; never commit a real token)
+$GHCR_READ_TOKEN = "REPLACE_ME_BEFORE_DISTRIBUTION"
+if ($GHCR_READ_TOKEN -like "REPLACE_ME*") {
+    Fail "GHCR_READ_TOKEN が設定されていません。管理者に配布用インストーラーを依頼してください。"
+}
+# Compose project .env: compose interpolates ${GHCR_READ_TOKEN}; the OTA updater reads it too.
+[System.IO.File]::WriteAllText("$INSTALL_DIR\.env", "GHCR_READ_TOKEN=$GHCR_READ_TOKEN`n", $Utf8NoBom)
 Write-Host "[STEP] セキュア・コンテナレジストリへ接続中..." -ForegroundColor Gray
-# Construct read-only token dynamically to evade static secret scanners
-$T1 = "ghp_zwKPN"
-$T2 = "HVpezyn8MUI5"
-$T3 = "LZxgqxT7j9Sxx"
-$T4 = "0qhTqX"
-$GHCR_READ_TOKEN = $T1 + $T2 + $T3 + $T4
-$GHCR_READ_TOKEN | docker login ghcr.io -u BAIZ1D --password-stdin *>$null
+Invoke-Native "docker login に失敗しました" { $GHCR_READ_TOKEN | docker login ghcr.io -u BAIZ1D --password-stdin }
 
-# 5. Generate Core Files natively (No external download needed!)
-Write-Host "[STEP] コア・システム構成ファイルを生成中..." -ForegroundColor Gray
+# 5. Download the source (services, config, installers)
+Write-Host "[STEP] ソースコードをダウンロードしています..." -ForegroundColor Gray
+Get-Source $GHCR_READ_TOKEN $SourceDir
+if (Test-Path "$SourceDir\models") { Remove-Item "$SourceDir\models" -Recurse -Force }
+New-Item -ItemType Junction -Path "$SourceDir\models" -Target $ModelsDir | Out-Null
 
-$ComposeContent = @"
-version: '3.8'
+# 6. Compose file (model preferences live in server\.env, which the Model Hub updates)
+$ComposeContent = @'
 services:
   georhizome-core:
     image: ghcr.io/baiz1d/georhizome_ai-lts:latest
@@ -96,154 +133,95 @@ services:
       - ./storage/hotdir:/app/collector/hotdir
       - ./storage/outputs:/app/collector/outputs
       - ./source/config:/config
+      - ./source/georhizome-ai-source/server/.env:/app/server/.env
     environment:
       - NODE_ENV=production
-      - GHCR_READ_TOKEN=$GHCR_READ_TOKEN
+      - GHCR_READ_TOKEN=${GHCR_READ_TOKEN}
       - STORAGE_DIR=/app/server/storage
-      - LLM_PROVIDER=generic-openai
-      - GENERIC_OPEN_AI_API_KEY=sk-local
-      - GENERIC_OPEN_AI_MODEL_PREF=Qwen2.5-1.5B-Instruct-Q3_K_M.gguf
-      - EMBEDDING_ENGINE=generic-openai
-      - EMBEDDING_MODEL_PREF=cl-nagoya/ruri-v3-310m
-      - VECTOR_DB=lancedb
-        - GENERIC_OPEN_AI_BASE_PATH=http://host.docker.internal:8003/v1
-        - EMBEDDING_BASE_PATH=http://host.docker.internal:8000/v1
-        - HARDWARE_SERVER_URL=http://host.docker.internal:8002
+      - HARDWARE_SERVER_URL=http://host.docker.internal:8002
     restart: unless-stopped
-    
-"@
-[System.IO.File]::WriteAllText("$INSTALL_DIR\docker-compose.yml", $ComposeContent, [System.Text.UTF8Encoding]::new($false))
+'@
+[System.IO.File]::WriteAllText("$INSTALL_DIR\docker-compose.yml", $ComposeContent, $Utf8NoBom)
 
-$BatContent = @"
-@echo off
-title GeoRhizome AI Enterprise Edition
-chcp 65001 >nul
-echo ============================================================
-echo   GeoRhizome AI Enterprise Edition - 起動ツール
-echo ============================================================
-cd %USERPROFILE%\.georhizome
-
-if not exist "%USERPROFILE%\.georhizome\source\georhizome-ai-source\server" mkdir "%USERPROFILE%\.georhizome\source\georhizome-ai-source\server"
-if not exist "%USERPROFILE%\.georhizome\source\georhizome-ai-source\server\.env" (
-    echo LLM_PROVIDER=generic-openai> "%USERPROFILE%\.georhizome\source\georhizome-ai-source\server\.env"
-    echo GENERIC_OPEN_AI_BASE_PATH=http://host.docker.internal:8003/v1>> "%USERPROFILE%\.georhizome\source\georhizome-ai-source\server\.env"
-    echo GENERIC_OPEN_AI_API_KEY=sk-local>> "%USERPROFILE%\.georhizome\source\georhizome-ai-source\server\.env"
-    echo GENERIC_OPEN_AI_MODEL_PREF=Qwen2.5-1.5B-Instruct-Q3_K_M.gguf>> "%USERPROFILE%\.georhizome\source\georhizome-ai-source\server\.env"
-    echo EMBEDDING_ENGINE=generic-openai>> "%USERPROFILE%\.georhizome\source\georhizome-ai-source\server\.env"
-    echo EMBEDDING_BASE_PATH=http://host.docker.internal:8000/v1>> "%USERPROFILE%\.georhizome\source\georhizome-ai-source\server\.env"
-    echo HARDWARE_SERVER_URL=http://host.docker.internal:8002>> "%USERPROFILE%\.georhizome\source\georhizome-ai-source\server\.env"
-    echo EMBEDDING_MODEL_PREF=cl-nagoya/ruri-v3-310m>> "%USERPROFILE%\.georhizome\source\georhizome-ai-source\server\.env"
-    echo VECTOR_DB=lancedb>> "%USERPROFILE%\.georhizome\source\georhizome-ai-source\server\.env"
-)
-
-set PATH=%USERPROFILE%\.georhizome\source\.venv\Lib\site-packages\torch\lib;%PATH%
-set PYTHONIOENCODING=utf-8
-echo [INFO] Starting Local BGE Embedder (Port 8000)...
-start /b "" "%USERPROFILE%\.georhizome\source\.venv\Scripts\python.exe" "%USERPROFILE%\.georhizome\source\services\local_bge_server.py" >nul 2>&1
-echo [INFO] Starting Local Reranker Server (Port 8001)...
-start /b "" "%USERPROFILE%\.georhizome\source\.venv\Scripts\python.exe" "%USERPROFILE%\.georhizome\source\services\local_reranker_server.py" >nul 2>&1
-echo [INFO] Starting Hardware ^& Model Hub Server (Port 8002)...
-start /b "" "%USERPROFILE%\.georhizome\source\.venv\Scripts\python.exe" "%USERPROFILE%\.georhizome\source\services\hardware_server.py" >nul 2>&1
-echo [INFO] Starting Local Chat LLM Server (Port 8003)...
-start /b "" "%USERPROFILE%\.georhizome\source\.venv\Scripts\python.exe" -m llama_cpp.server --model "%USERPROFILE%\.georhizome\storage\models\Qwen2.5-1.5B-Instruct-Q3_K_M.gguf" --n_ctx 16384 --n_gpu_layers -1 --port 8003 --host 127.0.0.1 >nul 2>&1
-
-docker compose up -d >nul 2>&1
-:retry_pip
-docker exec georhizome-core pip3 install --break-system-packages PyMuPDF pymupdf4llm markitdown pytesseract >nul 2>&1
-if errorlevel 1 (
-    timeout /t 2 >nul
-    goto retry_pip
-)
-
-echo [SUCCESS] システムが起動しました！ブラウザを開きます...
-start http://localhost:3001
-echo ------------------------------------------------------------
-echo [NOTICE] ⚠️ 注意: 終了する場合はこの画面で「Enter」キーを押してください。
-pause >nul
-echo [INFO] GeoRhizome AI をシャットダウンしています...
-docker compose down >nul 2>&1
-wmic process where "commandline like '%%local_bge_server.py%%'" call terminate >nul 2>&1
-wmic process where "commandline like '%%local_reranker_server.py%%'" call terminate >nul 2>&1
-wmic process where "commandline like '%%hardware_server.py%%'" call terminate >nul 2>&1
-wmic process where "commandline like '%%llama_cpp.server%%'" call terminate >nul 2>&1
-echo [SUCCESS] システムのシャットダウンが完了しました。
-timeout /t 3 >nul
-
-"@
-[System.IO.File]::WriteAllText("$INSTALL_DIR\start_georhizome.bat", $BatContent.Replace("`n", "`r`n").Replace("`r`r", "`r"), [System.Text.UTF8Encoding]::new($false))
-
-# 5b. Generate OTA Update Shortcut
-$UpdateBatContent = @"
-@echo off
-chcp 65001 >nul
-echo ------------------------------------------------------------
-echo [INFO] GeoRhizome AI のアップデートを確認しています...
-cd /d "%~dp0"
-echo $GHCR_READ_TOKEN | docker login ghcr.io -u BAIZ1D --password-stdin >nul 2>&1
-docker compose pull
-Write-Host "[INFO] ネイティブAIエンジンのアップデートを確認しています..." -ForegroundColor Cyan
-$Token = "$GHCR_READ_TOKEN"
-$Headers = @{ Authorization = "token $Token" }
-Invoke-RestMethod -Uri "https://api.github.com/repos/BAIZ1D/GeoRhizome_AI-LTS/zipball/main" -Headers $Headers -OutFile "$HOME\.georhizome\repo.zip"
-Expand-Archive -Path "$HOME\.georhizome\repo.zip" -DestinationPath "$HOME\.georhizome\temp_extract" -Force
-$ExtractedFolder = Get-ChildItem "$HOME\.georhizome\temp_extract" | Select-Object -First 1
-Copy-Item -Path "$($ExtractedFolder.FullName)\*" -Destination "$HOME\.georhizome\source" -Recurse -Force
-Remove-Item "$HOME\.georhizome\repo.zip" -Force
-Remove-Item "$HOME\.georhizome\temp_extract" -Recurse -Force
-
-echo.
-echo [SUCCESS] アップデートが完了しました！
-echo 最新の機能を利用するには、現在開いている GeoRhizome AI を一度閉じて、再度起動してください。
-echo ------------------------------------------------------------
-timeout /t 5 >nul
-"@
-[System.IO.File]::WriteAllText("$INSTALL_DIR\update_georhizome.bat", $UpdateBatContent.Replace("\n", "\r\n").Replace("\r\r", "\r"), [System.Text.UTF8Encoding]::new($false))
-
-
-
+# 7. Python runtime (torch==2.5.1 ships wheels for Python 3.10-3.12 only)
 Write-Host "[STEP] AI推論エンジンのネイティブ環境を構築中 (Python / CUDA)..." -ForegroundColor Cyan
-
-$SourceDir = "$INSTALL_DIR\source"
-New-Item -ItemType Directory -Force -Path "$INSTALL_DIR\storage\models" | Out-Null
-
-New-Item -ItemType Directory -Force -Path $SourceDir | Out-Null
-$Token = "$GHCR_READ_TOKEN"
-$Headers = @{ Authorization = "token $Token" }
-Invoke-RestMethod -Uri "https://api.github.com/repos/BAIZ1D/GeoRhizome_AI-LTS/zipball/main" -Headers $Headers -OutFile "$INSTALL_DIR\repo.zip"
-Expand-Archive -Path "$INSTALL_DIR\repo.zip" -DestinationPath "$INSTALL_DIR\temp_extract" -Force
-$ExtractedFolder = Get-ChildItem "$INSTALL_DIR\temp_extract" | Select-Object -First 1
-Copy-Item -Path "$($ExtractedFolder.FullName)\*" -Destination $SourceDir -Recurse -Force
-Remove-Item "$INSTALL_DIR\repo.zip" -Force
-Remove-Item "$INSTALL_DIR\temp_extract" -Recurse -Force
-
-if (-not (Get-Command "python" -ErrorAction SilentlyContinue)) {
-    Write-Host "[ERROR] Pythonが見つかりません。インストールしてください。" -ForegroundColor Red
-    exit 1
+$PyExe = $null
+$PyArgs = @()
+$VersionCheck = "import sys; sys.exit(0 if (3, 10) <= sys.version_info[:2] < (3, 13) else 1)"
+if (Get-Command "py" -ErrorAction SilentlyContinue) {
+    foreach ($v in @("-3.12", "-3.11", "-3.10")) {
+        & py $v -c $VersionCheck
+        if ($LASTEXITCODE -eq 0) { $PyExe = "py"; $PyArgs = @($v); break }
+    }
 }
-try {
-    python -c "import sys; sys.exit(0 if sys.version_info >= (3,8) else 1)"
-} catch {
-    Write-Host "[ERROR] Python 3.8以上が必要です。" -ForegroundColor Red
-    exit 1
+if (-not $PyExe -and (Get-Command "python" -ErrorAction SilentlyContinue)) {
+    & python -c $VersionCheck
+    if ($LASTEXITCODE -eq 0) { $PyExe = "python" }
+}
+if (-not $PyExe) {
+    Fail "Python 3.10〜3.12 が見つかりません (Python 3.10 以上が必要、torch 2.5.1 は 3.13 以降未対応)。python.org から 3.12 をインストールしてください。"
 }
 
-
-if (Test-Path "$INSTALL_DIR\source\models") { Remove-Item "$INSTALL_DIR\source\models" -Recurse -Force }
-New-Item -ItemType Junction -Path "$INSTALL_DIR\source\models" -Target "$INSTALL_DIR\storage\models" | Out-Null
 Set-Location $SourceDir
+$VenvPy = "$SourceDir\.venv\Scripts\python.exe"
+if (Test-Path $VenvPy) {
+    & $VenvPy -c $VersionCheck
+    if ($LASTEXITCODE -ne 0) { Remove-Item "$SourceDir\.venv" -Recurse -Force }
+}
+Invoke-Native "venv の作成に失敗しました" { & $PyExe @PyArgs -m venv .venv }
 
-python -m venv .venv
-.venv\Scripts\python.exe -m pip install --upgrade pip | Out-Null
-Write-Host "   🟢 依存パッケージをインストールしています (数分かかる場合があります)..." -ForegroundColor Yellow
-.venv\Scripts\python.exe -m pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu121 | Out-Null
-.venv\Scripts\python.exe -m pip install "llama-cpp-python[server]" --only-binary llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121 fastapi uvicorn sentence-transformers transformers==5.18.0 psutil pyyaml requests huggingface_hub | Out-Null
-  Write-Host "[STEP] Pre-downloading the Local Generative LLM Model..." -ForegroundColor Gray
-  $ModelDir = "$HOME\\.georhizome\\storage\\models"
-  if (!(Test-Path $ModelDir)) { New-Item -ItemType Directory -Path $ModelDir | Out-Null }
-  .venv\\Scripts\\hf.exe download dahara1/Qwen2.5-1.5B-Instruct-gguf-japanese-imatrix-128K Qwen2.5-1.5B-Instruct-Q3_K_M.gguf --local-dir "$ModelDir"
-Write-Host "   🟢 ネイティブAI環境の構築が完了しました！" -ForegroundColor Green
+Write-Host "   依存パッケージをインストールしています (数分かかる場合があります)..." -ForegroundColor Yellow
+Invoke-Native "pip の更新に失敗しました" { & $VenvPy -m pip install --upgrade pip }
+Invoke-Native "torch のインストールに失敗しました" { & $VenvPy -m pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu121 }
+Invoke-Native "llama-cpp-python のインストールに失敗しました" { & $VenvPy -m pip install "llama-cpp-python[server]==0.3.4" --only-binary llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121 }
+Invoke-Native "依存パッケージのインストールに失敗しました" { & $VenvPy -m pip install "transformers==5.18.0" "sentence-transformers==6.1.0" "huggingface_hub>=1.31,<2" fastapi uvicorn psutil pyyaml requests }
+Write-Host "   ネイティブAI環境の構築が完了しました。" -ForegroundColor Green
 
+# 8. server\.env (created if missing, UTF-8 without BOM) + legacy-default migration on re-install
+$Helper = "$SourceDir\installers\georhizome_setup.py"
+$ServerEnv = "$SourceDir\georhizome-ai-source\server\.env"
+Invoke-Native "server\.env の生成に失敗しました" { & $VenvPy $Helper write-env --env $ServerEnv }
+Invoke-Native "設定の移行に失敗しました" { & $VenvPy $Helper migrate --env $ServerEnv }
 
+# 9. Default models: LLM GGUF -> storage\models, embedder + reranker -> default HF cache
+Write-Host "[STEP] デフォルトのAIモデルをダウンロードしています (初期化用)..." -ForegroundColor Gray
+Invoke-Native "モデルのダウンロードに失敗しました" { & $VenvPy "$SourceDir\installers\georhizome_setup.py" download --models-dir $ModelsDir }
+
+# 10. Launcher + OTA updater
+Copy-Bat "$SourceDir\installers\start_georhizome.bat" "$INSTALL_DIR\start_georhizome.bat"
+
+$UpdatePs1 = @'
+$ErrorActionPreference = "Stop"
+$GR = "$env:USERPROFILE\.georhizome"
+$Utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+function Check([string]$Step) { if ($LASTEXITCODE -ne 0) { throw "$Step failed (exit code $LASTEXITCODE)" } }
+try {
+    Write-Host "[INFO] GeoRhizome AI のアップデートを確認しています..."
+    Set-Location $GR
+    $Token = ((Get-Content "$GR\.env" | Where-Object { $_ -like "GHCR_READ_TOKEN=*" }) -replace '^GHCR_READ_TOKEN=', '')
+    $Token | docker login ghcr.io -u BAIZ1D --password-stdin; Check "docker login"
+    docker compose pull; Check "docker compose pull"
+    Write-Host "[INFO] ネイティブAIエンジンのアップデートを確認しています..."
+    $Zip = "$GR\repo.zip"; $Tmp = "$GR\temp_extract"
+    Invoke-RestMethod -Uri "https://api.github.com/repos/BAIZ1D/GeoRhizome_AI-LTS/zipball/main" -Headers @{ Authorization = "token $Token" } -OutFile $Zip
+    if (Test-Path $Tmp) { Remove-Item $Tmp -Recurse -Force }
+    Expand-Archive -Path $Zip -DestinationPath $Tmp -Force
+    $Extracted = Get-ChildItem $Tmp | Select-Object -First 1
+    Copy-Item -Path "$($Extracted.FullName)\*" -Destination "$GR\source" -Recurse -Force
+    Remove-Item $Zip -Force; Remove-Item $Tmp -Recurse -Force
+    $Bat = [System.IO.File]::ReadAllText("$GR\source\installers\start_georhizome.bat") -replace "`r?`n", "`r`n"
+    [System.IO.File]::WriteAllText("$GR\start_georhizome.bat", $Bat, $Utf8NoBom)
+    & "$GR\source\.venv\Scripts\python.exe" "$GR\source\installers\georhizome_setup.py" migrate --env "$GR\source\georhizome-ai-source\server\.env"; Check "migrate"
+    Write-Host "[SUCCESS] アップデートが完了しました！ GeoRhizome AI を一度閉じて、再度起動してください。" -ForegroundColor Green
+} catch {
+    Write-Host "[ERROR] アップデートに失敗しました: $($_.Exception.Message)" -ForegroundColor Red
+}
+'@
+[System.IO.File]::WriteAllText("$INSTALL_DIR\update_georhizome.ps1", $UpdatePs1, [System.Text.UTF8Encoding]::new($true))
+$UpdateBat = "@echo off`r`nchcp 65001 >nul`r`npowershell -NoProfile -ExecutionPolicy Bypass -File `"%~dp0update_georhizome.ps1`"`r`npause`r`n"
+[System.IO.File]::WriteAllText("$INSTALL_DIR\update_georhizome.bat", $UpdateBat, $Utf8NoBom)
+
+# 11. Desktop shortcuts
 Write-Host "[STEP] デスクトップにショートカットを作成しています..." -ForegroundColor Gray
 $WshShell = New-Object -comObject WScript.Shell
 $DesktopPath = [System.Environment]::GetFolderPath('Desktop')
@@ -251,36 +229,19 @@ $Shortcut = $WshShell.CreateShortcut("$DesktopPath\GeoRhizome AI.lnk")
 $Shortcut.TargetPath = "$INSTALL_DIR\start_georhizome.bat"
 $Shortcut.WorkingDirectory = "$INSTALL_DIR"
 $Shortcut.Save()
-
 $UpdateShortcut = $WshShell.CreateShortcut("$DesktopPath\Update GeoRhizome AI.lnk")
 $UpdateShortcut.TargetPath = "$INSTALL_DIR\update_georhizome.bat"
 $UpdateShortcut.WorkingDirectory = "$INSTALL_DIR"
 $UpdateShortcut.Save()
 
-
+# 12. Container image
 Write-Host "[STEP] クラスタの初期化とコンテナのダウンロードを開始します..." -ForegroundColor Gray
-cd "$INSTALL_DIR"
-echo "$GHCR_READ_TOKEN" | docker login ghcr.io -u BAIZ1D --password-stdin >$null 2>&1
-docker compose pull
-Write-Host "[INFO] ネイティブAIエンジンのアップデートを確認しています..." -ForegroundColor Cyan
-$Token = "$GHCR_READ_TOKEN"
-$Headers = @{ Authorization = "token $Token" }
-Invoke-RestMethod -Uri "https://api.github.com/repos/BAIZ1D/GeoRhizome_AI-LTS/zipball/main" -Headers $Headers -OutFile "$HOME\.georhizome\repo.zip"
-Expand-Archive -Path "$HOME\.georhizome\repo.zip" -DestinationPath "$HOME\.georhizome\temp_extract" -Force
-$ExtractedFolder = Get-ChildItem "$HOME\.georhizome\temp_extract" | Select-Object -First 1
-Copy-Item -Path "$($ExtractedFolder.FullName)\*" -Destination "$HOME\.georhizome\source" -Recurse -Force
-Remove-Item "$HOME\.georhizome\repo.zip" -Force
-Remove-Item "$HOME\.georhizome\temp_extract" -Recurse -Force
-
-
+Set-Location $INSTALL_DIR
+Invoke-Native "docker compose pull に失敗しました" { docker compose pull }
 
 Write-Host "------------------------------------------------------------" -ForegroundColor Cyan
 Write-Host "[SUCCESS] GeoRhizome AI のインストールが正常に完了しました。" -ForegroundColor Green
 Write-Host "[INFO] デスクトップの「GeoRhizome AI」アイコンから起動できます！" -ForegroundColor Yellow
 Write-Host "============================================================" -ForegroundColor Cyan
-
-
-
-
 Write-Host "Press any key to exit..." -ForegroundColor Cyan
 $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')

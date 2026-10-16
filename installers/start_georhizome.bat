@@ -1,34 +1,68 @@
 @echo off
+setlocal
 title GeoRhizome AI Enterprise Edition
 chcp 65001 >nul
+rem The chat model is resolved from config (active_models.json -> app_config.json llm) by georhizome_setup.py.
+set "GR=%USERPROFILE%\.georhizome"
+set "SRC=%GR%\source"
+set "PY=%SRC%\.venv\Scripts\python.exe"
+set "HELPER=%SRC%\installers\georhizome_setup.py"
+set "LOGS=%GR%\logs"
+if not exist "%LOGS%" mkdir "%LOGS%"
 echo ============================================================
 echo   GeoRhizome AI Enterprise Edition - 起動ツール
 echo ============================================================
-cd %USERPROFILE%\.georhizome
+cd /d "%GR%"
 
-if not exist "%USERPROFILE%\.georhizome\source\georhizome-ai-source\server" mkdir "%USERPROFILE%\.georhizome\source\georhizome-ai-source\server"
-if not exist "%USERPROFILE%\.georhizome\source\georhizome-ai-source\server\.env" (
-    echo LLM_PROVIDER=generic-openai> "%USERPROFILE%\.georhizome\source\georhizome-ai-source\server\.env"
-    echo GENERIC_OPEN_AI_BASE_PATH=http://host.docker.internal:8003/v1>> "%USERPROFILE%\.georhizome\source\georhizome-ai-source\server\.env"
-    echo GENERIC_OPEN_AI_API_KEY=sk-local>> "%USERPROFILE%\.georhizome\source\georhizome-ai-source\server\.env"
-    echo GENERIC_OPEN_AI_MODEL_PREF=Qwen3.5-0.8B-Japanese-SFT-v2-Q4_K_M.gguf>> "%USERPROFILE%\.georhizome\source\georhizome-ai-source\server\.env"
-    echo EMBEDDING_ENGINE=generic-openai>> "%USERPROFILE%\.georhizome\source\georhizome-ai-source\server\.env"
-    echo EMBEDDING_BASE_PATH=http://host.docker.internal:8000/v1>> "%USERPROFILE%\.georhizome\source\georhizome-ai-source\server\.env"
-    echo EMBEDDING_MODEL_PREF=cl-nagoya/ruri-v3-310m>> "%USERPROFILE%\.georhizome\source\georhizome-ai-source\server\.env"
-    echo VECTOR_DB=lancedb>> "%USERPROFILE%\.georhizome\source\georhizome-ai-source\server\.env"
+set "PATH=%SRC%\.venv\Lib\site-packages\torch\lib;%PATH%"
+set PYTHONIOENCODING=utf-8
+"%PY%" "%HELPER%" write-env --env "%SRC%\georhizome-ai-source\server\.env"
+if errorlevel 1 echo [WARN] server\.env の生成に失敗しました。
+
+echo [INFO] Starting Local Embedder (Port 8000)... log: %LOGS%\bge.log
+start "" /b "%PY%" "%SRC%\services\local_bge_server.py" > "%LOGS%\bge.log" 2>&1
+echo [INFO] Starting Local Reranker Server (Port 8001)... log: %LOGS%\reranker.log
+start "" /b "%PY%" "%SRC%\services\local_reranker_server.py" > "%LOGS%\reranker.log" 2>&1
+echo [INFO] Starting Hardware ^& Model Hub Server (Port 8002)... log: %LOGS%\hardware.log
+start "" /b "%PY%" "%SRC%\services\hardware_server.py" > "%LOGS%\hardware.log" 2>&1
+
+set "LLM_PATH="
+for /f "usebackq delims=" %%M in (`""%PY%" "%HELPER%" llm-path --models-dir "%GR%\storage\models""`) do set "LLM_PATH=%%M"
+if not defined LLM_PATH goto llm_missing
+if not exist "%LLM_PATH%" goto llm_missing
+echo [INFO] Starting Local Chat LLM Server (Port 8003): %LLM_PATH%
+start "" /b "%PY%" -m llama_cpp.server --model "%LLM_PATH%" --n_ctx 16384 --n_gpu_layers -1 --port 8003 --host 127.0.0.1 > "%LOGS%\chat.log" 2>&1
+set /a TRIES=0
+:wait_llm
+timeout /t 2 >nul
+netstat -ano | findstr ":8003" | findstr "LISTENING" >nul
+if not errorlevel 1 goto llm_ok
+set /a TRIES+=1
+if %TRIES% lss 30 goto wait_llm
+echo [ERROR] Chat LLM Server が起動していません。ログ: %LOGS%\chat.log
+powershell -NoProfile -Command "Get-Content -Tail 20 '%LOGS%\chat.log'"
+goto llm_done
+:llm_missing
+echo [ERROR] チャットモデルが見つかりません (%LLM_PATH%)。モデルハブから再ダウンロードしてください。
+goto llm_done
+:llm_ok
+echo [SUCCESS] Chat LLM Server が起動しました。
+:llm_done
+
+docker compose up -d >> "%LOGS%\docker.log" 2>&1
+if errorlevel 1 echo [ERROR] docker compose up に失敗しました。ログ: %LOGS%\docker.log
+set /a PIPTRIES=0
+:retry_pip
+docker exec georhizome-core pip3 install --break-system-packages PyMuPDF pymupdf4llm markitdown pytesseract >> "%LOGS%\docker.log" 2>&1
+if not errorlevel 1 goto pip_done
+set /a PIPTRIES+=1
+if %PIPTRIES% geq 30 (
+    echo [WARN] コンテナ内 OCR パッケージの導入に失敗しました。ログ: %LOGS%\docker.log
+    goto pip_done
 )
-
-echo [INFO] Starting Local BGE Embedder (Port 8000)...
-start /b "" "%USERPROFILE%\.georhizome\source\.venv\Scripts\python.exe" "%USERPROFILE%\.georhizome\source\services\local_bge_server.py" >nul 2>&1
-echo [INFO] Starting Local Reranker Server (Port 8001)...
-start /b "" "%USERPROFILE%\.georhizome\source\.venv\Scripts\python.exe" "%USERPROFILE%\.georhizome\source\services\local_reranker_server.py" >nul 2>&1
-echo [INFO] Starting Hardware ^& Model Hub Server (Port 8002)...
-start /b "" "%USERPROFILE%\.georhizome\source\.venv\Scripts\python.exe" "%USERPROFILE%\.georhizome\source\services\hardware_server.py" >nul 2>&1
-echo [INFO] Starting Local Chat LLM Server (Port 8003)...
-start /b "" "%USERPROFILE%\.georhizome\source\.venv\Scripts\python.exe" -m llama_cpp.server --model "%USERPROFILE%\.georhizome\storage\models\Qwen3.5-0.8B-Japanese-SFT-v2-Q4_K_M.gguf" --n_ctx 16384 --n_gpu_layers -1 --port 8003 --host 127.0.0.1 >nul 2>&1
-
-docker compose up -d >nul 2>&1
-docker exec georhizome-core pip3 install --break-system-packages PyMuPDF pymupdf4llm markitdown pytesseract >nul 2>&1
+timeout /t 2 >nul
+goto retry_pip
+:pip_done
 
 echo [SUCCESS] システムが起動しました！ブラウザを開きます...
 start http://localhost:3001
@@ -36,7 +70,7 @@ echo ------------------------------------------------------------
 echo [NOTICE] ⚠️ 注意: 終了する場合はこの画面で「Enter」キーを押してください。
 pause >nul
 echo [INFO] GeoRhizome AI をシャットダウンしています...
-docker compose down >nul 2>&1
+docker compose down >> "%LOGS%\docker.log" 2>&1
 wmic process where "commandline like '%%local_bge_server.py%%'" call terminate >nul 2>&1
 wmic process where "commandline like '%%local_reranker_server.py%%'" call terminate >nul 2>&1
 wmic process where "commandline like '%%hardware_server.py%%'" call terminate >nul 2>&1

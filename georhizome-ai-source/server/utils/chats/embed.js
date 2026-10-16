@@ -216,61 +216,32 @@ async function streamChatWithForEmbed(
  * @param {Number} messageLimit the number of messages to return
  * @returns {Promise<{rawHistory: import("@prisma/client").embed_chats[], chatHistory: {role: string, content: string, attachments?: Object[]}[]}>
  */
-async function recentEmbedChatHistory(sessionId, embed, messageLimit = 20, currentPrompt = null) {
+async function recentEmbedChatHistory(
+  sessionId,
+  embed,
+  messageLimit = 20,
+  currentPrompt = null
+) {
   const rawHistory = (
     await EmbedChats.forEmbedByUser(embed.id, sessionId, messageLimit, {
       id: "desc",
     })
   ).reverse();
 
-  let processedHistory = rawHistory;
-  try {
-    const fs = require("fs");
-    const path = require("path");
-    const yaml = require("js-yaml");
-    const { safeJsonParse } = require("../http");
-    const containerPath = "/config/app_config.json";
-    const localPath = path.resolve(__dirname, "../../../../../config/app_config.json");
-    let retrievalCfg = { final_top_k: 8, reranker_server_url: "http://127.0.0.1:8001/rerank", reranker_enabled: false };
-    
-    let appConfig = null;
-    if (fs.existsSync(containerPath)) {
-      appConfig = JSON.parse(fs.readFileSync(containerPath, "utf8"));
-    } else if (fs.existsSync(localPath)) {
-      appConfig = JSON.parse(fs.readFileSync(localPath, "utf8"));
-    }
+  const { safeJsonParse } = require("../http");
+  const { rerankHistory } = require("../rerankerClient");
+  const processedHistory = await rerankHistory({
+    query: currentPrompt,
+    history: rawHistory,
+    label: "embed-chat-history",
+    toText: (r) =>
+      `User: ${r.prompt}\nAgent: ${safeJsonParse(r.response)?.text || ""}`,
+  });
 
-    if (appConfig && appConfig.reranker) {
-      retrievalCfg.reranker_enabled = appConfig.reranker.enabled !== false;
-      retrievalCfg.reranker_server_url = appConfig.reranker.base_url || retrievalCfg.reranker_server_url;
-    }
-    if (retrievalCfg.reranker_enabled && rawHistory.length > 0 && currentPrompt) {
-      const payload = {
-        query: currentPrompt,
-        documents: rawHistory.map((r, idx) => ({
-          text: `User: ${r.prompt}\nAgent: ${safeJsonParse(r.response)?.text || ""}`,
-          metadata: { original_index: idx },
-        })),
-      };
-      const res = await fetch(retrievalCfg.reranker_server_url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data?.results && Array.isArray(data.results)) {
-          const topResults = data.results.slice(0, retrievalCfg.final_top_k || 8);
-          topResults.sort((a, b) => a.metadata.original_index - b.metadata.original_index);
-          processedHistory = topResults.map(r => rawHistory[r.metadata.original_index]);
-        }
-      }
-    }
-  } catch (e) {
-    console.error("Error in dual-stage reranking for embed chat history", e.message);
-  }
-
-  return { rawHistory: processedHistory, chatHistory: convertToPromptHistory(processedHistory) };
+  return {
+    rawHistory: processedHistory,
+    chatHistory: convertToPromptHistory(processedHistory),
+  };
 }
 
 module.exports = {

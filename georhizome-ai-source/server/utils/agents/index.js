@@ -8,6 +8,7 @@ const { User } = require("../../models/user");
 const { Workspace } = require("../../models/workspace");
 const { WorkspaceChats } = require("../../models/workspaceChats");
 const { safeJsonParse } = require("../http");
+const { rerankHistory } = require("../rerankerClient");
 const { USER_AGENT, WORKSPACE_AGENT } = require("./defaults");
 const ImportedPlugin = require("./imported");
 const { AgentFlows } = require("../agentFlows");
@@ -88,42 +89,13 @@ class AgentHandler {
         )
       ).reverse();
 
-      let processedHistory = rawHistory;
-      try {
-        const fs = require("fs");
-        const path = require("path");
-        const yaml = require("js-yaml");
-        const cfgPath = path.resolve(__dirname, "../../../../../config/retrieval.yaml");
-        let retrievalCfg = { final_top_k: 8, reranker_server_url: "http://127.0.0.1:8001/rerank", reranker_enabled: false };
-        if (fs.existsSync(cfgPath)) {
-          const parsed = yaml.load(fs.readFileSync(cfgPath, "utf8")) || {};
-          retrievalCfg = { ...retrievalCfg, ...parsed };
-        }
-        if (retrievalCfg.reranker_enabled && rawHistory.length > 0 && this.invocation?.prompt) {
-          const payload = {
-            query: this.invocation.prompt,
-            documents: rawHistory.map((r, idx) => ({
-              text: `User: ${r.prompt}\nAgent: ${safeJsonParse(r.response)?.text || ""}`,
-              metadata: { original_index: idx },
-            })),
-          };
-          const res = await fetch(retrievalCfg.reranker_server_url, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data?.results && Array.isArray(data.results)) {
-              const topResults = data.results.slice(0, retrievalCfg.final_top_k || 8);
-              topResults.sort((a, b) => a.metadata.original_index - b.metadata.original_index);
-              processedHistory = topResults.map(r => rawHistory[r.metadata.original_index]);
-            }
-          }
-        }
-      } catch (e) {
-        this.log("Error in dual-stage reranking for chat history", e.message);
-      }
+      const processedHistory = await rerankHistory({
+        query: this.invocation?.prompt,
+        history: rawHistory,
+        label: "agent-history",
+        toText: (r) =>
+          `User: ${r.prompt}\nAgent: ${safeJsonParse(r.response)?.text || ""}`,
+      });
 
       const agentHistory = [];
       processedHistory.forEach((chatLog) => {
@@ -361,24 +333,34 @@ class AgentHandler {
           const path = require("path");
           const fs = require("fs");
           const containerActivePath = "/config/active_models.json";
-          const activePath = path.resolve(__dirname, "../../../../config/active_models.json");
+          const activePath = path.resolve(
+            __dirname,
+            "../../../../config/active_models.json"
+          );
           if (fs.existsSync(containerActivePath)) {
-            const act = JSON.parse(fs.readFileSync(containerActivePath, "utf-8"));
+            const act = JSON.parse(
+              fs.readFileSync(containerActivePath, "utf-8")
+            );
             if (act.generative?.model_id) return act.generative.model_id;
           } else if (fs.existsSync(activePath)) {
             const act = JSON.parse(fs.readFileSync(activePath, "utf-8"));
             if (act.generative?.model_id) return act.generative.model_id;
           }
           const containerAppCfgPath = "/config/app_config.json";
-          const appCfgPath = path.resolve(__dirname, "../../../../config/app_config.json");
+          const appCfgPath = path.resolve(
+            __dirname,
+            "../../../../config/app_config.json"
+          );
           if (fs.existsSync(containerAppCfgPath)) {
-            const cfg = JSON.parse(fs.readFileSync(containerAppCfgPath, "utf-8"));
+            const cfg = JSON.parse(
+              fs.readFileSync(containerAppCfgPath, "utf-8")
+            );
             if (cfg.llm?.model_name) return cfg.llm.model_name;
           } else if (fs.existsSync(appCfgPath)) {
             const cfg = JSON.parse(fs.readFileSync(appCfgPath, "utf-8"));
             if (cfg.llm?.model_name) return cfg.llm.model_name;
           }
-        } catch (e) {}
+        } catch {}
         return process.env.GENERIC_OPEN_AI_MODEL_PREF ?? null;
       }
       case "perplexity":
@@ -507,7 +489,9 @@ class AgentHandler {
       uuid: String(this.#invocationUUID),
     });
     if (!invocation || !invocation.workspace)
-      throw new Error(`Agent invocation ${this.#invocationUUID} or its workspace was not found.`);
+      throw new Error(
+        `Agent invocation ${this.#invocationUUID} or its workspace was not found.`
+      );
     if (invocation.closed)
       throw new Error("This agent invocation is already closed");
     this.invocation = invocation;

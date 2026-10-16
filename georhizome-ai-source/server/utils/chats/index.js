@@ -80,54 +80,20 @@ async function recentChatHistory({
     )
   ).reverse();
 
-  let processedHistory = rawHistory;
-  try {
-    const fs = require("fs");
-    const path = require("path");
-    const yaml = require("js-yaml");
-    const { safeJsonParse } = require("../http");
-    const containerPath = "/config/app_config.json";
-    const localPath = path.resolve(__dirname, "../../../../../config/app_config.json");
-    let retrievalCfg = { final_top_k: 8, reranker_server_url: "http://127.0.0.1:8001/rerank", reranker_enabled: false };
-    
-    let appConfig = null;
-    if (fs.existsSync(containerPath)) {
-      appConfig = JSON.parse(fs.readFileSync(containerPath, "utf8"));
-    } else if (fs.existsSync(localPath)) {
-      appConfig = JSON.parse(fs.readFileSync(localPath, "utf8"));
-    }
+  const { safeJsonParse } = require("../http");
+  const { rerankHistory } = require("../rerankerClient");
+  const processedHistory = await rerankHistory({
+    query: currentPrompt,
+    history: rawHistory,
+    label: "chat-history",
+    toText: (r) =>
+      `User: ${r.prompt}\nAgent: ${safeJsonParse(r.response)?.text || ""}`,
+  });
 
-    if (appConfig && appConfig.reranker) {
-      retrievalCfg.reranker_enabled = appConfig.reranker.enabled !== false;
-      retrievalCfg.reranker_server_url = appConfig.reranker.base_url || retrievalCfg.reranker_server_url;
-    }
-    if (retrievalCfg.reranker_enabled && rawHistory.length > 0 && currentPrompt) {
-      const payload = {
-        query: currentPrompt,
-        documents: rawHistory.map((r, idx) => ({
-          text: `User: ${r.prompt}\nAgent: ${safeJsonParse(r.response)?.text || ""}`,
-          metadata: { original_index: idx },
-        })),
-      };
-      const res = await fetch(retrievalCfg.reranker_server_url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data?.results && Array.isArray(data.results)) {
-          const topResults = data.results.slice(0, retrievalCfg.final_top_k || 8);
-          topResults.sort((a, b) => a.metadata.original_index - b.metadata.original_index);
-          processedHistory = topResults.map(r => rawHistory[r.metadata.original_index]);
-        }
-      }
-    }
-  } catch (e) {
-    console.error("Error in dual-stage reranking for recentChatHistory", e.message);
-  }
-
-  return { rawHistory: processedHistory, chatHistory: convertToPromptHistory(processedHistory) };
+  return {
+    rawHistory: processedHistory,
+    chatHistory: convertToPromptHistory(processedHistory),
+  };
 }
 
 /**
@@ -141,16 +107,18 @@ async function chatPrompt(workspace, user = null, answerLength = "default") {
   const { SystemSettings } = require("../../models/systemSettings");
   let basePrompt =
     workspace?.openAiPrompt ?? SystemSettings.saneDefaultSystemPrompt;
-    
+
   if (answerLength === "concise") {
-    basePrompt += "\n\nSystem Directive: Keep your answer very concise and short.";
+    basePrompt +=
+      "\n\nSystem Directive: Keep your answer very concise and short.";
   } else if (answerLength === "detailed") {
-    basePrompt += "\n\nSystem Directive: Provide a highly detailed and comprehensive answer.";
+    basePrompt +=
+      "\n\nSystem Directive: Provide a highly detailed and comprehensive answer.";
   }
 
-
   // System-Wide Strict Factuality & Citation Constraints
-  basePrompt += "\n\nSystem Directive:\n1. CRITICAL: You MUST answer in the EXACT SAME LANGUAGE as the user's prompt. If they ask in Japanese, answer in Japanese. If English, answer in English.\n2. Answer using only wording from the provided text. If the text doesn't state it, say so. Don't add information.\n3. For definition-type questions, quote the relevant sentence first and then summarize.";
+  basePrompt +=
+    "\n\nSystem Directive:\n1. CRITICAL: You MUST answer in the EXACT SAME LANGUAGE as the user's prompt. If they ask in Japanese, answer in Japanese. If English, answer in English.\n2. Answer using only wording from the provided text. If the text doesn't state it, say so. Don't add information.\n3. For definition-type questions, quote the relevant sentence first and then summarize.";
 
   return await SystemPromptVariables.expandSystemPromptVariables(
     basePrompt,

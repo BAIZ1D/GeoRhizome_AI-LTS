@@ -54,69 +54,47 @@ async function grepAgents({
   const agentHandles = WorkspaceAgentInvocation.parseAgents(message);
   if (agentHandles.length > 0 || nativeToolingEnabled) {
     let promptText = message ? message.normalize("NFKC") : message;
-    
+
     if (/^\s*[@＠]search/i.test(promptText)) {
-      const searchRawQuery = promptText.replace(/^\s*[@＠]search\s*/i, "").trim();
+      const searchRawQuery = promptText
+        .replace(/^\s*[@＠]search\s*/i, "")
+        .trim();
       let contextualizedQuery = searchRawQuery;
-      
+
       try {
         const { WorkspaceChats } = require("../../models/workspaceChats");
         const { safeJsonParse } = require("../http");
         const { getLLMProvider } = require("../helpers");
-        
-        const rawHistory = (await WorkspaceChats.where(
-          {
-            workspaceId: workspace.id,
-            user_id: user?.id || null,
-            thread_id: thread?.id || null,
-            api_session_id: null,
-            include: true,
-          },
-          15,
-          { id: "desc" }
-        )).reverse();
-        
+
+        const rawHistory = (
+          await WorkspaceChats.where(
+            {
+              workspaceId: workspace.id,
+              user_id: user?.id || null,
+              thread_id: thread?.id || null,
+              api_session_id: null,
+              include: true,
+            },
+            15,
+            { id: "desc" }
+          )
+        ).reverse();
+
         if (rawHistory.length > 0 && searchRawQuery) {
-          let processedHistory = rawHistory;
-          const fs = require("fs");
-          const path = require("path");
-          const yaml = require("js-yaml");
-          
-          const cfgPath = path.resolve(__dirname, "../../../../config/retrieval.yaml");
-          let retrievalCfg = { final_top_k: 8, reranker_server_url: "http://127.0.0.1:8001/rerank", reranker_enabled: false };
-          if (fs.existsSync(cfgPath)) {
-            const parsed = yaml.load(fs.readFileSync(cfgPath, "utf8")) || {};
-            retrievalCfg = { ...retrievalCfg, ...parsed };
-          }
-          
-          if (retrievalCfg.reranker_enabled) {
-            const payload = {
-              query: searchRawQuery,
-              documents: rawHistory.map((r, idx) => ({
-                text: `User: ${r.prompt}\nAgent: ${safeJsonParse(r.response)?.text || ""}`,
-                metadata: { original_index: idx },
-              })),
-            };
-            const res = await fetch(retrievalCfg.reranker_server_url, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload)
-            });
-            if (res.ok) {
-              const data = await res.json();
-              if (data?.results && Array.isArray(data.results)) {
-                const topResults = data.results.slice(0, retrievalCfg.final_top_k || 8);
-                topResults.sort((a, b) => a.metadata.original_index - b.metadata.original_index);
-                processedHistory = topResults.map(r => rawHistory[r.metadata.original_index]);
-              }
-            }
-          }
-          
+          const { rerankHistory } = require("../rerankerClient");
+          const processedHistory = await rerankHistory({
+            query: searchRawQuery,
+            history: rawHistory,
+            label: "agent-search-history",
+            toText: (r) =>
+              `User: ${r.prompt}\nAgent: ${safeJsonParse(r.response)?.text || ""}`,
+          });
+
           let contextStr = "";
-          processedHistory.forEach(msg => {
+          processedHistory.forEach((msg) => {
             contextStr += `User: ${msg.prompt}\nAgent: ${safeJsonParse(msg.response)?.text || ""}\n\n`;
           });
-          
+
           const systemPrompt = `You are an expert Search Query Reformulator engine used by advanced AI systems. Your sole task is to convert a user's conversational follow-up question into a standalone, highly optimized web search query.
 
 CRITICAL RULES:
@@ -126,36 +104,30 @@ CRITICAL RULES:
 4. STRICT OUTPUT: Output ONLY the raw search query. Do not include markdown, quotes, conversational text, or prefixes. If the query is already fully self-contained, output it optimized.`;
 
           const userPrompt = `CONVERSATION HISTORY:\n${contextStr || "No prior history."}\n\nLATEST USER INPUT:\n${searchRawQuery}\n\nREWRITTEN SEARCH QUERY:`;
-          
+
           const LLMConnector = getLLMProvider({
             provider: workspace?.chatProvider,
             model: workspace?.chatModel,
           });
-          
+
           const responseText = await LLMConnector.getChatCompletion(
             [
               { role: "system", content: systemPrompt },
-              { role: "user", content: userPrompt }
+              { role: "user", content: userPrompt },
             ],
             { temperature: 0.1 }
           );
-          
+
           if (responseText && typeof responseText === "string") {
-            contextualizedQuery = responseText.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
-            contextualizedQuery = contextualizedQuery.replace(/^["']|["']$/g, '');
+            contextualizedQuery = responseText
+              .replace(/<think>[\s\S]*?<\/think>/gi, "")
+              .trim();
+            contextualizedQuery = contextualizedQuery.replace(
+              /^["']|["']$/g,
+              ""
+            );
           }
         }
-        
-        // Log to file for debugging
-        const fs = require("fs");
-        fs.writeFileSync("/Users/baizid_alhamid/Downloads/GeoRhizome/debug_rewrite.txt", 
-          `rawHistory length: ${rawHistory.length}\n` +
-          `SearchRawQuery: ${searchRawQuery}\n` +
-          `ContextStr: \n${typeof contextStr !== 'undefined' ? contextStr : 'undefined'}\n` +
-          `Response: ${typeof responseText !== 'undefined' ? responseText : 'undefined'}\n` +
-          `Final Query: ${contextualizedQuery}\n`
-        );
-
       } catch (e) {
         console.error("Query rewrite failed, falling back", e);
         contextualizedQuery = searchRawQuery;

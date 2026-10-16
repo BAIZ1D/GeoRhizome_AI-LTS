@@ -1,17 +1,28 @@
+# Every tier uses the same cross-encoder; tiers differ only in precision,
+# batch_size, device and RAM threshold.
+# RAM thresholds are effective (under-reporting tolerant):
+#   nominal 8 GB reports ~7.x GB -> medium; nominal 16 GB reports ~15.x GB -> high.
+# device "auto" = cuda > mps > cpu. A detected cuda/mps is never overridden,
+# so low-tier "cpu" only applies on machines without an accelerator.
+# precision on cpu is always forced to fp32; mps fp16 requires a load-time self-test.
+model: "cl-nagoya/ruri-v3-reranker-310m"
 tiers:
   low:
-    model: "BAAI/bge-reranker-base"
-    quantization: "onnx-int8"
-    min_ram_gb: 4
-    device: "cpu"
-  medium:
-    model: "BAAI/bge-reranker-base"
+    model: "cl-nagoya/ruri-v3-reranker-310m"
     precision: "fp16"
-    min_ram_gb: 8
+    batch_size: 4
     device: "cpu"
+    min_ram_gb: 0
+  medium:
+    model: "cl-nagoya/ruri-v3-reranker-310m"
+    precision: "fp16"
+    batch_size: 8
+    device: "auto"
+    min_ram_gb: 7
   high:
-    model: "BAAI/bge-reranker-base"
+    model: "cl-nagoya/ruri-v3-reranker-310m"
     precision: "fp32"
     batch_size: 16
-    min_ram_gb: 16
-    device: "cpu"
+    device: "auto"
+    min_ram_gb: 15
+    requires_accelerator: true

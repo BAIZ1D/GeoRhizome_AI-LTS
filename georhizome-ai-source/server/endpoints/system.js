@@ -243,15 +243,12 @@ function systemEndpoints(app) {
       const { slug } = request.body;
       if (!slug) return response.status(400).json({ error: "Missing slug" });
 
+      // Repo and release assets are public; a token is optional (rate limits only).
       const readToken = process.env.GHCR_READ_TOKEN;
-      if (!readToken)
-        return response
-          .status(500)
-          .json({ error: "GHCR_READ_TOKEN is missing in the environment." });
 
       const repo = "BAIZ1D/GeoRhizome_AI-LTS";
       const headers = {
-        Authorization: `token ${readToken}`,
+        ...(readToken ? { Authorization: `token ${readToken}` } : {}),
         Accept: "application/vnd.github.v3+json",
         "User-Agent": "GeoRhizome-AI",
       };

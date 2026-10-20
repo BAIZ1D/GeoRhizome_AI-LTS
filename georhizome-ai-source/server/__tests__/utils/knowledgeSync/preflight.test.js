@@ -45,11 +45,13 @@ test("fails closed when statfs missing", async () => {
   }
 });
 test("float factor honoured", async () => {
-  jest.spyOn(fs.promises, "statfs").mockResolvedValue({ bavail: 24, bsize: 10 });
+  jest
+    .spyOn(fs.promises, "statfs")
+    .mockResolvedValue({ bavail: 24, bsize: 10 });
   const c = { disk_preflight_factor: 2.5 };
-  await expect(requireFreeSpace(root, 100, { config: c })).rejects.toMatchObject(
-    { code: "KS_E_DISK_SPACE" }
-  );
+  await expect(
+    requireFreeSpace(root, 100, { config: c })
+  ).rejects.toMatchObject({ code: "KS_E_DISK_SPACE" });
   await expect(
     requireFreeSpace(root, 96, { config: c })
   ).resolves.toBeUndefined();

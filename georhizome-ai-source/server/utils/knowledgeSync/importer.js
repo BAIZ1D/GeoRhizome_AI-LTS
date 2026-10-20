@@ -8,6 +8,7 @@ const { assertSafeSlug } = require("./paths");
 const marker = require("./marker");
 const locks = require("./locks");
 const swap = require("./swap");
+const { assertWorkspaceAccess } = require("./access");
 const { safeLog } = require("./redact");
 
 const prisma = () => require("../prisma");
@@ -26,6 +27,8 @@ async function refuseIfBlocked(staged) {
 async function confirmImport({
   previewId,
   userId,
+  user = null,
+  multiUser = false,
   passphrase: _p,
   config,
 } = {}) {
@@ -45,6 +48,8 @@ async function confirmImport({
   let createdWorkspaceId = null;
   if (first.target.matched) {
     workspace = first.target.workspace;
+    // W2: matched (existing) workspace requires membership in multi-user mode.
+    await assertWorkspaceAccess({ slug: workspace.slug, user, multiUser });
   } else {
     const res = await W.new(staged.manifest.workspace.name, userId);
     if (!res || !res.workspace)
@@ -68,6 +73,7 @@ async function confirmImport({
       async () => {
         // Recheck inside the lock (state may have moved since the first check).
         await refuseIfBlocked(staged);
+        if (!created) await assertWorkspaceAccess({ slug, user, multiUser });
         const archiveIds = new Set(staged.rows.docs.map((d) => d.docId));
         const local = await prisma().workspace_documents.findMany({
           where: { workspaceId: workspace.id },

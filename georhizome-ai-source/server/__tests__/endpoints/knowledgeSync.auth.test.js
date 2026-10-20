@@ -51,7 +51,6 @@ for (const m of [
   "models/telemetry",
   "models/temporaryAuthToken",
   "models/vectors",
-  "models/workspace",
   "models/workspaceChats",
   "utils/chats",
   "utils/collectorApi",
@@ -68,6 +67,40 @@ for (const m of [
 ]) {
   jest.doMock("../../" + m, () => ({}));
 }
+
+const mockWorkspace = {
+  get: jest.fn(async ({ slug }) => ({ id: 5, slug })),
+  getWithUser: jest.fn(),
+  new: jest.fn(),
+  delete: jest.fn(),
+};
+jest.doMock("../../models/workspace", () => ({ Workspace: mockWorkspace }));
+jest.doMock("../../utils/prisma", () => ({
+  workspace_documents: { findMany: jest.fn(async () => []) },
+}));
+jest.doMock("../../utils/knowledgeSync/stage", () => ({
+  loadStaged: jest.fn(async () => ({
+    jobId: "job-1",
+    meta: { ownerUserId: null },
+    manifest: { versionId: "v1", workspace: { name: "WS", randomId: "r" } },
+    rows: { docs: [], vectors: [] },
+    stagedLance: "/x/lance",
+    stagedDocs: "/x/docs",
+  })),
+  discardStaged: jest.fn(async () => {}),
+}));
+jest.doMock("../../utils/knowledgeSync/preview", () => ({
+  previewImport: jest.fn(),
+  validateConfirmable: jest.fn(async () => ({
+    ok: true,
+    blocking: [],
+    target: { matched: true, workspace: { id: 5, slug: "ws-a" } },
+  })),
+}));
+jest.doMock("../../utils/knowledgeSync/swap", () => ({
+  CrashSignal: class CrashSignal extends Error {},
+  runSwap: jest.fn(async () => {}),
+}));
 
 const mockMw = (_req, _res, next) => next();
 jest.doMock("../../utils/middleware/chatHistoryViewable", () => ({
@@ -241,5 +274,86 @@ describe("gate wiring", () => {
       expect(hs).toContain(KS_USER_GATE[1]);
       expect(hs).not.toContain(KS_ADMIN_GATE[1]);
     }
+  });
+});
+
+describe("W2 workspace access on confirm and rollback", () => {
+  const post = (path, token, body = {}) =>
+    new Promise((resolve, reject) => {
+      const headers = { "content-type": "application/json" };
+      if (token) headers.authorization = `Bearer ${token}`;
+      const req = http.request(
+        { port, method: "POST", path, headers },
+        (res) => {
+          let d = "";
+          res.on("data", (c) => (d += c));
+          res.on("end", () =>
+            resolve({ status: res.statusCode, body: d ? JSON.parse(d) : {} })
+          );
+        }
+      );
+      req.on("error", reject);
+      req.write(JSON.stringify(body));
+      req.end();
+    });
+  const member = (ok) =>
+    mockWorkspace.getWithUser.mockImplementation(async (_u, { slug }) =>
+      ok ? { id: 5, slug } : null
+    );
+  beforeEach(() => mockWorkspace.getWithUser.mockReset());
+
+  describe("multi-user", () => {
+    beforeAll(() => (mockMulti = true));
+
+    test("non-member rollback -> 403 KS_E_FORBIDDEN", async () => {
+      member(false);
+      const r = await post("/knowledge-sync/rollback/ws-a", "3");
+      expect(r.status).toBe(403);
+      expect(r.body.error.code).toBe("KS_E_FORBIDDEN");
+    });
+    test("member rollback passes the access check", async () => {
+      member(true);
+      const r = await post("/knowledge-sync/rollback/ws-a", "3");
+      expect(r.status).not.toBe(403);
+      expect(mockWorkspace.getWithUser).toHaveBeenCalled();
+    });
+    test("admin rollback sees all workspaces", async () => {
+      mockWorkspace.getWithUser.mockImplementation(async (u, { slug }) =>
+        u.role === "admin" ? { id: 5, slug } : null
+      );
+      const r = await post("/knowledge-sync/rollback/ws-a", "1");
+      expect(r.status).not.toBe(403);
+    });
+    test("non-member confirm into existing workspace -> 403", async () => {
+      member(false);
+      const r = await post("/knowledge-sync/import/confirm", "3", {
+        previewId: "p1",
+      });
+      expect(r.status).toBe(403);
+      expect(r.body.error.code).toBe("KS_E_FORBIDDEN");
+      expect(
+        require("../../utils/knowledgeSync/swap").runSwap
+      ).not.toHaveBeenCalled();
+    });
+    test("member confirm into existing workspace OK", async () => {
+      member(true);
+      const r = await post("/knowledge-sync/import/confirm", "3", {
+        previewId: "p1",
+      });
+      expect(r.status).toBe(200);
+    });
+  });
+
+  describe("single-user", () => {
+    beforeAll(() => (mockMulti = false));
+    test("rollback and confirm never consult membership", async () => {
+      const rb = await post("/knowledge-sync/rollback/ws-a");
+      expect(rb.status).not.toBe(403);
+      const cf = await post("/knowledge-sync/import/confirm", null, {
+        previewId: "p1",
+      });
+      expect(cf.status).toBe(200);
+      expect(mockWorkspace.getWithUser).not.toHaveBeenCalled();
+    });
   });
 });

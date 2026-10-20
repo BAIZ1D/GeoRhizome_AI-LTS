@@ -40,6 +40,12 @@ async function isAdminOrSingle(response) {
   return response.locals?.user?.role === ROLES.admin;
 }
 
+async function accessCtx(response) {
+  const multiUser =
+    response.locals?.multiUserMode ?? (await SystemSettings.isMultiUserMode());
+  return { user: response.locals?.user ?? null, multiUser: !!multiUser };
+}
+
 function knowledgeSyncEndpoints(app) {
   if (!app) return;
 
@@ -154,6 +160,7 @@ function knowledgeSyncEndpoints(app) {
         const r = await confirmImport({
           previewId: body.previewId,
           userId: response.locals.user?.id ?? null,
+          ...(await accessCtx(response)),
           passphrase: body.passphrase,
         });
         return response.status(200).json(r);
@@ -193,6 +200,7 @@ function knowledgeSyncEndpoints(app) {
         const r = await rollbackWorkspace({
           slug,
           userId: response.locals.user?.id ?? null,
+          ...(await accessCtx(response)),
         });
         return response.status(200).json(r);
       } catch (e) {

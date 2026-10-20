@@ -182,10 +182,14 @@ describe("default user can preview/confirm/rollback", () => {
     });
     const r = await call("/knowledge-sync/rollback/ws", "3");
     expect(r.status).toBe(200);
-    expect(rollback.rollbackWorkspace).toHaveBeenCalledWith({
-      slug: "ws",
-      userId: 3,
-    });
+    expect(rollback.rollbackWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({
+        slug: "ws",
+        userId: 3,
+        user: expect.objectContaining({ id: 3 }),
+        multiUser: expect.any(Boolean),
+      })
+    );
   });
   test("discard: owner ok, other user's preview refused", async () => {
     mockStage.loadStaged.mockResolvedValue({ meta: { ownerUserId: 3 } });

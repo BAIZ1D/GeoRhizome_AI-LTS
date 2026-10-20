@@ -6,6 +6,7 @@ const { getKnowledgeSyncConfig } = require("./config");
 const paths = require("./paths");
 const locks = require("./locks");
 const swap = require("./swap");
+const { assertWorkspaceAccess } = require("./access");
 const journalLib = require("./journal");
 
 const WorkspaceModel = () => require("../../models/workspace").Workspace;
@@ -25,12 +26,19 @@ async function readJson(file) {
 }
 
 /** One-step reversible rollback to the backup slot (D-04, IMP-08). */
-async function rollbackWorkspace({ slug, userId: _userId, config } = {}) {
+async function rollbackWorkspace({
+  slug,
+  userId: _userId,
+  user = null,
+  multiUser = false,
+  config,
+} = {}) {
   const cfg = config || getKnowledgeSyncConfig();
   paths.assertSafeSlug(slug);
   const workspace = await WorkspaceModel().get({ slug });
   if (!workspace)
     throw new KnowledgeSyncError("KS_E_NOT_FOUND", { phase: "slug" });
+  await assertWorkspaceAccess({ slug, user, multiUser });
   const bk = paths.backupRoot(slug);
   if (!(await exists(path.join(bk, "rows.json"))))
     throw new KnowledgeSyncError("KS_E_NO_BACKUP", { phase: "backup" });

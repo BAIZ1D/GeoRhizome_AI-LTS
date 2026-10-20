@@ -1,13 +1,13 @@
-const store = new Map();
+const mockStore = new Map();
 jest.mock("../../../utils/prisma", () => ({
   system_settings: {
     upsert: async ({ where, create }) => {
-      store.set(where.label, create.value);
+      mockStore.set(where.label, create.value);
     },
     findFirst: async ({ where }) =>
-      store.has(where.label) ? { value: store.get(where.label) } : null,
+      mockStore.has(where.label) ? { value: mockStore.get(where.label) } : null,
     findMany: async ({ where }) =>
-      [...store]
+      [...mockStore]
         .filter(([k]) => k.startsWith(where.label.startsWith))
         .map(([label, value]) => ({ label, value })),
   },
@@ -24,7 +24,7 @@ test("breadcrumb stores only whitelisted fields", async () => {
     pat: "ghp_secret",
     path: "/x/y",
   });
-  const raw = JSON.parse(store.get("ks_job_ws"));
+  const raw = JSON.parse(mockStore.get("ks_job_ws"));
   expect(Object.keys(raw).sort()).toEqual(
     ["jobId", "kind", "phase", "slug", "state", "updatedAt", "userId"].sort()
   );

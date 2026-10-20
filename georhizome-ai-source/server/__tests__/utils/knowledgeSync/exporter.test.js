@@ -254,3 +254,74 @@ test("WR-07: counter reset never overwrites or deletes an existing archive", asy
   expect(fs.readFileSync(r1.archivePath).equals(orig)).toBe(true);
   expect(fs.existsSync(r1.archivePath + ".part")).toBe(false);
 });
+
+describe("phase 7 options", () => {
+  test("explicit versionId honored and counter committed", async () => {
+    const res = await exportWorkspace({
+      slug: "ws1",
+      passphrase: PW,
+      config,
+      versionId: 7,
+    });
+    expect(res.archiveName).toBe("ws1-v7.grks");
+    expect(res.versionId).toBe(7);
+    expect(res.manifest.versionId).toBe(7);
+    expect(res.docs).toEqual([
+      { docId: "d1", filename: "doc1.json", docpath: "doc1.json" },
+    ]);
+    expect(mockStore.get("ks_export_ver_ws1")).toBe("7");
+  });
+  test("overwrite true replaces leftover; false refuses", async () => {
+    const dir = paths.exportsDir({ config });
+    fs.mkdirSync(dir, { recursive: true });
+    const left = path.join(dir, "ws1-v3.grks");
+    fs.writeFileSync(left, "stale");
+    expect(
+      await code(
+        exportWorkspace({ slug: "ws1", passphrase: PW, config, versionId: 3 })
+      )
+    ).toBe("KS_E_ARCHIVE_EXISTS");
+    expect(fs.readFileSync(left, "utf8")).toBe("stale");
+    await exportWorkspace({
+      slug: "ws1",
+      passphrase: PW,
+      config,
+      versionId: 3,
+      overwrite: true,
+    });
+    expect(fs.statSync(left).size).toBeGreaterThan(5);
+  });
+  test("aborted signal throws KS_E_CANCELLED and onPhase fires", async () => {
+    const phases = [];
+    const ac = new AbortController();
+    const c = await code(
+      exportWorkspace({
+        slug: "ws1",
+        passphrase: PW,
+        config,
+        signal: ac.signal,
+        onPhase: (p) => {
+          phases.push(p);
+          if (p === "pack") ac.abort();
+        },
+      })
+    );
+    expect(phases).toEqual(["pack"]);
+    expect(c).toBe("KS_E_CANCELLED");
+    expect(exportsList()).toEqual([]);
+  });
+  test("lockHeld skips the non-reentrant lock", async () => {
+    await locks.withWorkspaceLock("ws1", "export", async () => {
+      expect(
+        await code(exportWorkspace({ slug: "ws1", passphrase: PW, config }))
+      ).toBe("KS_E_BUSY");
+      const res = await exportWorkspace({
+        slug: "ws1",
+        passphrase: PW,
+        config,
+        lockHeld: true,
+      });
+      expect(res.rowCount).toBe(2);
+    });
+  });
+});

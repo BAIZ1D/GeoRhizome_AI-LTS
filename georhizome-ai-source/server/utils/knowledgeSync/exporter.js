@@ -119,7 +119,21 @@ function resolveDocFile(doc) {
   }
 }
 
-async function exportWorkspace({ slug, passphrase, config } = {}) {
+async function exportWorkspace({
+  slug,
+  passphrase,
+  config,
+  versionId: givenVersionId,
+  overwrite = false,
+  lockHeld = false,
+  onPhase,
+  signal,
+} = {}) {
+  const phase = (n) => {
+    if (signal && signal.aborted)
+      throw new KnowledgeSyncError("KS_E_CANCELLED", { phase: n });
+    if (typeof onPhase === "function") onPhase(n);
+  };
   assertSafeSlug(slug);
   const cfg = config || getKnowledgeSyncConfig();
   const pass = passphrase || (await secrets.getPassphrase());
@@ -142,7 +156,7 @@ async function exportWorkspace({ slug, passphrase, config } = {}) {
   if (cfg.max_entries && pre.docs.length + 2 > cfg.max_entries)
     throw err("KS_E_SIZE_LIMIT", "export");
 
-  return locks.withWorkspaceLock(slug, "export", async () => {
+  const run = async () => {
     const work = path.join(staging, uuidv4());
     const tarFile = work + ".tar";
     assertWithin(staging, work);
@@ -234,7 +248,8 @@ async function exportWorkspace({ slug, passphrase, config } = {}) {
       const vectorIdHash = await computeVectorIdHash(table);
 
       // Step 7: manifest sealed as first entry.
-      const versionId = await marker.nextExportVersion(slug);
+      const versionId =
+        givenVersionId || (await marker.nextExportVersion(slug));
       const files = [];
       for (const rel of await listFiles(work)) {
         const st = await fs.promises.stat(path.join(work, rel));
@@ -271,6 +286,7 @@ async function exportWorkspace({ slug, passphrase, config } = {}) {
       await fs.promises.rm(manifestJson, { force: true });
 
       // Step 8: pack (manifest.enc first) and encrypt.
+      phase("pack");
       await packDirectory(work, tarFile, [
         "manifest.enc",
         "lancedb",
@@ -286,9 +302,13 @@ async function exportWorkspace({ slug, passphrase, config } = {}) {
       const archivePath = path.join(outDir, archiveName);
       // WR-07: never overwrite (or, on failure, delete) an existing archive,
       // e.g. after the version counter was reset.
-      if (fs.existsSync(archivePath))
-        throw err("KS_E_ARCHIVE_EXISTS", "export");
+      if (fs.existsSync(archivePath)) {
+        if (!overwrite) throw err("KS_E_ARCHIVE_EXISTS", "export");
+        assertWithin(outDir, archivePath);
+        await fs.promises.rm(archivePath, { force: true });
+      }
       const partPath = archivePath + ".part";
+      phase("encrypt");
       try {
         await encryptFile(tarFile, partPath, pass, { config: cfg });
         if (fs.existsSync(archivePath))
@@ -303,12 +323,25 @@ async function exportWorkspace({ slug, passphrase, config } = {}) {
       await marker.commitExportVersion(slug, versionId);
       const bytes = (await fs.promises.stat(archivePath)).size;
       safeLog("info", `export complete ${archiveName}`, { rowCount, bytes });
-      return { archivePath, archiveName, versionId, rowCount, bytes };
+      return {
+        archivePath,
+        archiveName,
+        versionId,
+        rowCount,
+        bytes,
+        manifest,
+        docs: rowDocs.map((d) => ({
+          docId: d.docId,
+          filename: d.filename,
+          docpath: d.file,
+        })),
+      };
     } finally {
       await fs.promises.rm(work, { recursive: true, force: true });
       await fs.promises.rm(tarFile, { force: true });
     }
-  });
+  };
+  return lockHeld ? run() : locks.withWorkspaceLock(slug, "export", run);
 }
 
 module.exports = { exportWorkspace, redactPaths };

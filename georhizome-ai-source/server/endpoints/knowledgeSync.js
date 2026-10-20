@@ -7,6 +7,7 @@ const { toClientError } = require("../utils/knowledgeSync/errors");
 const secrets = require("../utils/knowledgeSync/secrets");
 const { SystemSettings } = require("../models/systemSettings");
 const { safeLog } = require("../utils/knowledgeSync/redact");
+const { reqBody } = require("../utils/http");
 
 // Locked admin gate: Phase 7 publish / delete-version / wipe routes MUST use it.
 const KS_ADMIN_GATE = [validatedRequest, flexUserRoleValid([ROLES.admin])];
@@ -48,7 +49,7 @@ function knowledgeSyncEndpoints(app) {
 
   app.put("/knowledge-sync/pat", KS_ADMIN_GATE, async (request, response) => {
     try {
-      await secrets.setPat(request.body?.pat);
+      await secrets.setPat(reqBody(request)?.pat);
       return response.status(200).json({ pat: await secrets.patStatus() });
     } catch (e) {
       return fail(response, e);
@@ -69,7 +70,7 @@ function knowledgeSyncEndpoints(app) {
     KS_USER_GATE,
     async (request, response) => {
       try {
-        await secrets.setPassphrase(request.body?.passphrase);
+        await secrets.setPassphrase(reqBody(request)?.passphrase);
         return response
           .status(200)
           .json({ passphrase: await secrets.passphraseStatus() });

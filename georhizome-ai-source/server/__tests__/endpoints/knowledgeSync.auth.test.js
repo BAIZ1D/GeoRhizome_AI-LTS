@@ -25,6 +25,7 @@ jest.mock("../../models/user", () => ({
   },
 }));
 jest.mock("../../utils/http", () => ({
+  reqBody: jest.requireActual("../../utils/http").reqBody,
   decodeJWT: jest.fn((t) => ({ id: Number(t) })),
   userFromSession: jest.fn(),
 }));
@@ -97,6 +98,7 @@ beforeAll(async () => {
   delete process.env.AUTH_TOKEN;
   delete process.env.JWT_SECRET;
   const app = express();
+  app.use(express.text());
   app.use(express.json());
   systemEndpoints(app);
   knowledgeSyncEndpoints(app);

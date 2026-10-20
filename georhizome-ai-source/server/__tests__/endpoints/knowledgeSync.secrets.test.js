@@ -18,6 +18,7 @@ jest.mock("../../models/systemSettings", () => ({
 }));
 jest.mock("../../models/user", () => ({ User: { get: jest.fn() } }));
 jest.mock("../../utils/http", () => ({
+  reqBody: jest.requireActual("../../utils/http").reqBody,
   decodeJWT: jest.fn(),
   userFromSession: jest.fn(),
 }));
@@ -44,6 +45,7 @@ let server, port;
 beforeAll(async () => {
   delete process.env.AUTH_TOKEN;
   const app = express();
+  app.use(express.text());
   app.use(express.json());
   const r = express.Router();
   knowledgeSyncEndpoints(r);
@@ -54,7 +56,7 @@ beforeAll(async () => {
 afterAll(() => server.close());
 beforeEach(() => mockStore.clear());
 
-const call = (method, path, body) =>
+const call = (method, path, body, contentType = "application/json") =>
   new Promise((resolve, reject) => {
     const data = body ? JSON.stringify(body) : null;
     const req = http.request(
@@ -62,7 +64,7 @@ const call = (method, path, body) =>
         port,
         method,
         path: "/api" + path,
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": contentType },
       },
       (res) => {
         let t = "";
@@ -134,6 +136,24 @@ describe("routes", () => {
       expect(t).not.toContain(PAT);
       expect(t).not.toContain(PASS);
     }
+  });
+  // Frontend baseHeaders() sends no content-type, so fetch posts text/plain.
+  test("text/plain JSON bodies are accepted", async () => {
+    const pat = await call(
+      "PUT",
+      "/knowledge-sync/pat",
+      { pat: PAT },
+      "text/plain"
+    );
+    expect(pat.status).toBe(200);
+    const pass = await call(
+      "PUT",
+      "/knowledge-sync/passphrase",
+      { passphrase: PASS },
+      "text/plain"
+    );
+    expect(pass.status).toBe(200);
+    expect(JSON.parse(pass.text).passphrase.configured).toBe(true);
   });
   test("short passphrase 400", async () => {
     const r = await call("PUT", "/knowledge-sync/passphrase", {

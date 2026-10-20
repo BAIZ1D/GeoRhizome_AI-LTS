@@ -162,6 +162,7 @@ function knowledgeSyncEndpoints(app) {
           userId: response.locals.user?.id ?? null,
           ...(await accessCtx(response)),
           passphrase: body.passphrase,
+          allowUnsynced: body.allowUnsynced === true,
         });
         return response.status(200).json(r);
       } catch (e) {

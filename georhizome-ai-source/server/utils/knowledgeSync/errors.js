@@ -18,6 +18,8 @@ const KS_CODES = Object.freeze({
   KS_E_DIM_MISMATCH: "Archive vector dimension does not match this system.",
   KS_E_NO_BACKUP: "No backup is available to roll back to.",
   KS_E_VERSION_STALE: "Archive version is not newer than the synced version.",
+  KS_E_TARGET_UNSYNCED:
+    "A local workspace with this name was never synced; confirm overwrite.",
   KS_E_DOCID_CONFLICT:
     "A document in the archive already belongs to another workspace.",
   KS_E_EXPORT_INCOMPLETE:

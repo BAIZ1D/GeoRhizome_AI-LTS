@@ -186,7 +186,8 @@ test("matched by slug; shape and no live writes", async () => {
   );
   expect(r.docCount).toBe(1);
   expect(r.compatibility.ok).toBe(true);
-  expect(r.blocking).toEqual([]);
+  // WR-06: matched, never-synced target with local docs needs an override.
+  expect(r.blocking).toEqual(["KS_E_TARGET_UNSYNCED"]);
   expect(Array.isArray(r.localOnlyDocs)).toBe(true);
   expect(writeCalls()).toBe(writesBefore);
   expect(fs.readdirSync(path.join(root, "lancedb"))).toEqual(lanceBefore);
@@ -278,9 +279,14 @@ test("validateConfirmable recomputes blocking", async () => {
     r.previewId,
     { config }
   );
-  expect((await preview.validateConfirmable(st)).ok).toBe(true);
+  expect((await preview.validateConfirmable(st)).blocking).toEqual([
+    "KS_E_TARGET_UNSYNCED",
+  ]);
+  expect(
+    (await preview.validateConfirmable(st, { allowUnsynced: true })).ok
+  ).toBe(true);
   setLocal([D("d1", "custom-documents/doc1.json", 99)]);
-  const v = await preview.validateConfirmable(st);
+  const v = await preview.validateConfirmable(st, { allowUnsynced: true });
   expect(v.ok).toBe(false);
   expect(v.blocking).toContain("KS_E_DOCID_CONFLICT");
 });

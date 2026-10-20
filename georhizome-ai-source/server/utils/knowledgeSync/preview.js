@@ -19,7 +19,13 @@ async function resolveTarget(manifest) {
   return { matched: false, willCreateName: manifest.workspace.name };
 }
 
-async function computeBlocking({ manifest, rows, target, compatibility }) {
+async function computeBlocking({
+  manifest,
+  rows,
+  target,
+  compatibility,
+  allowUnsynced = false,
+}) {
   const blocking = [];
   if (!compatibility.ok)
     for (const r of compatibility.reasons)
@@ -30,6 +36,13 @@ async function computeBlocking({ manifest, rows, target, compatibility }) {
       const same = m.sourceRandomId === manifest.workspace.randomId;
       if (!same || manifest.versionId <= Number(m.versionId))
         blocking.push("KS_E_VERSION_STALE");
+    } else if (!allowUnsynced) {
+      // WR-06: never-synced local workspace matched by slug/name: replacing
+      // its documents needs an explicit override.
+      const local = await prisma().workspace_documents.findMany({
+        where: { workspaceId: target.workspace.id },
+      });
+      if (local.length) blocking.push("KS_E_TARGET_UNSYNCED");
     }
   }
   const ids = rows.docs.map((d) => d.docId);
@@ -102,7 +115,7 @@ async function previewImport({ archiveName, passphrase, userId, config } = {}) {
 }
 
 // Recomputed at confirm (D-08); never trust stored results.
-async function validateConfirmable(staged) {
+async function validateConfirmable(staged, { allowUnsynced = false } = {}) {
   const { manifest, rows } = staged;
   const compatibility = checkCompatibility(manifest, effectiveEmbedder());
   const target = await resolveTarget(manifest);
@@ -111,6 +124,7 @@ async function validateConfirmable(staged) {
     rows,
     target,
     compatibility,
+    allowUnsynced,
   });
   return { ok: blocking.length === 0, blocking, compatibility, target };
 }

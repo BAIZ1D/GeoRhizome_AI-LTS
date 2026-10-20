@@ -126,6 +126,7 @@ test("matched by slug: workspaces row untouched, local-only removed, flags kept"
     previewId: p.previewId,
     userId: 7,
     passphrase: PW,
+    allowUnsynced: true,
     config,
   });
   expect(r).toMatchObject({ slug: "ws1", docCount: 1, created: false });
@@ -245,6 +246,7 @@ test("workspace is syncing during the swap", async () => {
     previewId: p.previewId,
     userId: 7,
     passphrase: PW,
+    allowUnsynced: true,
     config,
   });
   expect(seen).toBe(true);
@@ -319,4 +321,23 @@ test("WR-01: non-crash failure before swap removes the prepared journal but keep
   expect(await journalLib.readJournal(p.previewId)).toBeNull();
   expect(fs.existsSync(journalLib.jobDir(p.previewId))).toBe(true);
   expect(mockWsList).toEqual([]);
+});
+
+test("WR-06: never-synced matched workspace with docs refused without override", async () => {
+  await seedLocalWs1();
+  const p = await prev();
+  expect(p.blocking).toEqual(["KS_E_TARGET_UNSYNCED"]);
+  const before = memdb.snapshot();
+  await expect(
+    confirmImport({ previewId: p.previewId, userId: 7, passphrase: PW, config })
+  ).rejects.toMatchObject({ code: "KS_E_TARGET_UNSYNCED" });
+  expect(memdb.snapshot()).toBe(before);
+  const r = await confirmImport({
+    previewId: p.previewId,
+    userId: 7,
+    passphrase: PW,
+    allowUnsynced: true,
+    config,
+  });
+  expect(r).toMatchObject({ slug: "ws1", created: false });
 });

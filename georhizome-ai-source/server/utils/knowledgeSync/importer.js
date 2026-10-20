@@ -20,8 +20,8 @@ const { safeLog } = require("./redact");
 const prisma = () => require("../prisma");
 const WorkspaceModel = () => require("../../models/workspace").Workspace;
 
-async function refuseIfBlocked(staged) {
-  const v = await validateConfirmable(staged);
+async function refuseIfBlocked(staged, opts) {
+  const v = await validateConfirmable(staged, opts);
   if (!v.ok) throw new KnowledgeSyncError(v.blocking[0], { phase: "confirm" });
   return v;
 }
@@ -49,6 +49,7 @@ async function confirmImportClaimed({
   user = null,
   multiUser = false,
   passphrase: _p,
+  allowUnsynced = false,
   config,
 } = {}) {
   const cfg = config || getKnowledgeSyncConfig();
@@ -60,7 +61,7 @@ async function confirmImportClaimed({
     throw new KnowledgeSyncError("KS_E_PREVIEW_INVALID", { phase: "owner" });
 
   // D-08: server-side recompute; client "confirm" is never trusted.
-  const first = await refuseIfBlocked(staged);
+  const first = await refuseIfBlocked(staged, { allowUnsynced });
 
   const W = WorkspaceModel();
   let workspace;
@@ -107,7 +108,7 @@ async function confirmImportClaimed({
       "import",
       async () => {
         // Recheck inside the lock (state may have moved since the first check).
-        await refuseIfBlocked(staged);
+        await refuseIfBlocked(staged, { allowUnsynced });
         if (!created) await assertWorkspaceAccess({ slug, user, multiUser });
         const archiveIds = new Set(staged.rows.docs.map((d) => d.docId));
         const local = await prisma().workspace_documents.findMany({

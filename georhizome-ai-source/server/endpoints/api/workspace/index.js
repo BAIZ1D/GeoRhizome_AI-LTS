@@ -1010,6 +1010,11 @@ function apiWorkspaceEndpoints(app) {
           })),
         });
       } catch (e) {
+        if (e?.code === "KS_E_SYNCING")
+          return response.status(409).json({
+            code: "KS_E_SYNCING",
+            message: "Workspace is syncing. Try again shortly. (KS_E_SYNCING)",
+          });
         console.error(e.message, e);
         response.sendStatus(500).end();
       }

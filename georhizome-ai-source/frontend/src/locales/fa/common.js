@@ -1,4 +1,4 @@
-// Anything with "null" requires a translation. Contribute to translation via a PR!
+// Untranslated keys fall back to the English string.
 const TRANSLATIONS = {
   onboarding: {
     survey: {
@@ -1187,6 +1187,8 @@ const TRANSLATIONS = {
     loading_mcp_servers: "بارگذاری سرورهای MCP...",
     app_integrations: "ادغام با برنامه‌ها",
     sub_skills: "مهارت‌های پایه",
+    preset_search_description: "Search the web and internet in real-time",
+    start_web_search: "Search the web (@search)",
   },
   profile_settings: {
     edit_account: "ویرایش حساب",
@@ -1657,6 +1659,138 @@ const TRANSLATIONS = {
       timed_out: "زمان به پایان رسید",
       running: "دویدن",
       queued: "در صف انتظار",
+    },
+  },
+  upload: {
+    progress: {
+      parsing: "Parsing page {{current}} of {{total}}... (Tesseract OCR)",
+      stage1: "Stage 1: PDF → Markdown OCR Conversion...",
+      stage2: "Stage 2: Embedding Markdown into Workspace RAG...",
+      complete: "✅ 100% Converted & Embedded!",
+    },
+  },
+  workspace: {
+    embedding: {
+      progress:
+        "Embedding chunk {{current}} of {{total}} into Workspace RAG...",
+      complete: "✅ 100% Embedded into Workspace!",
+    },
+  },
+  modelHub: {
+    titleFull: "GeoRhizome Local Model Hub",
+    title: "GeoRhizome Model Hub",
+    hardwareAware: "HARDWARE-AWARE",
+    subtitle: "Model serving, 1-click downloads, and RAM/VRAM resource manager",
+    dragResize: "Drag / Resize",
+    ram: "RAM:",
+    vram: "VRAM:",
+    backend: "BACKEND:",
+    topSpeed: "TOP SPEED:",
+    filter: "Filter models...",
+    footer: "GeoRhizome AI Engine • Hardware-Aware",
+    active: "Active",
+    tabs: {
+      current: "Current Models",
+      downloaded: "Downloaded Models",
+      chat: "Chat & Reasoning",
+      embedder: "Embedder",
+      reranker: "Reranker",
+      hfSearch: "HuggingFace Search",
+    },
+    quants: {
+      all: "All Quants",
+      optimal: "Q4_K_M (Optimal Fit)",
+      high: "Q8_0 (High Quality)",
+      light: "Q2_K (Ultra Light)",
+    },
+    actions: {
+      offloadModel: "Offload Model",
+      offloadEmbedder: "Offload Embedder",
+      offloadReranker: "Offload Reranker",
+      purge: "Purge All Caches",
+      onboardServe: "Onboard & Serve",
+      downloadOnboard: "Download & Onboard",
+      delete: "Delete",
+      offload: "Offload",
+    },
+  },
+  knowledgeSync: {
+    title: "Knowledge Sync",
+    description:
+      "Configure access for publishing and syncing encrypted knowledge archives.",
+    saving: "Saving…",
+    saved: "Saved.",
+    notConfigured: "Not configured",
+    pat: {
+      heading: "GitHub access token",
+      hint: "Stored encrypted on this server. It is never shown again.",
+      configured: "Configured (…{{last4}})",
+      placeholder: "github_pat_…",
+      save: "Save token",
+      remove: "Remove token",
+      removeTitle: "Remove GitHub access token?",
+      removeBody:
+        "Remove GitHub access token? Publishing will stop until a new token is saved.",
+      keep: "Keep token",
+    },
+    passphrase: {
+      heading: "Team passphrase",
+      hint: "At least 12 characters. Share it with co-workers outside this app.",
+      tooShort: "Passphrase must be at least 12 characters.",
+      configured: "Configured",
+      save: "Save passphrase",
+      clear: "Clear passphrase",
+      clearTitle: "Clear passphrase",
+      clearBody:
+        "Clear the team passphrase? You will be asked for it again on the next sync.",
+      keep: "Keep passphrase",
+      changeWarning:
+        "Changing the passphrase does not re-encrypt existing releases. They stay readable only with the old passphrase until re-published.",
+    },
+    prompt: {
+      title: "Enter team passphrase",
+      body: "Ask your administrator for the team passphrase. It will be saved encrypted on this machine.",
+      save: "Save and continue",
+      dismiss: "Not now",
+    },
+    errors: {
+      KS_E_PAT_INVALID:
+        "GitHub access token is missing or invalid. Save one in Settings → Knowledge Sync.",
+      KS_E_PASSPHRASE_TOO_SHORT: "Passphrase must be at least 12 characters.",
+      forbidden: "Only administrators can change this setting.",
+      KS_E_PASSPHRASE:
+        "Wrong team passphrase. Check it with your administrator.",
+      KS_E_AUTH_TAG: "Archive damaged or incomplete — re-download.",
+      KS_E_TRUNCATED: "Archive damaged or incomplete — re-download.",
+      KS_E_MISSING_FINAL: "Archive damaged or incomplete — re-download.",
+      KS_E_PARAMS:
+        "Archive uses unsupported encryption settings. Update GeoRhizome or ask the administrator to re-publish.",
+      KS_E_UNSAFE_ENTRY:
+        "Archive contains an unsafe file path and was rejected. Nothing was changed.",
+      KS_E_MANIFEST:
+        "Archive format is incompatible with this version. Update GeoRhizome or re-publish.",
+      KS_E_UNKNOWN: "Knowledge Sync failed. Try again.",
+      KS_E_BUSY: "Another operation is already running on this workspace.",
+      KS_E_SYNCING: "This workspace is being synced. Try again shortly.",
+      KS_E_DISK_SPACE: "Not enough free disk space for this operation.",
+      KS_E_EMBEDDER_MISMATCH:
+        "Archive was built with a different embedding model.",
+      KS_E_DIM_MISMATCH: "Archive vector dimension does not match this system.",
+      KS_E_NO_BACKUP: "No backup is available to roll back to.",
+      KS_E_VERSION_STALE:
+        "Archive version is not newer than the synced version.",
+      KS_E_DOCID_CONFLICT:
+        "A document in the archive already belongs to another workspace.",
+      KS_E_EXPORT_INCOMPLETE:
+        "Export failed because a referenced document is missing.",
+      KS_E_SIZE_LIMIT: "Archive exceeds the allowed size.",
+      KS_E_NOT_FOUND: "The requested item was not found.",
+      KS_E_PREVIEW_INVALID: "Import preview is missing or expired.",
+    },
+    sync: {
+      started: "Sync started. Please wait...",
+      done: "Sync completed.",
+      failed: "Sync error: {{message}}",
     },
   },
 };

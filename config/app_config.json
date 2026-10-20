@@ -95,6 +95,18 @@
     "stale_staging_hours": 24,
     "preview_ttl_minutes": 60,
     "import_tx_timeout_ms": 60000,
-    "import_tx_max_wait_ms": 10000
+    "import_tx_max_wait_ms": 10000,
+    "upload_attempts": 5,
+    "upload_backoff_min_ms": 2000,
+    "upload_backoff_max_ms": 60000,
+    "download_attempts": 5,
+    "github_api_timeout_ms": 60000,
+    "catalog_cache_ttl_ms": 300000,
+    "job_retention_ms": 3600000,
+    "job_poll_interval_ms": 1000,
+    "release_list_per_page": 100,
+    "max_redirect_hops": 5,
+    "catalog_max_probe": 20,
+    "catalog_tag_prefix": "ks-catalog-"
   }
 }

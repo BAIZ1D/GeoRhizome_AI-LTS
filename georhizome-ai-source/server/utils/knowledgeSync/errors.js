@@ -29,6 +29,13 @@ const KS_CODES = Object.freeze({
     "An archive with this version already exists; it was not overwritten.",
   KS_E_NOT_FOUND: "The requested item was not found.",
   KS_E_PREVIEW_INVALID: "Import preview is missing or expired.",
+  KS_E_GITHUB: "GitHub request failed.",
+  KS_E_PART_HASH: "Downloaded part failed integrity check.",
+  KS_E_CANCELLED: "Cancelled.",
+  KS_E_INTERRUPTED: "The server restarted before this job finished.",
+  KS_E_JOB_NOT_FOUND: "Job not found.",
+  KS_E_NO_PAT: "No GitHub token is configured.",
+  KS_E_CATALOG: "Catalog could not be read.",
   KS_E_UNKNOWN: "Unexpected knowledge sync error.",
 });
 

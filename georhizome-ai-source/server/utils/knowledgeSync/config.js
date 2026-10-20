@@ -44,6 +44,19 @@ const DEFAULTS = Object.freeze({
   import_tx_timeout_ms: 60000,
   /** Prisma transaction max wait (ms). */
   import_tx_max_wait_ms: 10000,
+  upload_attempts: 5,
+  upload_backoff_min_ms: 2000,
+  upload_backoff_max_ms: 60000,
+  download_attempts: 5,
+  github_api_timeout_ms: 60000,
+  catalog_cache_ttl_ms: 300000,
+  job_retention_ms: 3600000,
+  job_poll_interval_ms: 1000,
+  release_list_per_page: 100,
+  max_redirect_hops: 5,
+  catalog_max_probe: 20,
+  /** Catalog release tag prefix (only source of the prefix). */
+  catalog_tag_prefix: "ks-catalog-",
 });
 
 function candidatePaths() {
@@ -149,6 +162,68 @@ function getKnowledgeSyncConfig({ configPath } = {}) {
       "import_tx_max_wait_ms",
       D.import_tx_max_wait_ms,
       posInt
+    ),
+    upload_attempts: pick(ks, "upload_attempts", D.upload_attempts, posInt),
+    upload_backoff_min_ms: pick(
+      ks,
+      "upload_backoff_min_ms",
+      D.upload_backoff_min_ms,
+      posInt
+    ),
+    upload_backoff_max_ms: pick(
+      ks,
+      "upload_backoff_max_ms",
+      D.upload_backoff_max_ms,
+      posInt
+    ),
+    download_attempts: pick(
+      ks,
+      "download_attempts",
+      D.download_attempts,
+      posInt
+    ),
+    github_api_timeout_ms: pick(
+      ks,
+      "github_api_timeout_ms",
+      D.github_api_timeout_ms,
+      posInt
+    ),
+    catalog_cache_ttl_ms: pick(
+      ks,
+      "catalog_cache_ttl_ms",
+      D.catalog_cache_ttl_ms,
+      posInt
+    ),
+    job_retention_ms: pick(ks, "job_retention_ms", D.job_retention_ms, posInt),
+    job_poll_interval_ms: pick(
+      ks,
+      "job_poll_interval_ms",
+      D.job_poll_interval_ms,
+      posInt
+    ),
+    release_list_per_page: pick(
+      ks,
+      "release_list_per_page",
+      D.release_list_per_page,
+      posInt
+    ),
+    max_redirect_hops: pick(
+      ks,
+      "max_redirect_hops",
+      D.max_redirect_hops,
+      posInt
+    ),
+    catalog_max_probe: pick(
+      ks,
+      "catalog_max_probe",
+      D.catalog_max_probe,
+      posInt
+    ),
+    catalog_tag_prefix: pick(
+      ks,
+      "catalog_tag_prefix",
+      D.catalog_tag_prefix,
+      str
     ),
   };
   cfg.allowedScryptParams = [{ N: scrypt.N, r: scrypt.r, p: scrypt.p }];

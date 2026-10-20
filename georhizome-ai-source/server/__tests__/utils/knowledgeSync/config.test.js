@@ -59,3 +59,33 @@ test("bad JSON -> defaults", () => {
   expect(c.repo).toBe(DEFAULTS.repo);
   warn.mockRestore();
 });
+
+test("transport keys: defaults and invalid fallback", () => {
+  const c = getKnowledgeSyncConfig({ configPath: write("d.json", {}) });
+  expect(c.upload_attempts).toBe(5);
+  expect(c.upload_backoff_min_ms).toBe(2000);
+  expect(c.upload_backoff_max_ms).toBe(60000);
+  expect(c.download_attempts).toBe(5);
+  expect(c.github_api_timeout_ms).toBe(60000);
+  expect(c.catalog_cache_ttl_ms).toBe(300000);
+  expect(c.job_retention_ms).toBe(3600000);
+  expect(c.job_poll_interval_ms).toBe(1000);
+  expect(c.release_list_per_page).toBe(100);
+  expect(c.max_redirect_hops).toBe(5);
+  expect(c.catalog_max_probe).toBe(20);
+  expect(c.catalog_tag_prefix).toBe("ks-catalog-");
+  const b = getKnowledgeSyncConfig({
+    configPath: write("e.json", {
+      knowledge_sync: {
+        upload_attempts: 0,
+        catalog_max_probe: "x",
+        catalog_tag_prefix: " ",
+        job_poll_interval_ms: 250,
+      },
+    }),
+  });
+  expect(b.upload_attempts).toBe(5);
+  expect(b.catalog_max_probe).toBe(20);
+  expect(b.catalog_tag_prefix).toBe("ks-catalog-");
+  expect(b.job_poll_interval_ms).toBe(250);
+});

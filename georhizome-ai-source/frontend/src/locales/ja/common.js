@@ -1713,6 +1713,68 @@ const TRANSLATIONS = {
       offload: "オフロード",
     },
   },
+  knowledgeSync: {
+    title: "ナレッジ同期",
+    description: "暗号化されたナレッジアーカイブの公開・同期の設定を行います。",
+    saving: "保存中…",
+    saved: "保存しました。",
+    notConfigured: "未設定",
+    pat: {
+      heading: "GitHub アクセストークン",
+      hint: "このサーバーに暗号化して保存されます。再表示されません。",
+      configured: "設定済み（…{{last4}}）",
+      placeholder: "github_pat_…",
+      save: "トークンを保存",
+      remove: "トークンを削除",
+      removeTitle: "GitHub アクセストークンの削除",
+      removeBody:
+        "GitHub アクセストークンを削除しますか？新しいトークンを保存するまで公開できません。",
+      keep: "トークンを保持",
+    },
+    passphrase: {
+      heading: "チームパスフレーズ",
+      hint: "12文字以上。同僚にはアプリ外で共有してください。",
+      tooShort: "パスフレーズは12文字以上必要です。",
+      configured: "設定済み",
+      save: "パスフレーズを保存",
+      clear: "パスフレーズを消去",
+      clearTitle: "パスフレーズの消去",
+      clearBody:
+        "チームパスフレーズを消去しますか？次回の同期時に再入力が必要です。",
+      keep: "パスフレーズを保持",
+      changeWarning:
+        "パスフレーズを変更しても既存リリースは再暗号化されません。再公開するまで旧パスフレーズでのみ読み込めます。",
+    },
+    prompt: {
+      title: "チームパスフレーズを入力",
+      body: "管理者からチームパスフレーズを受け取ってください。この端末に暗号化して保存されます。",
+      save: "保存して続行",
+      dismiss: "後で",
+    },
+    errors: {
+      forbidden: "この設定は管理者のみ変更できます。",
+      KS_E_PASSPHRASE:
+        "チームパスフレーズが違います。管理者に確認してください。",
+      KS_E_AUTH_TAG:
+        "アーカイブが破損しているか不完全です。再ダウンロードしてください。",
+      KS_E_TRUNCATED:
+        "アーカイブが破損しているか不完全です。再ダウンロードしてください。",
+      KS_E_MISSING_FINAL:
+        "アーカイブが破損しているか不完全です。再ダウンロードしてください。",
+      KS_E_PARAMS:
+        "未対応の暗号化設定です。GeoRhizome を更新するか、管理者に再公開を依頼してください。",
+      KS_E_UNSAFE_ENTRY:
+        "安全でないファイルパスを含むため拒否しました。変更はありません。",
+      KS_E_MANIFEST:
+        "このバージョンと互換性のない形式です。GeoRhizome を更新するか再公開してください。",
+      KS_E_UNKNOWN: "ナレッジ同期に失敗しました。再試行してください。",
+    },
+    sync: {
+      started: "同期を開始しました。お待ちください...",
+      done: "同期が完了しました。",
+      failed: "同期エラー: {{message}}",
+    },
+  },
 };
 
 export default TRANSLATIONS;

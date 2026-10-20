@@ -1703,6 +1703,66 @@ const TRANSLATIONS = {
       offload: "Offload",
     },
   },
+  knowledgeSync: {
+    title: "Knowledge Sync",
+    description:
+      "Configure access for publishing and syncing encrypted knowledge archives.",
+    saving: "Saving…",
+    saved: "Saved.",
+    notConfigured: "Not configured",
+    pat: {
+      heading: "GitHub access token",
+      hint: "Stored encrypted on this server. It is never shown again.",
+      configured: "Configured (…{{last4}})",
+      placeholder: "github_pat_…",
+      save: "Save token",
+      remove: "Remove token",
+      removeTitle: "Remove GitHub access token?",
+      removeBody:
+        "Remove GitHub access token? Publishing will stop until a new token is saved.",
+      keep: "Keep token",
+    },
+    passphrase: {
+      heading: "Team passphrase",
+      hint: "At least 12 characters. Share it with co-workers outside this app.",
+      tooShort: "Passphrase must be at least 12 characters.",
+      configured: "Configured",
+      save: "Save passphrase",
+      clear: "Clear passphrase",
+      clearTitle: "Clear passphrase",
+      clearBody:
+        "Clear the team passphrase? You will be asked for it again on the next sync.",
+      keep: "Keep passphrase",
+      changeWarning:
+        "Changing the passphrase does not re-encrypt existing releases. They stay readable only with the old passphrase until re-published.",
+    },
+    prompt: {
+      title: "Enter team passphrase",
+      body: "Ask your administrator for the team passphrase. It will be saved encrypted on this machine.",
+      save: "Save and continue",
+      dismiss: "Not now",
+    },
+    errors: {
+      forbidden: "Only administrators can change this setting.",
+      KS_E_PASSPHRASE:
+        "Wrong team passphrase. Check it with your administrator.",
+      KS_E_AUTH_TAG: "Archive damaged or incomplete — re-download.",
+      KS_E_TRUNCATED: "Archive damaged or incomplete — re-download.",
+      KS_E_MISSING_FINAL: "Archive damaged or incomplete — re-download.",
+      KS_E_PARAMS:
+        "Archive uses unsupported encryption settings. Update GeoRhizome or ask the administrator to re-publish.",
+      KS_E_UNSAFE_ENTRY:
+        "Archive contains an unsafe file path and was rejected. Nothing was changed.",
+      KS_E_MANIFEST:
+        "Archive format is incompatible with this version. Update GeoRhizome or re-publish.",
+      KS_E_UNKNOWN: "Knowledge Sync failed. Try again.",
+    },
+    sync: {
+      started: "Sync started. Please wait...",
+      done: "Sync completed.",
+      failed: "Sync error: {{message}}",
+    },
+  },
 };
 
 export default TRANSLATIONS;

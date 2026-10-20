@@ -54,7 +54,7 @@ function readRaw(configPath) {
     try {
       if (!fs.existsSync(p)) continue;
       return JSON.parse(fs.readFileSync(p, "utf8"));
-    } catch (_e) {
+    } catch {
       console.warn(
         "[KnowledgeSync] config unreadable or invalid; using defaults"
       );

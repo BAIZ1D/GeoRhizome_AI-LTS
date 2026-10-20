@@ -95,6 +95,7 @@ module.exports = {
   validatePublicIndex,
   validatePreviewPayload,
   INDEX_ASSET_NAME,
+  PART_RE,
   PREVIEW_ASSET_NAME,
   RELEASE_BODY,
 };

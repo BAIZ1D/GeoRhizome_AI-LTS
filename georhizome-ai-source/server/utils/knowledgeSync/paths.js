@@ -39,6 +39,12 @@ function backupRoot(slug, { pathImpl = path, env = process.env, config } = {}) {
 function exportsDir(opts = {}) {
   return (opts.pathImpl || path).join(stagingRoot(opts), "exports");
 }
+function catalogSeqHintPath(opts = {}) {
+  return (opts.pathImpl || path).join(
+    stagingRoot(opts),
+    "catalog-seq-hint.json"
+  );
+}
 function lanceTablePath(slug, opts = {}) {
   assertSafeSlug(slug);
   return (opts.pathImpl || path).join(lancedbRoot(opts), slug + ".lance");
@@ -97,6 +103,7 @@ module.exports = {
   storageBase,
   backupRoot,
   exportsDir,
+  catalogSeqHintPath,
   lanceTablePath,
   ksDocsDir,
   ksDocpathPrefix,

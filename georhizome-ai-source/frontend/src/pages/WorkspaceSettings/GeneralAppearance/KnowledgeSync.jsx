@@ -1,7 +1,12 @@
 import React, { useState } from "react";
 import showToast from "@/utils/toast";
+import { useTranslation } from "react-i18next";
+import KnowledgeSyncModel from "@/models/knowledgeSync";
+import PassphrasePromptModal from "@/components/KnowledgeSync/PassphrasePromptModal";
 
 export default function KnowledgeSync({ workspace }) {
+  const { t } = useTranslation();
+  const [showPassphrasePrompt, setShowPassphrasePrompt] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [wiping, setWiping] = useState(false);
@@ -10,9 +15,18 @@ export default function KnowledgeSync({ workspace }) {
   const [showWipeModal, setShowWipeModal] = useState(false);
   const [githubPat, setGithubPat] = useState("");
 
+  const handleSyncClick = async () => {
+    const { ok, data } = await KnowledgeSyncModel.status();
+    if (ok && data?.passphrase?.configured === false) {
+      setShowPassphrasePrompt(true);
+      return;
+    }
+    handleSync();
+  };
+
   const handleSync = async () => {
     setSyncing(true);
-    showToast("同期を開始しました。お待ちください...", "info", { clear: true });
+    showToast(t("knowledgeSync.sync.started"), "info", { clear: true });
     try {
       const response = await fetch("/api/system/sync-workspace", {
         method: "POST",
@@ -27,11 +41,17 @@ export default function KnowledgeSync({ workspace }) {
       if (!response.ok)
         throw new Error(data.error || "Failed to sync workspace");
 
-      showToast("同期が完了しました。", "success", { clear: true });
+      showToast(t("knowledgeSync.sync.done"), "success", { clear: true });
       setTimeout(() => window.location.reload(), 2000);
     } catch (e) {
       console.error(e);
-      showToast(`同期エラー: ${e.message}`, "error", { clear: true });
+      showToast(
+        t("knowledgeSync.sync.failed", { message: e.message }),
+        "error",
+        {
+          clear: true,
+        }
+      );
     } finally {
       setSyncing(false);
     }
@@ -54,7 +74,7 @@ export default function KnowledgeSync({ workspace }) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${window.localStorage.getItem("anythingllm_authToken")}`,
         },
-        body: JSON.stringify({ slug: workspace.slug, githubPat }),
+        body: JSON.stringify({ slug: workspace.slug }),
       });
 
       const data = await response.json();
@@ -119,7 +139,7 @@ export default function KnowledgeSync({ workspace }) {
         <button
           type="button"
           disabled={syncing || uploading || wiping}
-          onClick={handleSync}
+          onClick={handleSyncClick}
           className="px-4 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-all text-sm font-medium disabled:opacity-50"
         >
           {syncing ? "同期を実行しています..." : "最新ナレッジを同期"}
@@ -145,6 +165,16 @@ export default function KnowledgeSync({ workspace }) {
             : "ナレッジをアップロード"}
         </button>
       </div>
+
+      {showPassphrasePrompt && (
+        <PassphrasePromptModal
+          onCancel={() => setShowPassphrasePrompt(false)}
+          onSaved={() => {
+            setShowPassphrasePrompt(false);
+            handleSync();
+          }}
+        />
+      )}
 
       {showWipeModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">

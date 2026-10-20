@@ -11,6 +11,7 @@ import {
   Nut,
   Toolbox,
   Plugs,
+  ArrowsClockwise,
 } from "@phosphor-icons/react";
 import AgentIcon from "@/media/animations/agent-static.png";
 import useUser from "@/hooks/useUser";
@@ -346,6 +347,14 @@ const SidebarOptions = ({ user = null, t }) => (
           flex={true}
           roles={["admin", "manager"]}
           hidden={user?.role}
+        />
+        <Option
+          btnText={t("knowledgeSync.title")}
+          icon={<ArrowsClockwise className="h-5 w-5 flex-shrink-0" />}
+          href={paths.settings.knowledgeSync()}
+          user={user}
+          flex={true}
+          roles={["admin", "manager", "default"]}
         />
         <HoldToReveal key="exp_features">
           <Option

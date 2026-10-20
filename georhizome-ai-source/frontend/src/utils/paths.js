@@ -133,6 +133,9 @@ export default {
     security: () => {
       return "/settings/security";
     },
+    knowledgeSync: () => {
+      return "/settings/knowledge-sync";
+    },
     interface: () => {
       return "/settings/interface";
     },

@@ -186,6 +186,15 @@ const router = createBrowserRouter([
         },
       },
       {
+        path: "/settings/knowledge-sync",
+        lazy: async () => {
+          const { default: KnowledgeSync } = await import(
+            "@/pages/GeneralSettings/KnowledgeSync"
+          );
+          return { element: <PrivateRoute Component={KnowledgeSync} /> };
+        },
+      },
+      {
         path: "/settings/privacy",
         lazy: async () => {
           const { default: PrivacyAndData } = await import(

@@ -67,7 +67,8 @@ const api = {
     }
   },
 };
-const snapshot = () => JSON.stringify(clone(), (k, v) => (v instanceof Map ? [...v] : v));
+const snapshot = () =>
+  JSON.stringify(clone(), (k, v) => (v instanceof Map ? [...v] : v));
 const reset = () => {
   state.docs = [];
   state.vecs = [];

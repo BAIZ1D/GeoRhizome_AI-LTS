@@ -7,8 +7,9 @@ const { v4: uuidv4 } = require("uuid");
 process.env.STORAGE_DIR =
   process.env.STORAGE_DIR || path.join(os.tmpdir(), "ks-swap-init");
 
-jest.mock("../../../utils/prisma", () =>
-  require("../../../__testhelpers__/memdb").db
+jest.mock(
+  "../../../utils/prisma",
+  () => require("../../../__testhelpers__/memdb").db
 );
 
 const lancedb = require("@lancedb/lancedb");
@@ -37,7 +38,9 @@ function hashDir(dir) {
       if (fs.statSync(p).isDirectory()) walk(p, r);
       else
         out.push(
-          r + ":" + crypto.createHash("sha1").update(fs.readFileSync(p)).digest("hex")
+          r +
+            ":" +
+            crypto.createHash("sha1").update(fs.readFileSync(p)).digest("hex")
         );
     }
   };

@@ -1,0 +1,118 @@
+const fs = require("fs");
+const path = require("path");
+const { getKnowledgeSyncConfig } = require("./config");
+const { stageArchive, discardStaged } = require("./stage");
+const { checkCompatibility } = require("./compat");
+const { effectiveEmbedder } = require("./embedder");
+const marker = require("./marker");
+
+const prisma = () => require("../prisma");
+const WorkspaceModel = () => require("../../models/workspace").Workspace;
+
+const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
+async function resolveTarget(manifest) {
+  const W = WorkspaceModel();
+  let ws = await W.get({ slug: manifest.workspace.slug });
+  if (!ws) ws = await W.get({ name: manifest.workspace.name });
+  if (ws) return { matched: true, workspace: ws };
+  return { matched: false, willCreateName: manifest.workspace.name };
+}
+
+async function computeBlocking({ manifest, rows, target, compatibility }) {
+  const blocking = [];
+  if (!compatibility.ok)
+    for (const r of compatibility.reasons)
+      if (!blocking.includes(r.code)) blocking.push(r.code);
+  if (target.matched) {
+    const m = await marker.readMarker(target.workspace.slug);
+    if (m) {
+      const same = m.sourceRandomId === manifest.workspace.randomId;
+      if (!same || manifest.versionId <= Number(m.versionId))
+        blocking.push("KS_E_VERSION_STALE");
+    }
+  }
+  const ids = rows.docs.map((d) => d.docId);
+  if (ids.length) {
+    const owned = await prisma().workspace_documents.findMany({
+      where: { docId: { in: ids } },
+    });
+    const ownId = target.matched ? target.workspace.id : null;
+    if (owned.some((d) => d.workspaceId !== ownId))
+      blocking.push("KS_E_DOCID_CONFLICT");
+  }
+  return blocking;
+}
+
+async function previewImport({ archiveName, passphrase, userId, config } = {}) {
+  const cfg = config || getKnowledgeSyncConfig();
+  const staged = await stageArchive({ archiveName, passphrase, config: cfg });
+  try {
+    await fs.promises.writeFile(
+      path.join(staged.dir, "preview.json"),
+      JSON.stringify({
+        ownerUserId: userId ?? null,
+        archiveName,
+        createdAt: new Date().toISOString(),
+      })
+    );
+    const { manifest, rows } = staged;
+    const compatibility = checkCompatibility(manifest, effectiveEmbedder());
+    const target = await resolveTarget(manifest);
+    let localOnlyDocs = [];
+    if (target.matched) {
+      const inArchive = new Set(rows.docs.map((d) => d.docId));
+      const local = await prisma().workspace_documents.findMany({
+        where: { workspaceId: target.workspace.id },
+      });
+      localOnlyDocs = local
+        .filter((d) => !inArchive.has(d.docId))
+        .map((d) => ({
+          docId: d.docId,
+          filename: d.filename,
+          docpath: d.docpath,
+        }))
+        .sort((a, b) => cmp(a.docpath, b.docpath) || cmp(a.docId, b.docId));
+    }
+    const blocking = await computeBlocking({
+      manifest,
+      rows,
+      target,
+      compatibility,
+    });
+    return {
+      previewId: staged.jobId,
+      versionId: manifest.versionId,
+      archiveBytes: staged.archiveBytes,
+      sizeBytes: manifest.files.reduce((s, f) => s + f.size, 0),
+      docCount: rows.docs.length,
+      compatibility,
+      target: {
+        matched: target.matched,
+        slug: target.matched ? target.workspace.slug : null,
+        name: target.matched ? target.workspace.name : target.willCreateName,
+      },
+      localOnlyDocs,
+      blocking,
+    };
+  } catch (e) {
+    await discardStaged(staged.jobId, { config: cfg }).catch(() => {});
+    throw e;
+  }
+}
+
+// Recomputed at confirm (D-08); never trust stored results.
+async function validateConfirmable(staged) {
+  const { manifest, rows } = staged;
+  const compatibility = checkCompatibility(manifest, effectiveEmbedder());
+  const target = await resolveTarget(manifest);
+  const blocking = await computeBlocking({
+    manifest,
+    rows,
+    target,
+    compatibility,
+  });
+  return { ok: blocking.length === 0, blocking, compatibility, target };
+}
+
+module.exports = { previewImport, resolveTarget, validateConfirmable };

@@ -88,6 +88,8 @@ jest.doMock("../../utils/knowledgeSync/stage", () => ({
     stagedDocs: "/x/docs",
   })),
   discardStaged: jest.fn(async () => {}),
+  claimPreview: jest.fn(),
+  releasePreview: jest.fn(),
 }));
 jest.doMock("../../utils/knowledgeSync/preview", () => ({
   previewImport: jest.fn(),

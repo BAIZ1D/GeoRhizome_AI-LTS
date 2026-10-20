@@ -177,7 +177,9 @@ async function runSwap(ctx, { config } = {}) {
   const live = paths.lanceTablePath(slug);
   const liveDocs = paths.ksDocsDir(slug);
   const pend = pendingRoot(slug);
-  paths.assertSameFilesystem(live, liveDocs, source.lance, pend);
+  paths.assertSameFilesystem(
+    ...[live, liveDocs, source.lance, pend].filter(Boolean)
+  );
 
   let journal = null;
   let committed = false;
@@ -213,7 +215,9 @@ async function runSwap(ctx, { config } = {}) {
     };
     if (hadLance)
       await step("S1", () => mv(live, path.join(pend, "lance")), "after:S1");
-    await step("S2", () => mv(source.lance, live), "after:S2");
+    // A null source.lance (rollback to a state that had none) leaves live absent.
+    if (source.lance)
+      await step("S2", () => mv(source.lance, live), "after:S2");
     if (hadDocs)
       await step("S3", () => mv(liveDocs, path.join(pend, "docs")), "after:S3");
     await step(

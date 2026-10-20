@@ -87,6 +87,7 @@ const { validatedRequest } = require("../../utils/middleware/validatedRequest");
 const {
   knowledgeSyncEndpoints,
   KS_ADMIN_GATE,
+  KS_USER_GATE,
 } = require("../../endpoints/knowledgeSync");
 const {
   systemEndpoints,
@@ -125,6 +126,9 @@ const ADMIN_ONLY = [
   ["PUT", "/knowledge-sync/pat"],
   ["DELETE", "/knowledge-sync/pat"],
   ["POST", "/system/upload-workspace"],
+];
+const ANY_USER = [
+  ["PUT", "/knowledge-sync/passphrase"],
   ["DELETE", "/system/workspace-vectors/abc"],
 ];
 const denied = (s) => s === 401 || s === 403;
@@ -140,6 +144,12 @@ describe("multi-user mode", () => {
   });
   test.each(ADMIN_ONLY)("admin passes gate %s %s", async (m, p) => {
     expect(denied(await call(m, p, "1"))).toBe(false);
+  });
+  test.each(ANY_USER)("default user passes %s %s", async (m, p) => {
+    expect(denied(await call(m, p, "3", { passphrase: "x" }))).toBe(false);
+  });
+  test.each(ANY_USER)("no token denied %s %s", async (m, p) => {
+    expect(await call(m, p)).toBe(401);
   });
   test("manager denied admin-only routes", async () => {
     expect(denied(await call("PUT", "/knowledge-sync/pat", "2"))).toBe(true);
@@ -166,13 +176,12 @@ describe("multi-user mode", () => {
 
 describe("single-user mode", () => {
   beforeAll(() => (mockMulti = false));
-  test.each([
-    ...ADMIN_ONLY,
-    ["POST", "/system/sync-workspace"],
-    ["PUT", "/knowledge-sync/passphrase"],
-  ])("reaches handler %s %s", async (m, p) => {
-    expect(denied(await call(m, p))).toBe(false);
-  });
+  test.each([...ADMIN_ONLY, ...ANY_USER, ["POST", "/system/sync-workspace"]])(
+    "reaches handler %s %s",
+    async (m, p) => {
+      expect(denied(await call(m, p))).toBe(false);
+    }
+  );
 });
 
 describe("gate wiring", () => {
@@ -188,25 +197,22 @@ describe("gate wiring", () => {
     expect(typeof KS_ADMIN_GATE[1]).toBe("function");
     expect(KS_LEGACY_SYNC_GATE[0]).toBe(validatedRequest);
   });
-  test("legacy publish and wipe use the exact KS_ADMIN_GATE", () => {
+  test("legacy publish uses KS_ADMIN_GATE, wipe uses KS_USER_GATE", () => {
     const app = express.Router();
     systemEndpoints(app);
-    for (const [path, method] of [
-      ["/system/upload-workspace", "post"],
-      ["/system/workspace-vectors/:slug", "delete"],
-    ]) {
-      const h = handlesOf(app, path, method);
-      expect(h).toContain(KS_ADMIN_GATE[0]);
-      expect(h).toContain(KS_ADMIN_GATE[1]);
-    }
+    const up = handlesOf(app, "/system/upload-workspace", "post");
+    expect(up).toContain(KS_ADMIN_GATE[0]);
+    expect(up).toContain(KS_ADMIN_GATE[1]);
+    const wipe = handlesOf(app, "/system/workspace-vectors/:slug", "delete");
+    expect(wipe).toContain(KS_USER_GATE[0]);
+    expect(wipe).toContain(KS_USER_GATE[1]);
     const sync = handlesOf(app, "/system/sync-workspace", "post");
     expect(sync).toContain(KS_LEGACY_SYNC_GATE[1]);
   });
   test("every sensitive /knowledge-sync route uses KS_ADMIN_GATE", () => {
     const router = express.Router();
     knowledgeSyncEndpoints(router);
-    const sensitive =
-      /\/knowledge-sync\/(pat|publish|delete-version|wipe|versions)/;
+    const sensitive = /\/knowledge-sync\/(pat|publish|delete-version|versions)/;
     let checked = 0;
     for (const l of router.stack) {
       if (!l.route || !sensitive.test(l.route.path)) continue;

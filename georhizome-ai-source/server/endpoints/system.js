@@ -61,7 +61,7 @@ const { TemporaryAuthToken } = require("../models/temporaryAuthToken");
 const { SystemPromptVariables } = require("../models/systemPromptVariables");
 const { VALID_COMMANDS } = require("../utils/chats");
 const { AgentSkillWhitelist } = require("../models/agentSkillWhitelist");
-const { KS_ADMIN_GATE } = require("./knowledgeSync");
+const { KS_ADMIN_GATE, KS_USER_GATE } = require("./knowledgeSync");
 const ksSecrets = require("../utils/knowledgeSync/secrets");
 
 // Interim gate: legacy sync-workspace performs a destructive overwrite.
@@ -460,7 +460,8 @@ function systemEndpoints(app) {
   // =========================================================================
   app.delete(
     "/system/workspace-vectors/:slug",
-    KS_ADMIN_GATE,
+    // Any authenticated user may wipe a workspace's vectors (user decision).
+    KS_USER_GATE,
     async (request, response) => {
       try {
         const { slug } = request.params;

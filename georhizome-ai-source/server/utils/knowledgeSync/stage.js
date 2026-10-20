@@ -186,7 +186,7 @@ function previewDir(previewId, cfg) {
   return assertWithin(staging, path.join(staging, previewId));
 }
 
-async function loadStaged(previewId, { config } = {}) {
+async function loadStaged(previewId, { config, allowExpired = false } = {}) {
   const cfg = config || getKnowledgeSyncConfig();
   const dir = previewDir(previewId, cfg);
   let meta;
@@ -198,7 +198,10 @@ async function loadStaged(previewId, { config } = {}) {
     throw err("KS_E_PREVIEW_INVALID", "load");
   }
   const age = Date.now() - Date.parse(meta && meta.createdAt);
-  if (!Number.isFinite(age) || age > cfg.preview_ttl_minutes * 60000)
+  if (
+    !allowExpired &&
+    (!Number.isFinite(age) || age > cfg.preview_ttl_minutes * 60000)
+  )
     throw err("KS_E_PREVIEW_INVALID", "load");
   const x = path.join(dir, "x");
   try {
@@ -234,8 +237,16 @@ function releasePreview(previewId) {
   claimed.delete(previewId);
 }
 
-async function discardStaged(previewId, { config } = {}) {
+/**
+ * CR-02: the preview dir doubles as the import journal dir. Refuse while a
+ * confirm holds the claim (unless the caller is that confirm) or while an
+ * import journal exists (crash recovery owns the directory then).
+ */
+async function discardStaged(previewId, { config, owned = false } = {}) {
   const dir = previewDir(previewId, config || getKnowledgeSyncConfig());
+  if (!owned && claimed.has(previewId)) throw err("KS_E_BUSY", "discard");
+  if (await require("./journal").readJournal(previewId))
+    throw err("KS_E_BUSY", "discard");
   await fs.promises.rm(dir, { recursive: true, force: true });
 }
 

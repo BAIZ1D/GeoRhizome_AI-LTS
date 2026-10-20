@@ -278,3 +278,35 @@ test("loadStaged: bad id, missing, expired", async () => {
   );
   await stage.discardStaged(s.jobId, { config });
 });
+
+test("CR-02: discard refused while claimed or journaled; expired preview loadable for discard", async () => {
+  const journalLib = require("../../../utils/knowledgeSync/journal");
+  const s = await stage.stageArchive({
+    archiveName: path.basename(archivePath),
+    passphrase: PW,
+    config,
+  });
+  fs.writeFileSync(
+    path.join(s.dir, "preview.json"),
+    JSON.stringify({
+      createdAt: new Date(Date.now() - 2 * 3600e3).toISOString(),
+    })
+  );
+  const exp = await stage.loadStaged(s.jobId, { config, allowExpired: true });
+  expect(exp.jobId).toBe(s.jobId);
+
+  stage.claimPreview(s.jobId);
+  expect(await code(stage.discardStaged(s.jobId, { config }))).toBe(
+    "KS_E_BUSY"
+  );
+  expect(fs.existsSync(s.dir)).toBe(true);
+  stage.releasePreview(s.jobId);
+
+  await journalLib.createJournal(s.jobId, { kind: "import", slug: "ws1" });
+  expect(await code(stage.discardStaged(s.jobId, { config }))).toBe(
+    "KS_E_BUSY"
+  );
+  expect(fs.existsSync(path.join(s.dir, "journal.json"))).toBe(true);
+  await journalLib.removeJournalDir(s.jobId);
+  expect(leftovers()).toEqual([]);
+});

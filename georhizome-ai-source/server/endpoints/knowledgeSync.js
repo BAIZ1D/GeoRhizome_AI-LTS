@@ -176,7 +176,8 @@ function knowledgeSyncEndpoints(app) {
     async (request, response) => {
       try {
         const previewId = (reqBody(request) || {}).previewId;
-        const staged = await loadStaged(previewId);
+        // Expired previews must still be discardable (CR-02).
+        const staged = await loadStaged(previewId, { allowExpired: true });
         const owner = staged.meta && staged.meta.ownerUserId;
         const uid = response.locals.user?.id ?? null;
         if (owner !== null && owner !== undefined && owner !== uid)

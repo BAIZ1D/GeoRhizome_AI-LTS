@@ -135,7 +135,7 @@ async function confirmImportClaimed({
     if (!(e instanceof swap.CrashSignal)) await cleanupCreated();
     throw e;
   }
-  await discardStaged(previewId, { config: cfg }).catch(() => {});
+  await discardStaged(previewId, { config: cfg, owned: true }).catch(() => {});
   safeLog("info", "import complete", {
     slug,
     versionId: staged.manifest.versionId,

@@ -2,6 +2,17 @@ const markerLabel = (slug) => "ks_synced_" + slug;
 const commitTokenLabel = (jobId) => "ks_commit_" + jobId;
 const exportCounterLabel = (slug) => "ks_export_ver_" + slug;
 
+const jobLabel = (slug) => "ks_job_" + slug;
+const JOB_FIELDS = [
+  "jobId",
+  "userId",
+  "slug",
+  "kind",
+  "state",
+  "phase",
+  "updatedAt",
+];
+
 const db = () => require("../prisma");
 
 async function readMarker(slug, client) {
@@ -80,7 +91,54 @@ async function commitExportVersion(slug, n) {
   });
 }
 
+/** Persists only the whitelisted job fields; anything else is stripped. */
+async function writeJobBreadcrumb(slug, rec) {
+  const clean = {};
+  for (const k of JOB_FIELDS)
+    if (rec && rec[k] !== undefined) clean[k] = rec[k];
+  clean.slug = slug;
+  clean.updatedAt = clean.updatedAt || new Date().toISOString();
+  const label = jobLabel(slug);
+  const value = JSON.stringify(clean);
+  await db().system_settings.upsert({
+    where: { label },
+    update: { value },
+    create: { label, value },
+  });
+  return clean;
+}
+
+function parseJob(row) {
+  if (!row || !row.value) return null;
+  try {
+    const v = JSON.parse(row.value);
+    if (!v || typeof v !== "object") return null;
+    const out = {};
+    for (const k of JOB_FIELDS) if (v[k] !== undefined) out[k] = v[k];
+    return out;
+  } catch {
+    return null;
+  }
+}
+
+async function readJobBreadcrumb(slug) {
+  return parseJob(
+    await db().system_settings.findFirst({ where: { label: jobLabel(slug) } })
+  );
+}
+
+async function listJobBreadcrumbs() {
+  const rows = await db().system_settings.findMany({
+    where: { label: { startsWith: "ks_job_" } },
+  });
+  return rows.map(parseJob).filter(Boolean);
+}
+
 module.exports = {
+  jobLabel,
+  writeJobBreadcrumb,
+  readJobBreadcrumb,
+  listJobBreadcrumbs,
   markerLabel,
   exportCounterLabel,
   commitTokenLabel,

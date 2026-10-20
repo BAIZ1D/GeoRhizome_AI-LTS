@@ -52,15 +52,31 @@ test("release body", () => {
 });
 test("catalog", () => {
   expect(CATALOG_ASSET_NAME).toBe("catalog.bin");
-  const e = (id) => ({ name: "n", slug: "s", randomId: id, latestVersion: 1 });
+  const e = (id) => ({
+    name: "n",
+    slug: "s",
+    randomId: id,
+    latestVersion: 1,
+    maxVersion: 1,
+    versions: [
+      {
+        version: 1,
+        tag: `ks-${id}-v1`,
+        parts: 1,
+        sizeBytes: 1,
+        docCount: 1,
+        publishedAt: "2026-01-01T00:00:00.000Z",
+      },
+    ],
+  });
   expect(buildCatalog([e("7f3a9c2e")]).entries).toHaveLength(1);
   expect(() =>
     validateCatalog({
-      formatVersion: 1,
+      formatVersion: 2,
       entries: [e("7f3a9c2e"), e("7f3a9c2e")],
     })
   ).toThrow();
   expect(() =>
-    validateCatalog({ formatVersion: 1, entries: [e("ZZ")] })
+    validateCatalog({ formatVersion: 2, entries: [e("ZZ")] })
   ).toThrow();
 });

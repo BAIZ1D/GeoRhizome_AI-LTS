@@ -3,6 +3,8 @@ const { MANIFEST_FORMAT_VERSION } = require("./manifest");
 
 const RELEASE_BODY =
   "Encrypted GeoRhizome knowledge archive. Not usable without the team passphrase.";
+const INDEX_ASSET_NAME = "index.json";
+const PREVIEW_ASSET_NAME = "preview.bin";
 const HEX64 = /^[0-9a-f]{64}$/;
 const PART_RE = /^part-\d{4}\.bin$/;
 
@@ -76,4 +78,23 @@ function buildPublicIndex(manifest, parts) {
   return validatePublicIndex(idx);
 }
 
-module.exports = { buildPublicIndex, validatePublicIndex, RELEASE_BODY };
+function validatePreviewPayload(p) {
+  exactKeys(p, ["manifest", "docs"], "preview");
+  if (!isObj(p.manifest)) throw bad("preview");
+  if (!Array.isArray(p.docs)) throw bad("preview");
+  for (const d of p.docs) {
+    exactKeys(d, ["docId", "filename", "docpath"], "preview");
+    for (const k of ["docId", "filename", "docpath"])
+      if (typeof d[k] !== "string" || !d[k]) throw bad("preview");
+  }
+  return Object.freeze(p);
+}
+
+module.exports = {
+  buildPublicIndex,
+  validatePublicIndex,
+  validatePreviewPayload,
+  INDEX_ASSET_NAME,
+  PREVIEW_ASSET_NAME,
+  RELEASE_BODY,
+};

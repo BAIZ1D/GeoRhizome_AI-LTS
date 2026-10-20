@@ -32,6 +32,18 @@ const DEFAULTS = Object.freeze({
   max_extract_bytes: 4294967296,
   /** Max archive entries. */
   max_entries: 200000,
+  /** Free-space multiple of archive size required before import/export. */
+  disk_preflight_factor: 3,
+  /** Backup directory name under STORAGE_DIR. */
+  backup_dir_name: "knowledge-sync-backup",
+  /** Orphan staging age (hours) before cleanup. */
+  stale_staging_hours: 24,
+  /** Import preview validity (minutes). */
+  preview_ttl_minutes: 60,
+  /** Prisma interactive transaction timeout (ms). */
+  import_tx_timeout_ms: 60000,
+  /** Prisma transaction max wait (ms). */
+  import_tx_max_wait_ms: 10000,
 });
 
 function candidatePaths() {
@@ -42,6 +54,7 @@ function candidatePaths() {
 }
 
 const posInt = (v) => Number.isSafeInteger(v) && v > 0;
+const posNum = (v) => typeof v === "number" && Number.isFinite(v) && v > 0;
 const str = (v) => typeof v === "string" && v.trim().length > 0;
 
 function pick(src, key, def, ok) {
@@ -106,6 +119,37 @@ function getKnowledgeSyncConfig({ configPath } = {}) {
       posInt
     ),
     max_entries: pick(ks, "max_entries", D.max_entries, posInt),
+    disk_preflight_factor: pick(
+      ks,
+      "disk_preflight_factor",
+      D.disk_preflight_factor,
+      posNum
+    ),
+    backup_dir_name: pick(ks, "backup_dir_name", D.backup_dir_name, str),
+    stale_staging_hours: pick(
+      ks,
+      "stale_staging_hours",
+      D.stale_staging_hours,
+      posInt
+    ),
+    preview_ttl_minutes: pick(
+      ks,
+      "preview_ttl_minutes",
+      D.preview_ttl_minutes,
+      posInt
+    ),
+    import_tx_timeout_ms: pick(
+      ks,
+      "import_tx_timeout_ms",
+      D.import_tx_timeout_ms,
+      posInt
+    ),
+    import_tx_max_wait_ms: pick(
+      ks,
+      "import_tx_max_wait_ms",
+      D.import_tx_max_wait_ms,
+      posInt
+    ),
   };
   cfg.allowedScryptParams = [{ N: scrypt.N, r: scrypt.r, p: scrypt.p }];
   cfg.allowedChunkSizes = [cfg.chunk_size_bytes];

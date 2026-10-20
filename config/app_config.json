@@ -89,6 +89,12 @@
     "catalog_release_tag": "ks-catalog-0001",
     "staging_dir_name": "knowledge-sync-staging",
     "max_extract_bytes": 4294967296,
-    "max_entries": 200000
+    "max_entries": 200000,
+    "disk_preflight_factor": 3,
+    "backup_dir_name": "knowledge-sync-backup",
+    "stale_staging_hours": 24,
+    "preview_ttl_minutes": 60,
+    "import_tx_timeout_ms": 60000,
+    "import_tx_max_wait_ms": 10000
   }
 }

@@ -1,3 +1,4 @@
+const fs = require("fs");
 const path = require("path");
 const { getKnowledgeSyncConfig } = require("./config");
 const { KnowledgeSyncError } = require("./errors");
@@ -17,11 +18,55 @@ function stagingRoot({ pathImpl = path, env = process.env, config } = {}) {
   const cfg = config || getKnowledgeSyncConfig();
   return pathImpl.join(storageBase(env, pathImpl), cfg.staging_dir_name);
 }
+// Follows LanceDb.uri: STORAGE_DIR whenever set, regardless of NODE_ENV.
 function lancedbRoot({ pathImpl = path, env = process.env } = {}) {
-  return pathImpl.resolve(storageBase(env, pathImpl), "lancedb");
+  const base = env.STORAGE_DIR
+    ? env.STORAGE_DIR
+    : pathImpl.resolve(__dirname, "../../storage");
+  return pathImpl.resolve(base, "lancedb");
 }
+// Follows utils/files documentsPath: dev -> __dirname storage, else STORAGE_DIR.
 function documentsRoot({ pathImpl = path, env = process.env } = {}) {
-  return pathImpl.resolve(storageBase(env, pathImpl), "documents");
+  if (env.NODE_ENV === "development" || !env.STORAGE_DIR)
+    return pathImpl.resolve(__dirname, "../../storage/documents");
+  return pathImpl.resolve(env.STORAGE_DIR, "documents");
+}
+function backupRoot(slug, { pathImpl = path, env = process.env, config } = {}) {
+  assertSafeSlug(slug);
+  const cfg = config || getKnowledgeSyncConfig();
+  return pathImpl.join(storageBase(env, pathImpl), cfg.backup_dir_name, slug);
+}
+function exportsDir(opts = {}) {
+  return (opts.pathImpl || path).join(stagingRoot(opts), "exports");
+}
+function lanceTablePath(slug, opts = {}) {
+  assertSafeSlug(slug);
+  return (opts.pathImpl || path).join(lancedbRoot(opts), slug + ".lance");
+}
+function ksDocpathPrefix(slug) {
+  assertSafeSlug(slug);
+  return `custom-documents/ks-${slug}`;
+}
+function ksDocsDir(slug, opts = {}) {
+  return (opts.pathImpl || path).join(
+    documentsRoot(opts),
+    ksDocpathPrefix(slug)
+  );
+}
+
+function nearestExisting(p) {
+  let cur = path.resolve(p);
+  while (!fs.existsSync(cur)) {
+    const up = path.dirname(cur);
+    if (up === cur) break;
+    cur = up;
+  }
+  return cur;
+}
+function assertSameFilesystem(...paths) {
+  const devs = paths.map((p) => fs.statSync(nearestExisting(p)).dev);
+  if (devs.some((d) => d !== devs[0]))
+    throw new KnowledgeSyncError("KS_E_UNSAFE_ENTRY", { phase: "filesystem" });
 }
 
 function assertSafeSlug(slug) {
@@ -49,6 +94,13 @@ module.exports = {
   stagingRoot,
   lancedbRoot,
   documentsRoot,
+  storageBase,
+  backupRoot,
+  exportsDir,
+  lanceTablePath,
+  ksDocsDir,
+  ksDocpathPrefix,
+  assertSameFilesystem,
   assertSafeSlug,
   assertWithin,
 };

@@ -223,4 +223,23 @@ describe("gate wiring", () => {
     }
     expect(checked).toBeGreaterThanOrEqual(2);
   });
+  test("Phase 6 routes: export admin gate, others user gate", () => {
+    const router = express.Router();
+    knowledgeSyncEndpoints(router);
+    const h = (p) => handlesOf(router, p, "post");
+    const exp = h("/knowledge-sync/export/:slug");
+    expect(exp).toContain(KS_ADMIN_GATE[0]);
+    expect(exp).toContain(KS_ADMIN_GATE[1]);
+    for (const p of [
+      "/knowledge-sync/import/preview",
+      "/knowledge-sync/import/confirm",
+      "/knowledge-sync/import/discard",
+      "/knowledge-sync/rollback/:slug",
+    ]) {
+      const hs = h(p);
+      expect(hs).toContain(KS_USER_GATE[0]);
+      expect(hs).toContain(KS_USER_GATE[1]);
+      expect(hs).not.toContain(KS_ADMIN_GATE[1]);
+    }
+  });
 });

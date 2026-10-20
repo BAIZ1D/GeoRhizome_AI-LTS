@@ -43,6 +43,7 @@ async function rollbackWorkspace({ slug, userId: _userId, config } = {}) {
       ? await readJson(path.join(bk, "marker.json"))
       : null;
     const jobId = crypto.randomUUID();
+    await fs.promises.mkdir(journalLib.jobDir(jobId), { recursive: true });
     const lance = path.join(bk, "lance");
     const docs = path.join(bk, "docs");
     await swap.runSwap(

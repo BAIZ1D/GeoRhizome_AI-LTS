@@ -95,7 +95,7 @@ async function verifyContents(x, manifest) {
     throw err("KS_E_MANIFEST", "verify");
 }
 
-async function readRows(x, manifest) {
+async function readRows(x, _manifest) {
   let rows;
   try {
     rows = JSON.parse(

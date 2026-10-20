@@ -63,6 +63,11 @@ const { VALID_COMMANDS } = require("../utils/chats");
 const { AgentSkillWhitelist } = require("../models/agentSkillWhitelist");
 const { KS_ADMIN_GATE, KS_USER_GATE } = require("./knowledgeSync");
 const ksSecrets = require("../utils/knowledgeSync/secrets");
+const locks = require("../utils/knowledgeSync/locks");
+const {
+  isKnowledgeSyncError,
+  toClientError,
+} = require("../utils/knowledgeSync/errors");
 
 // Interim gate: legacy sync-workspace performs a destructive overwrite.
 const KS_LEGACY_SYNC_GATE = [
@@ -476,41 +481,45 @@ function systemEndpoints(app) {
         if (!workspace)
           return response.status(404).json({ error: "Workspace not found" });
 
-        // 2. Get Document IDs to wipe vectors
-        const workspaceDocs = await prisma.workspace_documents.findMany({
-          where: { workspaceId: workspace.id },
-        });
-        const docIds = workspaceDocs.map((wd) => wd.docId);
-
-        // 3. Clear SQLite Mappings
-        if (docIds.length > 0) {
-          await prisma.document_vectors.deleteMany({
-            where: { docId: { in: docIds } },
+        await locks.withWorkspaceLock(slug, "wipe", async () => {
+          // 2. Get Document IDs to wipe vectors
+          const workspaceDocs = await prisma.workspace_documents.findMany({
+            where: { workspaceId: workspace.id },
           });
-        }
-        await prisma.workspace_documents.deleteMany({
-          where: { workspaceId: workspace.id },
-        });
+          const docIds = workspaceDocs.map((wd) => wd.docId);
 
-        // 4. Wipe physical LanceDB directory
-        const fs = require("fs");
-        const path = require("path");
-        const lancedbDest = path.join(
-          __dirname,
-          "..",
-          "storage",
-          "lancedb",
-          `${slug}.lance`
-        );
-        if (fs.existsSync(lancedbDest)) {
-          fs.rmSync(lancedbDest, { recursive: true, force: true });
-        }
+          // 3. Clear SQLite Mappings
+          if (docIds.length > 0) {
+            await prisma.document_vectors.deleteMany({
+              where: { docId: { in: docIds } },
+            });
+          }
+          await prisma.workspace_documents.deleteMany({
+            where: { workspaceId: workspace.id },
+          });
+
+          // 4. Wipe physical LanceDB directory
+          const fs = require("fs");
+          const path = require("path");
+          const lancedbDest = path.join(
+            __dirname,
+            "..",
+            "storage",
+            "lancedb",
+            `${slug}.lance`
+          );
+          if (fs.existsSync(lancedbDest)) {
+            fs.rmSync(lancedbDest, { recursive: true, force: true });
+          }
+        });
 
         response.status(200).json({
           success: true,
           message: "Workspace vectors purged successfully.",
         });
       } catch (e) {
+        if (isKnowledgeSyncError(e))
+          return response.status(409).json(toClientError(e));
         console.error("Wipe Vectors Error:", e);
         response.status(500).json({ error: e.message });
       }

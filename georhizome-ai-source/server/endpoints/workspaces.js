@@ -9,6 +9,11 @@ const {
 const { normalizePath, isWithin } = require("../utils/files");
 const { Workspace } = require("../models/workspace");
 const { Document } = require("../models/documents");
+const locks = require("../utils/knowledgeSync/locks");
+const {
+  isKnowledgeSyncError,
+  toClientError,
+} = require("../utils/knowledgeSync/errors");
 const { DocumentVectors } = require("../models/vectors");
 const { WorkspaceChats } = require("../models/workspaceChats");
 const { getVectorDbClass } = require("../utils/helpers");
@@ -277,6 +282,8 @@ function workspaceEndpoints(app) {
               : null,
         });
       } catch (e) {
+        if (isKnowledgeSyncError(e))
+          return response.status(409).json(toClientError(e));
         console.error(e.message, e);
         response.sendStatus(500).end();
       }
@@ -300,26 +307,30 @@ function workspaceEndpoints(app) {
           return;
         }
 
-        await WorkspaceChats.delete({ workspaceId: Number(workspace.id) });
-        await DocumentVectors.deleteForWorkspace(workspace.id);
-        await Document.delete({ workspaceId: Number(workspace.id) });
-        await Workspace.delete({ id: Number(workspace.id) });
+        await locks.withWorkspaceLock(slug, "delete", async () => {
+          await WorkspaceChats.delete({ workspaceId: Number(workspace.id) });
+          await DocumentVectors.deleteForWorkspace(workspace.id);
+          await Document.delete({ workspaceId: Number(workspace.id) });
+          await Workspace.delete({ id: Number(workspace.id) });
 
-        await EventLogs.logEvent(
-          "workspace_deleted",
-          {
-            workspaceName: workspace?.name || "Unknown Workspace",
-          },
-          response.locals?.user?.id
-        );
+          await EventLogs.logEvent(
+            "workspace_deleted",
+            {
+              workspaceName: workspace?.name || "Unknown Workspace",
+            },
+            response.locals?.user?.id
+          );
 
-        try {
-          await VectorDb["delete-namespace"]({ namespace: slug });
-        } catch (e) {
-          console.error(e.message);
-        }
+          try {
+            await VectorDb["delete-namespace"]({ namespace: slug });
+          } catch (e) {
+            console.error(e.message);
+          }
+        });
         response.sendStatus(200).end();
       } catch (e) {
+        if (isKnowledgeSyncError(e))
+          return response.status(409).json(toClientError(e));
         console.error(e.message, e);
         response.sendStatus(500).end();
       }
@@ -343,24 +354,28 @@ function workspaceEndpoints(app) {
           return;
         }
 
-        await DocumentVectors.deleteForWorkspace(workspace.id);
-        await Document.delete({ workspaceId: Number(workspace.id) });
+        await locks.withWorkspaceLock(slug, "delete", async () => {
+          await DocumentVectors.deleteForWorkspace(workspace.id);
+          await Document.delete({ workspaceId: Number(workspace.id) });
 
-        await EventLogs.logEvent(
-          "workspace_vectors_reset",
-          {
-            workspaceName: workspace?.name || "Unknown Workspace",
-          },
-          response.locals?.user?.id
-        );
+          await EventLogs.logEvent(
+            "workspace_vectors_reset",
+            {
+              workspaceName: workspace?.name || "Unknown Workspace",
+            },
+            response.locals?.user?.id
+          );
 
-        try {
-          await VectorDb["delete-namespace"]({ namespace: slug });
-        } catch (e) {
-          console.error(e.message);
-        }
+          try {
+            await VectorDb["delete-namespace"]({ namespace: slug });
+          } catch (e) {
+            console.error(e.message);
+          }
+        });
         response.sendStatus(200).end();
       } catch (e) {
+        if (isKnowledgeSyncError(e))
+          return response.status(409).json(toClientError(e));
         console.error(e.message, e);
         response.sendStatus(500).end();
       }

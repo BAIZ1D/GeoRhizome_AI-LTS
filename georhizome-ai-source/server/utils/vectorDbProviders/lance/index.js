@@ -312,7 +312,7 @@ class LanceDb extends VectorDatabase {
         const schema = await collection.schema();
         const vectorField = schema.fields.find((f) => f.name === "vector");
         tableDim = vectorField?.type?.listSize || null;
-      } catch (_) {
+      } catch {
         tableDim = null;
       }
 
@@ -321,7 +321,7 @@ class LanceDb extends VectorDatabase {
         let synced = true; // fail closed if the marker cannot be read
         try {
           synced = await marker.isSynced(namespace);
-        } catch (_) {
+        } catch {
           synced = true;
         }
         if (synced)

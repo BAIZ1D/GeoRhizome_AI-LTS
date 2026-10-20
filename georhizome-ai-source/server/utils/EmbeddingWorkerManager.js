@@ -1,5 +1,6 @@
 const path = require("path");
 const { EventLogs } = require("../models/eventLogs");
+const locks = require("./knowledgeSync/locks");
 
 /** @type {Map<string, { worker: ChildProcess, jobId: string }>} */
 const runningWorkers = new Map();
@@ -89,6 +90,10 @@ function removeSSEConnection(slug, res) {
  * @param {number|null} userId
  */
 async function embedFiles(slug, files, workspaceId, userId) {
+  // Lock lifetime invariant: every acquire is paired with exactly one release,
+  // on worker exit/error or spawn failure. The add_files branch below neither
+  // acquires nor bumps the ref count: the single hold taken at spawn covers
+  // all appended batches and is released once when the worker ends.
   if (runningWorkers.has(slug)) {
     const { worker } = runningWorkers.get(slug);
     try {
@@ -99,6 +104,9 @@ async function embedFiles(slug, files, workspaceId, userId) {
     }
   }
 
+  // Throws KS_E_BUSY while an export/import holds the workspace.
+  locks.acquire(slug, "embed", null);
+
   // Clear stale event history from any previous run so new SSE
   // connections don't replay old events (including all_complete).
   eventHistory.delete(slug);
@@ -106,7 +114,21 @@ async function embedFiles(slug, files, workspaceId, userId) {
   const { BackgroundService } = require("./BackgroundWorkers");
   const bg = new BackgroundService();
   const scriptPath = path.resolve(bg.jobsRoot, "embedding-worker.js");
-  const { worker, jobId } = await bg.spawnWorker(scriptPath);
+  let spawned;
+  try {
+    spawned = await bg.spawnWorker(scriptPath);
+  } catch (err) {
+    locks.release(slug, "embed");
+    throw err;
+  }
+  const { worker, jobId } = spawned;
+
+  let lockReleased = false;
+  const releaseLock = () => {
+    if (lockReleased) return;
+    lockReleased = true;
+    locks.release(slug, "embed");
+  };
 
   runningWorkers.set(slug, { worker, jobId });
   let workerCompleted = false;
@@ -120,6 +142,7 @@ async function embedFiles(slug, files, workspaceId, userId) {
   });
 
   worker.on("exit", (code) => {
+    releaseLock();
     if (runningWorkers.get(slug)?.worker === worker) {
       runningWorkers.delete(slug);
     }
@@ -141,6 +164,7 @@ async function embedFiles(slug, files, workspaceId, userId) {
       `[EmbeddingWorkerManager] Worker error for ${slug}:`,
       err.message
     );
+    releaseLock();
     if (runningWorkers.get(slug)?.worker === worker) {
       runningWorkers.delete(slug);
     }

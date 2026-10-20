@@ -5,6 +5,7 @@ const paths = require("./paths");
 const journalLib = require("./journal");
 const marker = require("./marker");
 const swap = require("./swap");
+const locks = require("./locks");
 const { safeLog } = require("./redact");
 
 const UUID_RE =
@@ -135,6 +136,12 @@ async function recoverKnowledgeSync() {
         safeLog("error", "knowledge sync recovery failed for job", {
           code: err && err.code,
         });
+        // WR-04: fence the half-swapped slug until a later recovery succeeds.
+        try {
+          locks.acquire(journal.slug, "recovery", journal.jobId);
+        } catch {
+          // already held
+        }
       }
     }
     await sweepStale(cfg, counts);

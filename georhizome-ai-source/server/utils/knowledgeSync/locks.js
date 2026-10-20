@@ -1,6 +1,7 @@
 const { KnowledgeSyncError } = require("./errors");
 
 // In-process per-workspace lock (D-01). Crash recovery is the journal's job.
+// op "recovery" is a persistent fence on slugs whose boot recovery failed.
 const held = new Map();
 
 /** Synchronous check-and-set: no await between check and set. */
@@ -42,7 +43,10 @@ async function withWorkspaceLock(slug, op, fn, jobId = null) {
 
 function syncing(slug) {
   const cur = held.get(slug);
-  return !!cur && (cur.op === "import" || cur.op === "rollback");
+  return (
+    !!cur &&
+    (cur.op === "import" || cur.op === "rollback" || cur.op === "recovery")
+  );
 }
 
 function state(slug) {

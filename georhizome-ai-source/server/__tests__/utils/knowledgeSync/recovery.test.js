@@ -391,3 +391,26 @@ describe("explicit commit token (W3), pre-swap and target markers both null", ()
     expect(await marker.hasCommitToken(jobId)).toBe(false);
   });
 });
+
+test("WR-04: failed recovery fences the slug (syncing, other locks refused)", async () => {
+  const jobId = uuidv4();
+  await journalLib.createJournal(jobId, { kind: "import", slug: SLUG });
+  await journalLib.updateJournal(jobId, { state: "committed" });
+  const spy = jest
+    .spyOn(swap, "finishSwap")
+    .mockRejectedValue(Object.assign(new Error("x"), { code: "EXDEV" }));
+  try {
+    await recoverKnowledgeSync();
+  } finally {
+    spy.mockRestore();
+  }
+  expect(locks.syncing(SLUG)).toBe(true);
+  expect(() => locks.assertNotSyncing(SLUG)).toThrow(
+    expect.objectContaining({ code: "KS_E_SYNCING" })
+  );
+  expect(() => locks.acquire(SLUG, "import")).toThrow(
+    expect.objectContaining({ code: "KS_E_BUSY" })
+  );
+  locks._resetForTests();
+  await journalLib.removeJournalDir(jobId);
+});

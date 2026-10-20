@@ -146,7 +146,11 @@ class LanceDb extends VectorDatabase {
         .distanceType("cosine")
         .limit(wideCount)
         .toArray();
+      // WR-05: a sync may have started while we read; never return or
+      // misreport results from a table that was being swapped.
+      locks.assertNotSyncing(namespace);
     } catch (err) {
+      locks.assertNotSyncing(namespace);
       if (
         err.message &&
         (err.message.includes("No vector column found") ||
@@ -239,7 +243,11 @@ class LanceDb extends VectorDatabase {
         .distanceType("cosine")
         .limit(topN)
         .toArray();
+      // WR-05: a sync may have started while we read; never return or
+      // misreport results from a table that was being swapped.
+      locks.assertNotSyncing(namespace);
     } catch (err) {
+      locks.assertNotSyncing(namespace);
       if (
         err.message &&
         (err.message.includes("No vector column found") ||

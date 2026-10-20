@@ -142,3 +142,48 @@ describe("LanceDb.rerankedSimilarityResponse (Stage 2 wiring)", () => {
     });
   });
 });
+
+describe("WR-05: sync starting mid-read is detected after the read", () => {
+  const locks = require("../../../../utils/knowledgeSync/locks");
+  afterEach(() => locks._resetForTests());
+  const racingClient = (fail = false) => ({
+    openTable: async () => ({
+      vectorSearch: () => ({
+        distanceType: () => ({
+          limit: () => ({
+            toArray: async () => {
+              locks.acquire("ws", "import");
+              if (fail) throw new Error("table dir moved");
+              return ROWS;
+            },
+          }),
+        }),
+      }),
+    }),
+  });
+  const args = (client) => ({
+    client,
+    namespace: "ws",
+    query: "q",
+    queryVector: [0.1, 0.2],
+    topN: 4,
+    similarityThreshold: 0.25,
+  });
+
+  test("similarityResponse refuses results read across a swap start", async () => {
+    await expect(
+      LanceDb.similarityResponse(args(racingClient()))
+    ).rejects.toMatchObject({ code: "KS_E_SYNCING" });
+  });
+  test("similarityResponse maps a mid-swap read error to KS_E_SYNCING", async () => {
+    await expect(
+      LanceDb.similarityResponse(args(racingClient(true)))
+    ).rejects.toMatchObject({ code: "KS_E_SYNCING" });
+  });
+  test("rerankedSimilarityResponse refuses results read across a swap start", async () => {
+    rerankerClient.loadRerankerConfig.mockReturnValue(CFG);
+    await expect(
+      LanceDb.rerankedSimilarityResponse(args(racingClient()))
+    ).rejects.toMatchObject({ code: "KS_E_SYNCING" });
+  });
+});

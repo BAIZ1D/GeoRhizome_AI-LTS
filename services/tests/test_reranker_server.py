@@ -82,7 +82,7 @@ def test_identity_batch_maxlen(srv, fake_ce):
         c.post("/rerank", json=_req())
     inst = fake_ce.instances[0]
     assert isinstance(inst.kwargs["activation_fn"], torch.nn.Identity)
-    assert inst.kwargs["max_length"] == 1024
+    assert inst.kwargs["max_length"] == 512  # shipped app_config.reranker.max_length
     assert inst.predict_calls[-1]["batch_size"] == 8
 
 

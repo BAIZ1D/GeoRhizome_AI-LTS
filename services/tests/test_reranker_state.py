@@ -174,7 +174,8 @@ def test_repo_app_config_reranker_keys():
               "model_name", "activation", "max_length", "idle_unload_minutes", "timeout_ms",
               "wide_candidate_count", "final_top_k", "min_reranker_score", "selftest_min_spearman"):
         assert k in c, k
-    assert c["activation"] == "identity" and c["max_length"] == 1024 and c["wide_candidate_count"] == 30
+    assert c["activation"] == "identity" and c["max_length"] == 512 and c["wide_candidate_count"] == 30
+    assert c["timeout_ms"] >= 20000 and c["cold_timeout_ms"] > c["timeout_ms"]
 
 
 def test_repo_active_defaults():

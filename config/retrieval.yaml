@@ -11,6 +11,6 @@ retrieval:
   min_reranker_score: -1.6
   reranker_server_url: http://host.docker.internal:8001/rerank
   reranker_enabled: true
-  timeout_ms: 12000
-  cold_timeout_ms: 20000
+  timeout_ms: 23000
+  cold_timeout_ms: 38000
   reranker_model: cl-nagoya/ruri-v3-reranker-310m

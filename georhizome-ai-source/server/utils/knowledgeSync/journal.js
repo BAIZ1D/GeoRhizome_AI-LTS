@@ -3,8 +3,7 @@ const path = require("path");
 const { KnowledgeSyncError } = require("./errors");
 const { stagingRoot, assertWithin, assertSafeSlug } = require("./paths");
 
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const { UUID_RE } = require("./util");
 const KINDS = ["import", "rollback"];
 const STATES = ["prepared", "swapping", "committed", "rolled_back"];
 const STEP_KEYS = ["S1", "S2", "S3", "S4"];

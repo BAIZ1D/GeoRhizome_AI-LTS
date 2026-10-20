@@ -1,27 +1,9 @@
 const { KnowledgeSyncError } = require("./errors");
 const { ksDocpathPrefix } = require("./paths");
 
-function safeBasename(name) {
-  if (
-    typeof name !== "string" ||
-    !name ||
-    name.includes("/") ||
-    name.includes("\\") ||
-    name.includes("\0") ||
-    name.includes("..")
-  )
-    throw new KnowledgeSyncError("KS_E_UNSAFE_ENTRY", { phase: "docpath" });
-  return name;
-}
+const util = require("./util");
 
-function isSafeName(name) {
-  try {
-    safeBasename(name);
-    return true;
-  } catch {
-    return false;
-  }
-}
+const safeBasename = (name) => util.safeBasename(name, "docpath");
 
 /** Pure: archive rows -> local rows (docpath rebuilt from LOCAL slug). */
 function buildImportRows({ rows, localSlug, workspaceId, existingFlags }) {
@@ -38,7 +20,7 @@ function buildImportRows({ rows, localSlug, workspaceId, existingFlags }) {
     return {
       docId: d.docId,
       // Prefer the original display name; `file` may carry a dedupe prefix.
-      filename: isSafeName(d.filename) ? d.filename : file,
+      filename: util.isSafeBasename(d.filename) ? d.filename : file,
       docpath: `${prefix}/${file}`,
       workspaceId,
       metadata: d.metadata == null ? null : JSON.stringify(d.metadata),

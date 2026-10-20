@@ -1,6 +1,5 @@
 const fs = require("fs");
 const path = require("path");
-const crypto = require("crypto");
 const { v4: uuidv4 } = require("uuid");
 const { KnowledgeSyncError } = require("./errors");
 const { getKnowledgeSyncConfig } = require("./config");
@@ -15,44 +14,10 @@ const { computeVectorIdHash } = require("./vectorIdHash");
 const { validateManifest } = require("./manifest");
 const { extractArchive } = require("./archive");
 const { decryptFile } = require("./crypto");
+const { UUID_RE, isSafeBasename, sha256File, listFiles } = require("./util");
 
 const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const err = (code, phase) => new KnowledgeSyncError(code, { phase });
-
-function safeBase(n) {
-  return (
-    typeof n === "string" &&
-    n &&
-    !n.includes("/") &&
-    !n.includes("\\") &&
-    !n.includes("\0") &&
-    !n.includes("..")
-  );
-}
-
-async function sha256File(file) {
-  const h = crypto.createHash("sha256");
-  await new Promise((resolve, reject) => {
-    fs.createReadStream(file)
-      .on("data", (c) => h.update(c))
-      .on("error", reject)
-      .on("end", resolve);
-  });
-  return h.digest("hex");
-}
-
-async function listFiles(root, rel = "") {
-  const out = [];
-  for (const ent of await fs.promises.readdir(path.join(root, rel))) {
-    const r = rel ? `${rel}/${ent}` : ent;
-    const st = await fs.promises.lstat(path.join(root, r));
-    if (st.isDirectory()) out.push(...(await listFiles(root, r)));
-    else out.push(r);
-  }
-  return out;
-}
 
 async function verifyContents(x, manifest) {
   const listed = new Map(manifest.files.map((f) => [f.path, f]));
@@ -107,7 +72,7 @@ async function readRows(x, manifest) {
   if (!rows || !Array.isArray(rows.docs) || !Array.isArray(rows.vectors))
     throw err("KS_E_MANIFEST", "rows");
   for (const d of rows.docs) {
-    if (!d || typeof d.docId !== "string" || !safeBase(d.file))
+    if (!d || typeof d.docId !== "string" || !isSafeBasename(d.file))
       throw err("KS_E_UNSAFE_ENTRY", "rows");
     if (!fs.existsSync(path.join(x, "documents", d.file)))
       throw err("KS_E_MANIFEST", "rows");

@@ -1,6 +1,5 @@
 const fs = require("fs");
 const path = require("path");
-const crypto = require("crypto");
 const { v4: uuidv4 } = require("uuid");
 const { KnowledgeSyncError } = require("./errors");
 const { getKnowledgeSyncConfig, candidatePaths } = require("./config");
@@ -23,6 +22,7 @@ const locks = require("./locks");
 const marker = require("./marker");
 const secrets = require("./secrets");
 const workspaceId = require("./workspaceId");
+const { safeBasename, sha256File, listFiles } = require("./util");
 
 const err = (code, phase) => new KnowledgeSyncError(code, { phase });
 const ROWS_ESTIMATE_BYTES = 1048576;
@@ -97,19 +97,6 @@ async function assertNoSymlinks(dir) {
   }
 }
 
-function safeBasename(name) {
-  if (
-    typeof name !== "string" ||
-    !name ||
-    name.includes("/") ||
-    name.includes("\\") ||
-    name.includes("\0") ||
-    name.includes("..")
-  )
-    throw err("KS_E_UNSAFE_ENTRY", "export");
-  return name;
-}
-
 async function loadDocs(workspace) {
   const docs = await prisma().workspace_documents.findMany({
     where: { workspaceId: workspace.id },
@@ -130,28 +117,6 @@ function resolveDocFile(doc) {
   } catch {
     throw err("KS_E_UNSAFE_ENTRY", "export");
   }
-}
-
-async function sha256File(file) {
-  const h = crypto.createHash("sha256");
-  await new Promise((resolve, reject) => {
-    fs.createReadStream(file)
-      .on("data", (c) => h.update(c))
-      .on("error", reject)
-      .on("end", resolve);
-  });
-  return h.digest("hex");
-}
-
-async function listFiles(root, rel = "") {
-  const out = [];
-  for (const ent of await fs.promises.readdir(path.join(root, rel))) {
-    const r = rel ? `${rel}/${ent}` : ent;
-    const st = await fs.promises.lstat(path.join(root, r));
-    if (st.isDirectory()) out.push(...(await listFiles(root, r)));
-    else out.push(r);
-  }
-  return out;
 }
 
 async function exportWorkspace({ slug, passphrase, config } = {}) {
@@ -221,9 +186,9 @@ async function exportWorkspace({ slug, passphrase, config } = {}) {
         } catch {
           throw err("KS_E_EXPORT_INCOMPLETE", "export");
         }
-        let base = safeBasename(path.basename(src));
+        let base = safeBasename(path.basename(src), "export");
         if (used.has(base)) base = `${String(d.docId).slice(0, 8)}-${base}`;
-        safeBasename(base);
+        safeBasename(base, "export");
         used.add(base);
         await fs.promises.writeFile(
           path.join(work, "documents", base),

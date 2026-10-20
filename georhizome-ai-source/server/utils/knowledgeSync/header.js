@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const { KnowledgeSyncError } = require("./errors");
 const { getKnowledgeSyncConfig } = require("./config");
 
@@ -8,8 +9,15 @@ const KDF_SCRYPT = 1;
 const SALT_LEN = 16;
 const NONCE_PREFIX_LEN = 8;
 const KEYCHECK_LEN = 16;
-// magic4 ver1 kdf1 N4 r1 p1 salt16 chunk4 noncePrefix8 keycheck16
-const HEADER_LEN = 56;
+// magic4 ver1 kdf1 N4 r1 p1 salt16 chunk4 noncePrefix8 keycheck16 check8
+const FIELDS_LEN = 56;
+const CHECKSUM_LEN = 8;
+const HEADER_LEN = FIELDS_LEN + CHECKSUM_LEN;
+
+// Unkeyed checksum: a flipped salt/keycheck byte must read as damage
+// (KS_E_AUTH_TAG), not as a wrong passphrase.
+const checksum = (fields) =>
+  crypto.createHash("sha256").update(fields).digest().subarray(0, CHECKSUM_LEN);
 
 const err = (code, phase = "header") => new KnowledgeSyncError(code, { phase });
 
@@ -48,6 +56,7 @@ function writeHeader({
   noncePrefix.copy(b, o);
   o += NONCE_PREFIX_LEN;
   keyCheck.copy(b, o);
+  checksum(b.subarray(0, FIELDS_LEN)).copy(b, FIELDS_LEN);
   return b;
 }
 
@@ -63,6 +72,13 @@ function readHeader(buf, { kind = "archive", config } = {}) {
   if (buf.toString("ascii", 0, 4) !== expected) throw err("KS_E_MANIFEST");
   if (buf.readUInt8(4) !== FORMAT_VERSION || buf.readUInt8(5) !== KDF_SCRYPT)
     throw err("KS_E_PARAMS");
+  if (
+    !crypto.timingSafeEqual(
+      checksum(buf.subarray(0, FIELDS_LEN)),
+      buf.subarray(FIELDS_LEN, HEADER_LEN)
+    )
+  )
+    throw err("KS_E_AUTH_TAG");
   const N = buf.readUInt32BE(6);
   const r = buf.readUInt8(10);
   const p = buf.readUInt8(11);

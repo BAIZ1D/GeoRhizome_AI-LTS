@@ -29,16 +29,27 @@ const code = (fn) => {
 };
 
 describe("header", () => {
-  test("is 56 bytes and round-trips", () => {
+  test("is 64 bytes (56 fields + 8 checksum) and round-trips", () => {
     const b = writeHeader(base());
     expect(b.length).toBe(HEADER_LEN);
-    expect(HEADER_LEN).toBe(56);
+    expect(HEADER_LEN).toBe(64);
     const h = readHeader(b, { config: cfg });
     expect(h.N).toBe(cfg.scrypt.N);
     expect(h.salt.equals(Buffer.alloc(16, 1))).toBe(true);
     expect(h.noncePrefix.equals(Buffer.alloc(8, 2))).toBe(true);
     expect(h.keyCheck.equals(Buffer.alloc(16, 3))).toBe(true);
     expect(h.chunkSize).toBe(cfg.chunk_size_bytes);
+  });
+  test("any flipped field or checksum byte -> KS_E_AUTH_TAG", () => {
+    // bytes 6..63: N, r, p, salt, chunk, noncePrefix, keyCheck, checksum
+    for (let i = 6; i < HEADER_LEN; i++) {
+      const b = writeHeader(base());
+      b[i] ^= 1;
+      expect([i, code(() => readHeader(b, { config: cfg }))]).toEqual([
+        i,
+        "KS_E_AUTH_TAG",
+      ]);
+    }
   });
   test("catalog magic round-trips with kind", () => {
     const b = writeHeader({ ...base(), magic: MAGIC_CATALOG });

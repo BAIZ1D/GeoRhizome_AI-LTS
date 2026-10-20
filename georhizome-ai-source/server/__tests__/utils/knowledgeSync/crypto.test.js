@@ -130,7 +130,20 @@ describe("tamper", () => {
   test("non-whitelisted header params -> KS_E_PARAMS", async () => {
     const b = Buffer.from(enc);
     b.writeUInt32BE(2 ** 20, 6);
+    // valid checksum: a well-formed archive with unsupported params
+    crypto
+      .createHash("sha256")
+      .update(b.subarray(0, 56))
+      .digest()
+      .copy(b, 56, 0, 8);
     expect(await dec(b)).toBe("KS_E_PARAMS");
+  });
+  test("flipped salt / keyCheck byte -> KS_E_AUTH_TAG, not KS_E_PASSPHRASE", async () => {
+    for (const i of [12, 27, 40, 55]) {
+      const b = Buffer.from(enc);
+      b[i] ^= 1;
+      expect([i, await dec(b)]).toEqual([i, "KS_E_AUTH_TAG"]);
+    }
   });
   test("decryptFile failure removes partial output", async () => {
     const b = Buffer.from(enc);

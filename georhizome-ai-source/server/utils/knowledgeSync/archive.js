@@ -105,7 +105,7 @@ async function extractArchive(file, stagingDir, opts = {}) {
         if (entry && !OK_TYPES.has(entry.type)) return false;
         try {
           checkEntryPath(p, allowedPrefixes);
-        } catch (_e) {
+        } catch {
           return false;
         }
         return true;

@@ -10,8 +10,8 @@ const path = require("path");
  * - wide_candidate_count: 30 Stage 1 cosine candidates
  * - final_top_k: null -> caller falls back to workspace topN
  * - min_reranker_score: -1.6 raw logits (Phase 1 calibration)
- * - timeout_ms: 12000 warm budget (Phase 1 p95 7988 ms x 1.5)
- * - cold_timeout_ms: 20000 budget when the model may need loading
+ * - timeout_ms: 23000 warm budget (8 GB loaded p95 14760 ms x 1.5)
+ * - cold_timeout_ms: 38000 budget when the model may need loading
  * - idle_unload_minutes: 15 (after this much idle time the next call is cold)
  */
 const DEFAULTS = Object.freeze({
@@ -20,8 +20,8 @@ const DEFAULTS = Object.freeze({
   wide_candidate_count: 30,
   final_top_k: null,
   min_reranker_score: -1.6,
-  timeout_ms: 12000,
-  cold_timeout_ms: 20000,
+  timeout_ms: 23000,
+  cold_timeout_ms: 38000,
   idle_unload_minutes: 15,
 });
 

@@ -67,6 +67,9 @@ describe("rerankerClient", () => {
       expect(cfg).toEqual(client.DEFAULTS);
       expect(cfg.base_url).toBe("http://host.docker.internal:8001/rerank");
       expect(JSON.stringify(client.DEFAULTS)).not.toContain("127.0.0.1");
+      // must match the shipped app_config.json (8 GB re-measure)
+      expect(client.DEFAULTS.timeout_ms).toBe(23000);
+      expect(client.DEFAULTS.cold_timeout_ms).toBe(38000);
     });
 
     it("treats only enabled === false as disabled", () => {

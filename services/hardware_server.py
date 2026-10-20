@@ -8,6 +8,7 @@ model ranking, quantization selection, 1-click downloads, 1-click onloading, and
 import sys
 import os
 import json
+import re
 import time
 import subprocess
 import yaml
@@ -82,6 +83,23 @@ def load_active_state():
 def default_generative_model() -> str:
     """Default LLM from app_config.json `llm.model_name` (fallback: model_defaults.FALLBACK_LLM)."""
     return model_defaults.default_llm(read_json(os.path.join(CONFIG_DIR, "app_config.json")))["model_name"]
+
+
+def find_repo_for_gguf(filename: str) -> Optional[str]:
+    """Find the HF repo hosting an uncatalogued GGUF filename (None if not found or offline)."""
+    stem = os.path.splitext(os.path.basename(filename))[0]
+    try:
+        import requests
+        r = requests.get(
+            "https://huggingface.co/api/models",
+            params={"search": re.split(r"[-.](?:q\d|iq\d|f16|bf16|fp16)", stem, flags=re.I)[0], "filter": "gguf", "full": "true", "sort": "downloads", "direction": -1, "limit": 50},
+            timeout=10,
+        )
+        if r.status_code == 200:
+            return model_defaults.pick_repo_for_gguf(filename, r.json())
+    except Exception as e:
+        print(f"[HardwareServer] HF repo lookup for {filename} failed: {e}")
+    return None
 
 
 def resolve_generative_target(model_id: Optional[str], quant: Optional[str]):
@@ -697,9 +715,15 @@ def serve_model(req: ServeRequest, background_tasks: BackgroundTasks):
 
         # Look up model filename in catalog (repo id or filename) before guessing
         catalog_repo, target_file = resolve_generative_target(actual_model_id, req.quant)
-        download_repo = catalog_repo or actual_model_id
+        if catalog_repo:
+            download_repo = catalog_repo
+        else:
+            # Uncatalogued: keep a given GGUF filename verbatim, never derive "<id>.Q4_K_M.gguf"
+            download_repo, target_file = model_defaults.split_gguf_id(actual_model_id)
+            if target_file and not download_repo:
+                download_repo = find_repo_for_gguf(target_file)
 
-        if not target_file:
+        if not target_file and download_repo:
             try:
                 import requests
                 r = requests.get(f"https://huggingface.co/api/models/{actual_model_id}", timeout=5)
@@ -791,7 +815,7 @@ def serve_model(req: ServeRequest, background_tasks: BackgroundTasks):
                 return
 
             # GGUF Model Download & Serving Flow (llama_cpp.server)
-            if not target_file:
+            if not target_file and download_repo:
                 try:
                     import requests
                     r = requests.get(f"https://huggingface.co/api/models/{download_repo}", timeout=10)
@@ -809,6 +833,11 @@ def serve_model(req: ServeRequest, background_tasks: BackgroundTasks):
                 target_file = f"{download_repo.split('/')[-1]}.Q4_K_M.gguf"
 
             model_path = os.path.join(models_dir, target_file)
+            if not os.path.exists(model_path) and not download_repo:
+                msg = f"No Hugging Face repo found for {target_file}; use 'owner/repo/{target_file}' or add it to model_catalog.json"
+                print(f"[HardwareServer] {msg}")
+                ACTIVE_DOWNLOAD_STATE["error"] = msg
+                return
             if os.path.exists(model_path):
                 print(f"[HardwareServer] Model file {target_file} already exists on disk. Serving directly...")
                 cmd = [sys.executable, "-m", "llama_cpp.server", "--model", model_path, "--n_ctx", "16384", "--n_gpu_layers", "-1", "--port", "8003", "--host", "127.0.0.1"]

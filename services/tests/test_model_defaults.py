@@ -89,3 +89,22 @@ def test_hardware_server_generative_fallback_and_catalog(tmp_config_dir, tmp_pat
 
     res = hs.serve_model(hs.ServeRequest(category="generative"), BackgroundTasks())
     assert res["status"] == "ok" and seen["id"] == DEF_FILE
+
+
+def test_split_gguf_id_uncatalogued():
+    # bare filename: no repo known, filename kept verbatim (never "<file>.Q4_K_M.gguf")
+    assert md.split_gguf_id("Foo-7B-Q5_K_M.gguf") == (None, "Foo-7B-Q5_K_M.gguf")
+    # repo-qualified filename
+    assert md.split_gguf_id("acme/Foo-GGUF/Foo-7B-Q5_K_M.gguf") == ("acme/Foo-GGUF", "Foo-7B-Q5_K_M.gguf")
+    # plain repo id: no filename
+    assert md.split_gguf_id("acme/Foo-GGUF") == ("acme/Foo-GGUF", None)
+    assert md.split_gguf_id(None) == (None, None)
+
+
+def test_pick_repo_for_gguf_from_search():
+    results = [
+        {"id": "x/other", "siblings": [{"rfilename": "Other.gguf"}]},
+        {"id": "acme/Foo-GGUF", "siblings": [{"rfilename": "Foo-7B-Q5_K_M.gguf"}]},
+    ]
+    assert md.pick_repo_for_gguf("Foo-7B-Q5_K_M.gguf", results) == "acme/Foo-GGUF"
+    assert md.pick_repo_for_gguf("Missing.gguf", results) is None

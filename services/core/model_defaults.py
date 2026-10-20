@@ -52,6 +52,31 @@ def resolve_generative(model_id: Optional[str], quant: Optional[str], catalog: O
     return None, None
 
 
+def split_gguf_id(model_id: Optional[str]) -> Tuple[Optional[str], Optional[str]]:
+    """Split an uncatalogued id into (repo_id, filename).
+
+    "file.gguf" -> (None, "file.gguf"); "owner/repo/file.gguf" -> ("owner/repo", "file.gguf");
+    "owner/repo" -> ("owner/repo", None).
+    """
+    if not model_id:
+        return None, None
+    if not model_id.lower().endswith(".gguf"):
+        return model_id, None
+    parts = model_id.split("/")
+    if len(parts) >= 3:
+        return "/".join(parts[:2]), "/".join(parts[2:])
+    return None, parts[-1]
+
+
+def pick_repo_for_gguf(filename: str, search_results: List[Dict[str, Any]]) -> Optional[str]:
+    """First HF search result whose siblings contain exactly this GGUF filename."""
+    for m in search_results or []:
+        names = {s.get("rfilename") for s in m.get("siblings") or []}
+        if filename in names:
+            return m.get("id")
+    return None
+
+
 def legacy_defaults(catalog: Optional[Dict[str, Any]]) -> List[str]:
     """Former default generative model names (catalog data `legacy_defaults.generative`)."""
     return list(((catalog or {}).get("legacy_defaults") or {}).get("generative") or [])

@@ -17,7 +17,7 @@ const { TelegramBotService } = require("../telegramBot");
 // Update .env keys with the correct values and boot. These are temporary and not real SSL certs - only use for local.
 // Test with https://localhost:3001/api/ping
 // build and copy frontend to server/public with correct API_BASE and start server in prod model and all should be ok
-function bootSSL(app, port = 3001) {
+function bootSSL(app, port = 3001, ready = Promise.resolve()) {
   try {
     console.log(
       `\x1b[33m[SSL BOOT ENABLED]\x1b[0m Loading the certificate and key for HTTPS mode...`
@@ -29,17 +29,19 @@ function bootSSL(app, port = 3001) {
     const credentials = { key: privateKey, cert: certificate };
     const server = https.createServer(credentials, app);
 
-    server.listen(port, async () => {
-      await markOnboarded();
-      await setupTelemetry();
-      new CommunicationKey(true);
-      new EncryptionManager();
-      new BackgroundService().boot();
-      await eagerLoadContextWindows();
-      await PushNotifications.setupPushNotificationService();
-      await TelegramBotService.bootIfActive();
-      console.log(`Primary server in HTTPS mode listening on port ${port}`);
-    });
+    ready.then(() =>
+      server.listen(port, async () => {
+        await markOnboarded();
+        await setupTelemetry();
+        new CommunicationKey(true);
+        new EncryptionManager();
+        new BackgroundService().boot();
+        await eagerLoadContextWindows();
+        await PushNotifications.setupPushNotificationService();
+        await TelegramBotService.bootIfActive();
+        console.log(`Primary server in HTTPS mode listening on port ${port}`);
+      })
+    );
     server.setTimeout(1000 * 60 * 60 * 2);
     server.keepAliveTimeout = 1000 * 60 * 60 * 2;
     server.on("error", catchSigTerms);
@@ -56,7 +58,8 @@ function bootSSL(app, port = 3001) {
         stacktrace: e.stack,
       }
     );
-    return bootHTTP(app, port);
+    ready.then(() => bootHTTP(app, port));
+    return { app };
   }
 }
 

@@ -1759,6 +1759,18 @@ const TRANSLATIONS = {
       KS_E_MANIFEST:
         "Archive format is incompatible with this version. Update GeoRhizome or re-publish.",
       KS_E_UNKNOWN: "Knowledge Sync failed. Try again.",
+      KS_E_BUSY: "Another operation is already running on this workspace.",
+      KS_E_SYNCING: "This workspace is being synced. Try again shortly.",
+      KS_E_DISK_SPACE: "Not enough free disk space for this operation.",
+      KS_E_EMBEDDER_MISMATCH: "Archive was built with a different embedding model.",
+      KS_E_DIM_MISMATCH: "Archive vector dimension does not match this system.",
+      KS_E_NO_BACKUP: "No backup is available to roll back to.",
+      KS_E_VERSION_STALE: "Archive version is not newer than the synced version.",
+      KS_E_DOCID_CONFLICT: "A document in the archive already belongs to another workspace.",
+      KS_E_EXPORT_INCOMPLETE: "Export failed because a referenced document is missing.",
+      KS_E_SIZE_LIMIT: "Archive exceeds the allowed size.",
+      KS_E_NOT_FOUND: "The requested item was not found.",
+      KS_E_PREVIEW_INVALID: "Import preview is missing or expired.",
     },
     sync: {
       started: "Sync started. Please wait...",

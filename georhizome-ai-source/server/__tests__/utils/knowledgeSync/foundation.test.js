@@ -67,3 +67,29 @@ test("assertSameFilesystem passes in one temp dir", () => {
     paths.assertSameFilesystem(path.join(d, "a"), path.join(d, "b", "c"))
   ).not.toThrow();
 });
+
+describe("effectiveEmbedder", () => {
+  const {
+    effectiveEmbedder,
+  } = require("../../../utils/knowledgeSync/embedder");
+  test("env overrides config", () => {
+    const e = effectiveEmbedder({
+      EMBEDDING_MODEL_PREF: "m/x",
+      EMBEDDING_DIMENSION: "384",
+    });
+    expect(e.modelId).toBe("m/x");
+    expect(e.dimension).toBe(384);
+  });
+  test("config used without env; all fields present", () => {
+    const e = effectiveEmbedder({});
+    expect(Object.keys(e).sort()).toEqual([
+      "dimension",
+      "modelId",
+      "normalization",
+      "prefixes",
+    ]);
+    expect(e.modelId).toBe("cl-nagoya/ruri-v3-310m");
+    expect(e.dimension).toBe(768);
+    expect(e.prefixes).toEqual({ query: "", document: "" });
+  });
+});

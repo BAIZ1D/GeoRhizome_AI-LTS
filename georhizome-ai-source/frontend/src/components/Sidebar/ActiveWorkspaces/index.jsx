@@ -14,6 +14,8 @@ import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
 import showToast from "@/utils/toast";
 import { LAST_VISITED_WORKSPACE } from "@/utils/constants";
 import { safeJsonParse } from "@/utils/request";
+import useKsCatalog from "@/components/KnowledgeSync/useKsCatalog";
+import KnowledgeSyncItem from "./KnowledgeSyncItem";
 
 export default function ActiveWorkspaces() {
   const navigate = useNavigate();
@@ -25,6 +27,7 @@ export default function ActiveWorkspaces() {
   const { user } = useUser();
   const isInWorkspaceSettings = !!useMatch("/workspace/:slug/settings/:tab");
   const isHomePage = !!useMatch("/");
+  const { entries: ksEntries, configured: ksConfigured } = useKsCatalog();
 
   useEffect(() => {
     async function getWorkspaces() {
@@ -208,6 +211,13 @@ export default function ActiveWorkspaces() {
                             )}
                           </div>
                         </Link>
+                        <KnowledgeSyncItem
+                          workspace={workspace}
+                          entry={ksEntries.find(
+                            (e) => e.slug === workspace.slug
+                          )}
+                          configured={ksConfigured}
+                        />
                       </div>
                       {isActive && (
                         <ThreadContainer

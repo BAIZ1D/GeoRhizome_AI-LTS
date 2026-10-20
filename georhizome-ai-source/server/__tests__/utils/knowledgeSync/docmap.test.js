@@ -59,3 +59,22 @@ test("vectors mapped", () => {
   });
   expect(r.vectors).toEqual([{ docId: "d1", vectorId: "v1" }]);
 });
+
+test("IN-01: original archive filename is preserved; docpath uses file", () => {
+  const { docs } = buildImportRows({
+    rows: rows([D({ filename: "report.json", file: "abcd1234-report.json" })]),
+    localSlug: "s",
+    workspaceId: 1,
+  });
+  expect(docs[0].filename).toBe("report.json");
+  expect(docs[0].docpath).toMatch(/\/abcd1234-report\.json$/);
+});
+
+test("IN-01: unsafe archive filename falls back to file", () => {
+  const { docs } = buildImportRows({
+    rows: rows([D({ filename: "../evil.json", file: "a.json" })]),
+    localSlug: "s",
+    workspaceId: 1,
+  });
+  expect(docs[0].filename).toBe("a.json");
+});

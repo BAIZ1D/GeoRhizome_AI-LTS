@@ -14,6 +14,15 @@ function safeBasename(name) {
   return name;
 }
 
+function isSafeName(name) {
+  try {
+    safeBasename(name);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Pure: archive rows -> local rows (docpath rebuilt from LOCAL slug). */
 function buildImportRows({ rows, localSlug, workspaceId, existingFlags }) {
   const prefix = ksDocpathPrefix(localSlug);
@@ -28,7 +37,8 @@ function buildImportRows({ rows, localSlug, workspaceId, existingFlags }) {
     const createdAt = d.createdAt ? new Date(d.createdAt) : new Date();
     return {
       docId: d.docId,
-      filename: file,
+      // Prefer the original display name; `file` may carry a dedupe prefix.
+      filename: isSafeName(d.filename) ? d.filename : file,
       docpath: `${prefix}/${file}`,
       workspaceId,
       metadata: d.metadata == null ? null : JSON.stringify(d.metadata),

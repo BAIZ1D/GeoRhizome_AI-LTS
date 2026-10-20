@@ -4,6 +4,7 @@ const { DocumentVectors } = require("../../models/vectors");
 const { EventLogs } = require("../../models/eventLogs");
 const { purgeEntireVectorCache } = require("../files");
 const { getVectorDbClass } = require("../helpers");
+const locks = require("../knowledgeSync/locks");
 
 /**
  * Resets all vector database and associated content:
@@ -16,8 +17,14 @@ const { getVectorDbClass } = require("../helpers");
  * @returns {Promise<boolean>} - True if successful, false otherwise.
  */
 async function resetAllVectorStores({ vectorDbKey }) {
+  const held = [];
   try {
     const workspaces = await Workspace.where();
+    // Take every workspace "delete" lock up front (all-or-nothing, D-01).
+    for (const workspace of workspaces) {
+      locks.acquire(workspace.slug, "delete");
+      held.push(workspace.slug);
+    }
     purgeEntireVectorCache(); // Purges the entire vector-cache folder.
     await DocumentVectors.delete(); // Deletes all document vectors from the database.
     await Document.delete(); // Deletes all documents from the database.
@@ -53,6 +60,8 @@ async function resetAllVectorStores({ vectorDbKey }) {
   } catch (error) {
     console.error("Failed to reset vector stores:", error);
     return false;
+  } finally {
+    for (const slug of held) locks.release(slug, "delete");
   }
 }
 

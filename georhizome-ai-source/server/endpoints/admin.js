@@ -24,6 +24,11 @@ const {
   ROLES,
 } = require("../utils/middleware/multiUserProtected");
 const { validatedRequest } = require("../utils/middleware/validatedRequest");
+const { deleteWorkspaceLocked } = require("../utils/knowledgeSync/deleteGuard");
+const {
+  isKnowledgeSyncError,
+  toClientError,
+} = require("../utils/knowledgeSync/errors");
 const ImportedPlugin = require("../utils/agents/imported");
 const {
   simpleSSOLoginDisabledMiddleware,
@@ -302,18 +307,22 @@ function adminEndpoints(app) {
           return;
         }
 
-        await WorkspaceChats.delete({ workspaceId: Number(workspace.id) });
-        await DocumentVectors.deleteForWorkspace(Number(workspace.id));
-        await Document.delete({ workspaceId: Number(workspace.id) });
-        await Workspace.delete({ id: Number(workspace.id) });
-        try {
-          await VectorDb["delete-namespace"]({ namespace: workspace.slug });
-        } catch (e) {
-          console.error(e.message);
-        }
+        await deleteWorkspaceLocked(workspace.slug, async () => {
+          await WorkspaceChats.delete({ workspaceId: Number(workspace.id) });
+          await DocumentVectors.deleteForWorkspace(Number(workspace.id));
+          await Document.delete({ workspaceId: Number(workspace.id) });
+          await Workspace.delete({ id: Number(workspace.id) });
+          try {
+            await VectorDb["delete-namespace"]({ namespace: workspace.slug });
+          } catch (e) {
+            console.error(e.message);
+          }
+        });
 
         response.status(200).json({ success: true, error: null });
       } catch (e) {
+        if (isKnowledgeSyncError(e))
+          return response.status(409).json(toClientError(e));
         console.error(e);
         response.sendStatus(500).end();
       }

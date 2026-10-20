@@ -14,6 +14,13 @@ const {
   writeResponseChunk,
 } = require("../../../utils/helpers/chat/responses");
 const { ApiChatHandler } = require("../../../utils/chats/apiChatHandler");
+const {
+  deleteWorkspaceLocked,
+} = require("../../../utils/knowledgeSync/deleteGuard");
+const {
+  isKnowledgeSyncError,
+  toClientError,
+} = require("../../../utils/knowledgeSync/errors");
 const { getModelTag } = require("../../utils");
 
 function apiWorkspaceEndpoints(app) {
@@ -249,21 +256,25 @@ function apiWorkspaceEndpoints(app) {
         }
 
         const workspaceId = Number(workspace.id);
-        await WorkspaceChats.delete({ workspaceId: workspaceId });
-        await DocumentVectors.deleteForWorkspace(workspaceId);
-        await Document.delete({ workspaceId: workspaceId });
-        await Workspace.delete({ id: workspaceId });
+        await deleteWorkspaceLocked(slug, async () => {
+          await WorkspaceChats.delete({ workspaceId: workspaceId });
+          await DocumentVectors.deleteForWorkspace(workspaceId);
+          await Document.delete({ workspaceId: workspaceId });
+          await Workspace.delete({ id: workspaceId });
 
-        await EventLogs.logEvent("api_workspace_deleted", {
-          workspaceName: workspace?.name || "Unknown Workspace",
+          await EventLogs.logEvent("api_workspace_deleted", {
+            workspaceName: workspace?.name || "Unknown Workspace",
+          });
+          try {
+            await VectorDb["delete-namespace"]({ namespace: slug });
+          } catch (e) {
+            console.error(e.message);
+          }
         });
-        try {
-          await VectorDb["delete-namespace"]({ namespace: slug });
-        } catch (e) {
-          console.error(e.message);
-        }
         response.sendStatus(200).end();
       } catch (e) {
+        if (isKnowledgeSyncError(e))
+          return response.status(409).json(toClientError(e));
         console.error(e.message, e);
         response.sendStatus(500).end();
       }

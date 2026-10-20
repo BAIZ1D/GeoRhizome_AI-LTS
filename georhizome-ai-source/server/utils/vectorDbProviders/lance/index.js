@@ -662,9 +662,12 @@ class LanceDb extends VectorDatabase {
   async reset() {
     if (locks.heldCount() > 0)
       throw new KnowledgeSyncError("KS_E_BUSY", { phase: "lock" });
-    const { client } = await this.connect();
+    await this.connect();
+    // Re-check after the await: a lock taken during connect() must still win.
+    if (locks.heldCount() > 0)
+      throw new KnowledgeSyncError("KS_E_BUSY", { phase: "lock" });
     const fs = require("fs");
-    fs.rm(`${client.uri}`, { recursive: true }, () => null);
+    await fs.promises.rm(this.uri, { recursive: true, force: true });
     return { reset: true };
   }
 

@@ -1743,6 +1743,9 @@ const TRANSLATIONS = {
       dismiss: "Not now",
     },
     errors: {
+      KS_E_PAT_INVALID:
+        "GitHub access token is missing or invalid. Save one in Settings → Knowledge Sync.",
+      KS_E_PASSPHRASE_TOO_SHORT: "Passphrase must be at least 12 characters.",
       forbidden: "Only administrators can change this setting.",
       KS_E_PASSPHRASE:
         "Wrong team passphrase. Check it with your administrator.",

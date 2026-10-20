@@ -1752,6 +1752,9 @@ const TRANSLATIONS = {
       dismiss: "後で",
     },
     errors: {
+      KS_E_PAT_INVALID:
+        "GitHub アクセストークンが未設定か無効です。設定の「ナレッジ同期」で保存してください。",
+      KS_E_PASSPHRASE_TOO_SHORT: "パスフレーズは12文字以上必要です。",
       forbidden: "この設定は管理者のみ変更できます。",
       KS_E_PASSPHRASE:
         "チームパスフレーズが違います。管理者に確認してください。",

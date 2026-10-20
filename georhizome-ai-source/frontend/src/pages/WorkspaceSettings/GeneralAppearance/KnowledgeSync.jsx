@@ -3,17 +3,27 @@ import showToast from "@/utils/toast";
 import { useTranslation } from "react-i18next";
 import KnowledgeSyncModel from "@/models/knowledgeSync";
 import PassphrasePromptModal from "@/components/KnowledgeSync/PassphrasePromptModal";
+import useUser from "@/hooks/useUser";
+import { formatKsError } from "@/utils/knowledgeSyncErrors";
 
 export default function KnowledgeSync({ workspace }) {
   const { t } = useTranslation();
+  const { user } = useUser();
+  // Upload is admin-only server-side (KS_ADMIN_GATE); single-user has no user.
+  const canUpload = !user || user.role === "admin";
   const [showPassphrasePrompt, setShowPassphrasePrompt] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [wiping, setWiping] = useState(false);
 
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  // Knowledge Sync routes return { error: { code, message } }; legacy ones a string.
+  const errorText = (data, status, fallback) =>
+    data?.error?.code || status === 401 || status === 403
+      ? formatKsError(t, { ...data?.error, status })
+      : data?.error || fallback;
+
+  const [showUploadModal, setShowUploadModal] = useState(false);
   const [showWipeModal, setShowWipeModal] = useState(false);
-  const [githubPat, setGithubPat] = useState("");
 
   const handleSyncClick = async () => {
     const { ok, data } = await KnowledgeSyncModel.status();
@@ -37,9 +47,11 @@ export default function KnowledgeSync({ workspace }) {
         body: JSON.stringify({ slug: workspace.slug }),
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
       if (!response.ok)
-        throw new Error(data.error || "Failed to sync workspace");
+        throw new Error(
+          errorText(data, response.status, "Failed to sync workspace")
+        );
 
       showToast(t("knowledgeSync.sync.done"), "success", { clear: true });
       setTimeout(() => window.location.reload(), 2000);
@@ -57,11 +69,9 @@ export default function KnowledgeSync({ workspace }) {
     }
   };
 
-  const handleUploadSubmit = async (e) => {
-    e.preventDefault();
-    if (!githubPat) return;
-
-    setShowPasswordModal(false);
+  // The GitHub token comes from Settings -> Knowledge Sync (server-side store).
+  const handleUpload = async () => {
+    setShowUploadModal(false);
     setUploading(true);
     showToast("アップロードを開始しました。お待ちください...", "info", {
       clear: true,
@@ -77,9 +87,11 @@ export default function KnowledgeSync({ workspace }) {
         body: JSON.stringify({ slug: workspace.slug }),
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
       if (!response.ok)
-        throw new Error(data.error || "Failed to upload workspace");
+        throw new Error(
+          errorText(data, response.status, "Failed to upload workspace")
+        );
 
       showToast("ナレッジのアップロードが完了しました。", "success", {
         clear: true,
@@ -89,7 +101,6 @@ export default function KnowledgeSync({ workspace }) {
       showToast(`アップロードエラー: ${e.message}`, "error", { clear: true });
     } finally {
       setUploading(false);
-      setGithubPat("");
     }
   };
 
@@ -111,8 +122,11 @@ export default function KnowledgeSync({ workspace }) {
         }
       );
 
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Failed to wipe vectors");
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok)
+        throw new Error(
+          errorText(data, response.status, "Failed to wipe vectors")
+        );
 
       showToast("ベクトルデータを初期化しました。", "success", { clear: true });
       setTimeout(() => window.location.reload(), 2000);
@@ -154,16 +168,18 @@ export default function KnowledgeSync({ workspace }) {
           {wiping ? "初期化を実行しています..." : "ベクトルデータを初期化"}
         </button>
 
-        <button
-          type="button"
-          disabled={syncing || uploading || wiping}
-          onClick={() => setShowPasswordModal(true)}
-          className="px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-all text-sm font-medium disabled:opacity-50"
-        >
-          {uploading
-            ? "アップロードを実行しています..."
-            : "ナレッジをアップロード"}
-        </button>
+        {canUpload && (
+          <button
+            type="button"
+            disabled={syncing || uploading || wiping}
+            onClick={() => setShowUploadModal(true)}
+            className="px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-all text-sm font-medium disabled:opacity-50"
+          >
+            {uploading
+              ? "アップロードを実行しています..."
+              : "ナレッジをアップロード"}
+          </button>
+        )}
       </div>
 
       {showPassphrasePrompt && (
@@ -208,40 +224,31 @@ export default function KnowledgeSync({ workspace }) {
         </div>
       )}
 
-      {showPasswordModal && (
+      {showUploadModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="bg-theme-bg-secondary p-6 rounded-lg shadow-xl w-full max-w-md border border-theme-border">
             <h3 className="text-lg font-semibold text-white mb-2">
-              GitHub 認証が必要です
+              ナレッジのアップロード
             </h3>
             <p className="text-sm text-theme-text-secondary mb-4">
-              ナレッジベースのアップロードにはGitHub Write PATが必要です。
+              このワークスペースのナレッジをGitHubにアップロードします。設定の「ナレッジ同期」で保存したGitHubアクセストークンを使用します。続行してもよろしいですか？
             </p>
-            <form onSubmit={handleUploadSubmit}>
-              <input
-                type="password"
-                value={githubPat}
-                onChange={(e) => setGithubPat(e.target.value)}
-                placeholder="GitHub Write PATを入力 (github_pat_...)"
-                className="w-full bg-theme-bg-primary text-white border border-theme-border rounded-lg px-4 py-2 mb-4 outline-none focus:border-blue-500"
-                autoFocus
-              />
-              <div className="flex justify-end gap-x-3">
-                <button
-                  type="button"
-                  onClick={() => setShowPasswordModal(false)}
-                  className="px-4 py-2 text-sm text-theme-text-secondary hover:text-white transition-all"
-                >
-                  キャンセル
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all"
-                >
-                  実行する
-                </button>
-              </div>
-            </form>
+            <div className="flex justify-end gap-x-3">
+              <button
+                type="button"
+                onClick={() => setShowUploadModal(false)}
+                className="px-4 py-2 text-sm text-theme-text-secondary hover:text-white transition-all"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={handleUpload}
+                className="px-4 py-2 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all"
+              >
+                実行する
+              </button>
+            </div>
           </div>
         </div>
       )}

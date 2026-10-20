@@ -224,9 +224,25 @@ async function loadStaged(previewId, { config } = {}) {
   }
 }
 
+// CR-03: in-process exclusive claim on a preview (synchronous check-and-set).
+const claimed = new Set();
+function claimPreview(previewId) {
+  if (claimed.has(previewId)) throw err("KS_E_BUSY", "claim");
+  claimed.add(previewId);
+}
+function releasePreview(previewId) {
+  claimed.delete(previewId);
+}
+
 async function discardStaged(previewId, { config } = {}) {
   const dir = previewDir(previewId, config || getKnowledgeSyncConfig());
   await fs.promises.rm(dir, { recursive: true, force: true });
 }
 
-module.exports = { stageArchive, loadStaged, discardStaged };
+module.exports = {
+  stageArchive,
+  loadStaged,
+  discardStaged,
+  claimPreview,
+  releasePreview,
+};

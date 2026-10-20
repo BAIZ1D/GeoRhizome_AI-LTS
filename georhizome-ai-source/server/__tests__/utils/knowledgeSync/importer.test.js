@@ -250,3 +250,26 @@ test("workspace is syncing during the swap", async () => {
   expect(seen).toBe(true);
   expect(locks.syncing("ws1")).toBe(false);
 });
+
+test("CR-03: concurrent confirm of the same preview is refused, one workspace created", async () => {
+  mockWsList = [];
+  let n = 0;
+  mockW.new.mockImplementation(async (name) => {
+    n += 1;
+    const w = { id: 4 + n, name, slug: `ws-one-${n}`, openAiTemp: null };
+    mockWsList.push(w);
+    return { workspace: w, message: null };
+  });
+  const p = await prev();
+  const args = { previewId: p.previewId, userId: 7, passphrase: PW, config };
+  const res = await Promise.allSettled([
+    confirmImport(args),
+    confirmImport(args),
+  ]);
+  expect(res.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+  const rej = res.find((r) => r.status === "rejected");
+  expect(rej.reason).toMatchObject({ code: "KS_E_BUSY", phase: "claim" });
+  expect(mockW.new).toHaveBeenCalledTimes(1);
+  expect(mockWsList).toHaveLength(1);
+  expect(locks.heldCount()).toBe(0);
+});

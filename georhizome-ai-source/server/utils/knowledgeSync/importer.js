@@ -1,7 +1,12 @@
 const fs = require("fs");
 const { KnowledgeSyncError } = require("./errors");
 const { getKnowledgeSyncConfig } = require("./config");
-const { loadStaged, discardStaged } = require("./stage");
+const {
+  loadStaged,
+  discardStaged,
+  claimPreview,
+  releasePreview,
+} = require("./stage");
 const { validateConfirmable } = require("./preview");
 const { buildImportRows } = require("./docmap");
 const { assertSafeSlug } = require("./paths");
@@ -24,7 +29,20 @@ async function refuseIfBlocked(staged) {
  * Confirm an import. passphrase is accepted for API symmetry but never used
  * or logged: the staged manifest was already verified at preview time.
  */
-async function confirmImport({
+async function confirmImport(opts = {}) {
+  // CR-03: one confirm per preview at a time, claimed before anything is
+  // created (unmatched targets would otherwise take different slug locks).
+  const previewId = opts.previewId;
+  const cfg = opts.config || getKnowledgeSyncConfig();
+  claimPreview(previewId);
+  try {
+    return await confirmImportClaimed({ ...opts, config: cfg });
+  } finally {
+    releasePreview(previewId);
+  }
+}
+
+async function confirmImportClaimed({
   previewId,
   userId,
   user = null,

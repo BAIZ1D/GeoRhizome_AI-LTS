@@ -98,6 +98,21 @@ def format_vertical_to_horizontal(text: str) -> str:
     cleaned = collapse_cjk_spacing(cleaned)
     return cleaned.strip()
 
+def route_parser_messages_to_stderr() -> None:
+    """Send pymupdf/pymupdf4llm parser messages to stderr; stdout is the document text."""
+    fitz.set_messages(stream=sys.stderr)
+
+
+def select_ocr_pass(text_horiz: str, text_vert: str) -> str:
+    """Pick the pass that recognized more Japanese characters; ties go to horizontal.
+
+    Raw length is not used: PSM 5 on a horizontal page emits long runs of noise glyphs.
+    """
+    jp_vert_count = len(re.findall(JP_CHAR_PATTERN, text_vert))
+    jp_horiz_count = len(re.findall(JP_CHAR_PATTERN, text_horiz))
+    return text_vert if jp_vert_count > jp_horiz_count else text_horiz
+
+
 def ocr_pdf_page(page, page_num: int) -> str:
     """Render a PDF page to image and perform Dual-PSM (Horizontal + Vertical) Tesseract OCR."""
     cfg = load_ocr_config()
@@ -127,15 +142,7 @@ def ocr_pdf_page(page, page_num: int) -> str:
         # Convert vertical OCR text into natural horizontal Japanese format
         text_vert = format_vertical_to_horizontal(text_vert_raw)
 
-        # Count Japanese characters in both passes
-        jp_vert_count = len(re.findall(JP_CHAR_PATTERN, text_vert))
-        jp_horiz_count = len(re.findall(JP_CHAR_PATTERN, text_horiz))
-
-        # Select vertical pass whenever vertical Japanese text is recognized, otherwise horizontal
-        if jp_vert_count >= jp_horiz_count or len(text_vert) >= len(text_horiz):
-            return text_vert
-        else:
-            return text_horiz
+        return select_ocr_pass(text_horiz, text_vert)
 
     except Exception as e:
         sys.stderr.write(f"[markitdown_ocr] Page {page_num} OCR error: {e}\n")
@@ -204,6 +211,7 @@ def main():
         sys.argv.append("/Users/baizid_alhamid/Downloads/GeoRhizome/GeoRhizome PDF/b_dourokeikan_reikisyu.pdf")
 
     pdf_path = sys.argv[1]
+    route_parser_messages_to_stderr()
     result_md = process_pdf(pdf_path)
     print(result_md)
 

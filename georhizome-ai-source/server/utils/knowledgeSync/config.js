@@ -156,4 +156,4 @@ function getKnowledgeSyncConfig({ configPath } = {}) {
   return cfg;
 }
 
-module.exports = { getKnowledgeSyncConfig, DEFAULTS };
+module.exports = { getKnowledgeSyncConfig, DEFAULTS, candidatePaths };

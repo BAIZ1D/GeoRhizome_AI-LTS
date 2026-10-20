@@ -21,6 +21,7 @@ const cors = require("cors");
 const path = require("path");
 const { reqBody } = require("./utils/http");
 const { systemEndpoints } = require("./endpoints/system");
+const { knowledgeSyncEndpoints } = require("./endpoints/knowledgeSync");
 const { workspaceEndpoints } = require("./endpoints/workspaces");
 const { chatEndpoints } = require("./endpoints/chat");
 const { embeddedEndpoints } = require("./endpoints/embed");
@@ -90,6 +91,7 @@ if (!!process.env.ENABLE_HTTPS) {
 app.use("/api", apiRouter);
 hardwareEndpoints(apiRouter);
 systemEndpoints(apiRouter);
+knowledgeSyncEndpoints(apiRouter);
 extensionEndpoints(apiRouter);
 workspaceEndpoints(apiRouter);
 workspaceThreadEndpoints(apiRouter);

@@ -188,10 +188,17 @@ async function runSwap(ctx, { config } = {}) {
     ...[live, liveDocs, source.lance, pend].filter(Boolean)
   );
 
+  // CR-01: never clobber an unrecovered job's backup-pending. Only this job's
+  // own pre-created "prepared" journal (importer, WR-01) may already exist.
+  const others = (await journalLib.listJournals()).filter(
+    (j) => j.slug === slug && (j.jobId !== jobId || j.state !== "prepared")
+  );
+  if (others.length || (await exists(pend)))
+    throw new KnowledgeSyncError("KS_E_BUSY", { phase: "recovery_pending" });
+
   let journal = null;
   let committed = false;
   try {
-    await rmrf(pend);
     const hadLance = await exists(live);
     const hadDocs = await exists(liveDocs);
     journal = await journalLib.createJournal(jobId, {

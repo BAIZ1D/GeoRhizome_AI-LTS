@@ -373,3 +373,37 @@ test("requires matching held lock", async () => {
     swap.runSwap({ jobId, kind: "import", slug: SLUG, workspaceId: 1, source })
   ).rejects.toThrow();
 });
+
+describe("CR-01: unrecovered job on the slug blocks a new swap", () => {
+  test("existing backup-pending is preserved and swap refused", async () => {
+    await seedLiveFull();
+    fs.mkdirSync(path.join(pend(), "lance"), { recursive: true });
+    fs.writeFileSync(path.join(pend(), "lance", "keep"), "orig");
+    const before = snap();
+    const { jobId, source } = await makeSource("n");
+    await expect(run(jobId, source)).rejects.toMatchObject({
+      code: "KS_E_BUSY",
+      phase: "recovery_pending",
+    });
+    expect(fs.readFileSync(path.join(pend(), "lance", "keep"), "utf-8")).toBe(
+      "orig"
+    );
+    expect(snap()).toEqual(before);
+  });
+
+  test("another job's journal on the slug refuses the swap", async () => {
+    await seedLiveFull();
+    await journalLib.createJournal(uuidv4(), {
+      kind: "import",
+      slug: SLUG,
+      hadLance: true,
+      hadDocs: true,
+    });
+    const before = snap();
+    const { jobId, source } = await makeSource("n");
+    await expect(run(jobId, source)).rejects.toMatchObject({
+      code: "KS_E_BUSY",
+    });
+    expect(snap()).toEqual(before);
+  });
+});

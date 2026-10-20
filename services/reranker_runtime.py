@@ -22,7 +22,7 @@ log = logging.getLogger("reranker_runtime")
 FALLBACK_MODEL = "cl-nagoya/ruri-v3-reranker-310m"
 FALLBACK_MAX_LENGTH = 1024
 FALLBACK_SELFTEST_MIN_SPEARMAN = 0.99
-FALLBACK_TIMEOUT_MS = 3000
+FALLBACK_TIMEOUT_MS = 23000  # matches app_config.json (8 GB loaded p95 x 1.5)
 FALLBACK_IDLE_UNLOAD_MINUTES = 15
 
 LEGACY_SENTINEL = "Offloaded"

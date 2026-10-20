@@ -55,7 +55,9 @@ function readRaw(configPath) {
       if (!fs.existsSync(p)) continue;
       return JSON.parse(fs.readFileSync(p, "utf8"));
     } catch (_e) {
-      console.warn("[KnowledgeSync] config unreadable or invalid; using defaults");
+      console.warn(
+        "[KnowledgeSync] config unreadable or invalid; using defaults"
+      );
       return null;
     }
   }
@@ -67,8 +69,10 @@ function readRaw(configPath) {
  */
 function getKnowledgeSyncConfig({ configPath } = {}) {
   const raw = readRaw(configPath);
-  const ks = raw && typeof raw.knowledge_sync === "object" ? raw.knowledge_sync : null;
-  const sc = ks && typeof ks.scrypt === "object" && ks.scrypt ? ks.scrypt : null;
+  const ks =
+    raw && typeof raw.knowledge_sync === "object" ? raw.knowledge_sync : null;
+  const sc =
+    ks && typeof ks.scrypt === "object" && ks.scrypt ? ks.scrypt : null;
   const D = DEFAULTS;
   const scrypt = {
     N: pick(sc, "N", D.scrypt.N, posInt),
@@ -82,10 +86,25 @@ function getKnowledgeSyncConfig({ configPath } = {}) {
     part_size_bytes: pick(ks, "part_size_bytes", D.part_size_bytes, posInt),
     chunk_size_bytes: pick(ks, "chunk_size_bytes", D.chunk_size_bytes, posInt),
     scrypt,
-    passphrase_min_length: pick(ks, "passphrase_min_length", D.passphrase_min_length, posInt),
-    catalog_release_tag: pick(ks, "catalog_release_tag", D.catalog_release_tag, str),
+    passphrase_min_length: pick(
+      ks,
+      "passphrase_min_length",
+      D.passphrase_min_length,
+      posInt
+    ),
+    catalog_release_tag: pick(
+      ks,
+      "catalog_release_tag",
+      D.catalog_release_tag,
+      str
+    ),
     staging_dir_name: pick(ks, "staging_dir_name", D.staging_dir_name, str),
-    max_extract_bytes: pick(ks, "max_extract_bytes", D.max_extract_bytes, posInt),
+    max_extract_bytes: pick(
+      ks,
+      "max_extract_bytes",
+      D.max_extract_bytes,
+      posInt
+    ),
     max_entries: pick(ks, "max_entries", D.max_entries, posInt),
   };
   cfg.allowedScryptParams = [{ N: scrypt.N, r: scrypt.r, p: scrypt.p }];

@@ -122,8 +122,47 @@ async function sweepStale(cfg, counts) {
   }
 }
 
+const TERMINAL_JOB_STATES = new Set([
+  "succeeded",
+  "failed",
+  "cancelled",
+  "interrupted",
+]);
+
+/** D-07: jobs live in memory, so any non-terminal breadcrumb at boot died. */
+async function sweepJobBreadcrumbs(counts) {
+  try {
+    const crumbs = await marker.listJobBreadcrumbs();
+    for (const b of crumbs) {
+      if (!b || TERMINAL_JOB_STATES.has(b.state)) continue;
+      try {
+        paths.assertSafeSlug(b.slug);
+        await marker.writeJobBreadcrumb(b.slug, {
+          ...b,
+          state: "interrupted",
+        });
+        counts.interrupted++;
+      } catch (err) {
+        safeLog("warn", "job breadcrumb sweep failed", {
+          code: err && err.code,
+        });
+      }
+    }
+  } catch (err) {
+    safeLog("warn", "job breadcrumb sweep unavailable", {
+      code: err && err.code,
+    });
+  }
+}
+
 async function recoverKnowledgeSync() {
-  const counts = { recovered: 0, rolledBack: 0, finished: 0, cleaned: 0 };
+  const counts = {
+    recovered: 0,
+    rolledBack: 0,
+    finished: 0,
+    cleaned: 0,
+    interrupted: 0,
+  };
   try {
     const cfg = getKnowledgeSyncConfig();
     const journals = await journalLib.listJournals();
@@ -144,8 +183,9 @@ async function recoverKnowledgeSync() {
       }
     }
     await sweepStale(cfg, counts);
+    await sweepJobBreadcrumbs(counts);
     counts.recovered = counts.rolledBack + counts.finished;
-    if (counts.recovered || counts.cleaned)
+    if (counts.recovered || counts.cleaned || counts.interrupted)
       safeLog("warn", "knowledge sync recovery complete", counts);
   } catch (err) {
     safeLog("error", "knowledge sync recovery aborted", {

@@ -186,6 +186,7 @@ describe("kill at every step", () => {
         rolledBack: 0,
         finished: 0,
         cleaned: 0,
+        interrupted: 0,
       });
       expect(snap()).toEqual(before);
     }
@@ -413,4 +414,24 @@ test("WR-04: failed recovery fences the slug (syncing, other locks refused)", as
   );
   locks._resetForTests();
   await journalLib.removeJournalDir(jobId);
+});
+
+test("D-07: boot sweep marks non-terminal job breadcrumbs interrupted", async () => {
+  const mk = (slug, state) =>
+    marker.writeJobBreadcrumb(slug, {
+      jobId: uuidv4(),
+      userId: 3,
+      kind: "publish",
+      state,
+      phase: "upload",
+    });
+  await mk("jrun", "running");
+  await mk("jawait", "awaiting_confirm");
+  await mk("jdone", "succeeded");
+  const r = await recoverKnowledgeSync();
+  expect(r.interrupted).toBe(2);
+  expect((await marker.readJobBreadcrumb("jrun")).state).toBe("interrupted");
+  expect((await marker.readJobBreadcrumb("jawait")).state).toBe("interrupted");
+  expect((await marker.readJobBreadcrumb("jdone")).state).toBe("succeeded");
+  expect((await marker.readJobBreadcrumb("jrun")).userId).toBe(3);
 });

@@ -41,6 +41,14 @@ const api = {
       state.settings.has(where.label)
         ? { value: state.settings.get(where.label) }
         : null,
+    findMany: async ({ where } = {}) =>
+      [...state.settings.entries()]
+        .filter(
+          ([label]) =>
+            !where?.label?.startsWith ||
+            label.startsWith(where.label.startsWith)
+        )
+        .map(([label, value]) => ({ label, value })),
     upsert: async ({ where, create }) => {
       state.settings.set(where.label, create.value);
     },

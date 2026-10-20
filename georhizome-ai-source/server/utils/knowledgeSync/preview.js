@@ -57,6 +57,52 @@ async function computeBlocking({
   return blocking;
 }
 
+async function localOnlyOf(target, docs) {
+  if (!target.matched) return [];
+  const inArchive = new Set(docs.map((d) => d.docId));
+  const local = await prisma().workspace_documents.findMany({
+    where: { workspaceId: target.workspace.id },
+  });
+  return local
+    .filter((d) => !inArchive.has(d.docId))
+    .map((d) => ({
+      docId: d.docId,
+      filename: d.filename,
+      docpath: d.docpath,
+    }))
+    .sort((a, b) => cmp(a.docpath, b.docpath) || cmp(a.docId, b.docId));
+}
+
+// C1: preview from the decrypted per-version preview asset (manifest + doc
+// list) before any archive part is downloaded. Same shape as previewImport.
+async function previewFromManifest({ manifest, docs, indexTotalSize } = {}) {
+  const rows = { docs };
+  const compatibility = checkCompatibility(manifest, effectiveEmbedder());
+  const target = await resolveTarget(manifest);
+  const localOnlyDocs = await localOnlyOf(target, docs);
+  const blocking = await computeBlocking({
+    manifest,
+    rows,
+    target,
+    compatibility,
+  });
+  return {
+    previewId: null,
+    versionId: manifest.versionId,
+    archiveBytes: indexTotalSize,
+    sizeBytes: manifest.files.reduce((s, f) => s + f.size, 0),
+    docCount: docs.length,
+    compatibility,
+    target: {
+      matched: target.matched,
+      slug: target.matched ? target.workspace.slug : null,
+      name: target.matched ? target.workspace.name : target.willCreateName,
+    },
+    localOnlyDocs,
+    blocking,
+  };
+}
+
 async function previewImport({ archiveName, passphrase, userId, config } = {}) {
   const cfg = config || getKnowledgeSyncConfig();
   const staged = await stageArchive({ archiveName, passphrase, config: cfg });
@@ -72,21 +118,7 @@ async function previewImport({ archiveName, passphrase, userId, config } = {}) {
     const { manifest, rows } = staged;
     const compatibility = checkCompatibility(manifest, effectiveEmbedder());
     const target = await resolveTarget(manifest);
-    let localOnlyDocs = [];
-    if (target.matched) {
-      const inArchive = new Set(rows.docs.map((d) => d.docId));
-      const local = await prisma().workspace_documents.findMany({
-        where: { workspaceId: target.workspace.id },
-      });
-      localOnlyDocs = local
-        .filter((d) => !inArchive.has(d.docId))
-        .map((d) => ({
-          docId: d.docId,
-          filename: d.filename,
-          docpath: d.docpath,
-        }))
-        .sort((a, b) => cmp(a.docpath, b.docpath) || cmp(a.docId, b.docId));
-    }
+    const localOnlyDocs = await localOnlyOf(target, rows.docs);
     const blocking = await computeBlocking({
       manifest,
       rows,
@@ -129,4 +161,9 @@ async function validateConfirmable(staged, { allowUnsynced = false } = {}) {
   return { ok: blocking.length === 0, blocking, compatibility, target };
 }
 
-module.exports = { previewImport, resolveTarget, validateConfirmable };
+module.exports = {
+  previewImport,
+  previewFromManifest,
+  resolveTarget,
+  validateConfirmable,
+};

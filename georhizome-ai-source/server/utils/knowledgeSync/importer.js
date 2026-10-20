@@ -100,6 +100,7 @@ async function confirmImportClaimed({
       await journalLib.removeJournalFile(staged.jobId);
   };
 
+  let swapResult = null;
   try {
     await locks.withWorkspaceLock(
       slug,
@@ -124,7 +125,7 @@ async function confirmImportClaimed({
           existingFlags,
         });
         const hasDocs = fs.existsSync(staged.stagedDocs);
-        await swap.runSwap(
+        swapResult = await swap.runSwap(
           {
             jobId: staged.jobId,
             kind: "import",
@@ -151,7 +152,12 @@ async function confirmImportClaimed({
     if (!(e instanceof swap.CrashSignal)) await cleanupCreated();
     throw e;
   }
-  await discardStaged(previewId, { config: cfg, owned: true }).catch(() => {});
+  const finalizePending = !!(swapResult && swapResult.finalizePending);
+  // The staging dir is the journal dir: keep it for recovery if still pending.
+  if (!finalizePending)
+    await discardStaged(previewId, { config: cfg, owned: true }).catch(
+      () => {}
+    );
   safeLog("info", "import complete", {
     slug,
     versionId: staged.manifest.versionId,
@@ -161,6 +167,7 @@ async function confirmImportClaimed({
     versionId: staged.manifest.versionId,
     docCount: staged.rows.docs.length,
     created,
+    finalizePending,
   };
 }
 

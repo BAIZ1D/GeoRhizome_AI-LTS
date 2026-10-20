@@ -249,6 +249,7 @@ async function runSwap(ctx, { config } = {}) {
     journal = await journalLib.updateJournal(jobId, { state: "committed" });
     fp("after:S6");
     await finishSwap(journal);
+    return { finalizePending: false };
   } catch (e) {
     if (e instanceof CrashSignal) throw e;
     safeLog("error", "swap failed", {
@@ -257,11 +258,17 @@ async function runSwap(ctx, { config } = {}) {
       kind,
     });
     if (committed) {
-      // DB is the commit authority; recovery finishes the FS side.
+      // WR-02: DB is the commit authority, so the import succeeded. Retry the
+      // FS finalisation once; otherwise boot recovery finishes it.
       try {
-        await journalLib.updateJournal(jobId, { state: "committed" });
-      } catch {
-        // best effort
+        const j = await journalLib.updateJournal(jobId, { state: "committed" });
+        await finishSwap(j);
+        return { finalizePending: false };
+      } catch (fe) {
+        safeLog("warn", "swap finalize deferred to recovery", {
+          code: fe && fe.code,
+        });
+        return { finalizePending: true };
       }
     } else if (journal) {
       try {

@@ -183,7 +183,11 @@ test("restores v1 (lance, docs, rows, marker) and is reversible once", async () 
   const v1 = await twoVersions();
   const v2 = snap();
   const r = await rollbackWorkspace({ slug: SLUG, userId: 1 });
-  expect(r).toEqual({ slug: SLUG, restoredVersionId: 1 });
+  expect(r).toEqual({
+    slug: SLUG,
+    restoredVersionId: 1,
+    finalizePending: false,
+  });
   expect(snap().lance).toBe(v1.lance);
   expect(snap().docs).toBe(v1.docs);
   expect(memdb.state.docs.map((d) => d.docId)).toEqual(["old1"]);

@@ -54,7 +54,7 @@ async function rollbackWorkspace({
     await fs.promises.mkdir(journalLib.jobDir(jobId), { recursive: true });
     const lance = path.join(bk, "lance");
     const docs = path.join(bk, "docs");
-    await swap.runSwap(
+    const res = await swap.runSwap(
       {
         jobId,
         kind: "rollback",
@@ -75,6 +75,7 @@ async function rollbackWorkspace({
     return {
       slug,
       restoredVersionId: oldMarker ? oldMarker.versionId ?? null : null,
+      finalizePending: !!(res && res.finalizePending),
     };
   });
 }

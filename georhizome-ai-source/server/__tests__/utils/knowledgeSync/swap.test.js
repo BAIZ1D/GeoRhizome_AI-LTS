@@ -348,7 +348,7 @@ test("post-commit normal failure does not roll back", async () => {
   await seedLiveFull();
   const { jobId, source } = await makeSource("new");
   swap.setFailpoint("after:S5");
-  await expect(run(jobId, source)).rejects.toThrow();
+  await expect(run(jobId, source)).resolves.toEqual({ finalizePending: false });
   expect(memdb.state.docs.map((d) => d.docId)).toEqual(["new1"]);
   expect(await countRows(liveLance())).toBe(3);
 });
@@ -405,5 +405,37 @@ describe("CR-01: unrecovered job on the slug blocks a new swap", () => {
       code: "KS_E_BUSY",
     });
     expect(snap()).toEqual(before);
+  });
+});
+
+describe("WR-02: post-commit failure reports success", () => {
+  test("non-crash failure after S5 retries finalize and resolves", async () => {
+    await seedLiveFull();
+    const { jobId, source } = await makeSource("n");
+    swap.setFailpoint("after:S5");
+    await expect(run(jobId, source)).resolves.toEqual({
+      finalizePending: false,
+    });
+    expect(memdb.state.docs.map((d) => d.docId)).toEqual(["n1"]);
+    expect(fs.existsSync(pend())).toBe(false);
+    expect(await journalLib.readJournal(jobId)).toBeNull();
+  });
+
+  test("finalize failure resolves with finalizePending and keeps journal", async () => {
+    await seedLiveFull();
+    const { jobId, source } = await makeSource("n");
+    swap.setFailpoint("after:S6");
+    const spy = jest
+      .spyOn(journalLib, "removeJournalDir")
+      .mockRejectedValue(new Error("EPERM"));
+    try {
+      await expect(run(jobId, source)).resolves.toEqual({
+        finalizePending: true,
+      });
+    } finally {
+      spy.mockRestore();
+    }
+    expect(memdb.state.docs.map((d) => d.docId)).toEqual(["n1"]);
+    expect((await journalLib.readJournal(jobId)).state).toBe("committed");
   });
 });

@@ -25,6 +25,8 @@ const KS_CODES = Object.freeze({
   KS_E_EXPORT_INCOMPLETE:
     "Export failed because a referenced document is missing.",
   KS_E_SIZE_LIMIT: "Archive exceeds the allowed size.",
+  KS_E_ARCHIVE_EXISTS:
+    "An archive with this version already exists; it was not overwritten.",
   KS_E_NOT_FOUND: "The requested item was not found.",
   KS_E_PREVIEW_INVALID: "Import preview is missing or expired.",
   KS_E_UNKNOWN: "Unexpected knowledge sync error.",

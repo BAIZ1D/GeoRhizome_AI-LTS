@@ -243,3 +243,14 @@ test("unknown workspace -> KS_E_NOT_FOUND", async () => {
     await code(exportWorkspace({ slug: "nope", passphrase: PW, config }))
   ).toBe("KS_E_NOT_FOUND");
 });
+
+test("WR-07: counter reset never overwrites or deletes an existing archive", async () => {
+  const r1 = await exportWorkspace({ slug: "ws1", passphrase: PW, config });
+  const orig = fs.readFileSync(r1.archivePath);
+  mockStore.clear(); // simulate DB/prisma reset of the version counter
+  expect(
+    await code(exportWorkspace({ slug: "ws1", passphrase: PW, config }))
+  ).toBe("KS_E_ARCHIVE_EXISTS");
+  expect(fs.readFileSync(r1.archivePath).equals(orig)).toBe(true);
+  expect(fs.existsSync(r1.archivePath + ".part")).toBe(false);
+});

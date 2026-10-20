@@ -319,10 +319,18 @@ async function exportWorkspace({ slug, passphrase, config } = {}) {
       await fs.promises.mkdir(outDir, { recursive: true });
       const archiveName = `${slug}-v${versionId}.grks`;
       const archivePath = path.join(outDir, archiveName);
+      // WR-07: never overwrite (or, on failure, delete) an existing archive,
+      // e.g. after the version counter was reset.
+      if (fs.existsSync(archivePath))
+        throw err("KS_E_ARCHIVE_EXISTS", "export");
+      const partPath = archivePath + ".part";
       try {
-        await encryptFile(tarFile, archivePath, pass, { config: cfg });
+        await encryptFile(tarFile, partPath, pass, { config: cfg });
+        if (fs.existsSync(archivePath))
+          throw err("KS_E_ARCHIVE_EXISTS", "export");
+        await fs.promises.rename(partPath, archivePath);
       } catch (e) {
-        await fs.promises.rm(archivePath, { force: true });
+        await fs.promises.rm(partPath, { force: true });
         throw e;
       }
 

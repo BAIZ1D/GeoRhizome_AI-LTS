@@ -17,7 +17,12 @@ const KNOWN_CODES = [
  * @returns {string}
  */
 export function formatKsError(t, error) {
-  if (error?.status === 403 || error?.code === "KS_E_FORBIDDEN")
+  // Role middleware (flexUserRoleValid) refuses with 401, not 403.
+  if (
+    error?.status === 401 ||
+    error?.status === 403 ||
+    error?.code === "KS_E_FORBIDDEN"
+  )
     return t("knowledgeSync.errors.forbidden");
   const code = KNOWN_CODES.includes(error?.code) ? error.code : "KS_E_UNKNOWN";
   return `${t(`knowledgeSync.errors.${code}`)} (${code})`;

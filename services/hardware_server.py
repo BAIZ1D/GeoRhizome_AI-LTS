@@ -38,6 +38,16 @@ app = FastAPI(title="GeoRhizome Hardware & Model Hub Server", version="1.0.0")
 ACTIVE_MODELS_STATE_PATH = os.path.join(CONFIG_DIR, "active_models.json")
 BGE_SCRIPT = os.path.abspath(os.path.join(os.path.dirname(__file__), "local_bge_server.py"))
 
+
+def _posix_listening_pids(port: int) -> List[str]:
+    """PIDs listening on `port`, excluding this hub (its probe sockets to the port also match lsof)."""
+    try:
+        out = subprocess.check_output(["lsof", "-ti:%d" % port, "-sTCP:LISTEN"], text=True)
+    except Exception:
+        return []
+    me = str(os.getpid())
+    return [p for p in out.split() if p and p != me]
+
 def load_active_state():
     """Load runtime model state. Seeds config/active_models.json from the tracked
     active_models.default.json when missing, strips persisted liveness flags and
@@ -609,7 +619,7 @@ def serve_model(req: ServeRequest, background_tasks: BackgroundTasks):
                             pid = parts[-1]
                             subprocess.run(f"taskkill /F /PID {pid}", shell=True)
             else:
-                pids = subprocess.check_output("lsof -ti:8001", shell=True, text=True).strip()
+                pids = "\n".join(_posix_listening_pids(8001))
                 if pids:
                     for p in pids.splitlines():
                         subprocess.run(f"kill -9 {p}", shell=True)
@@ -641,7 +651,7 @@ def serve_model(req: ServeRequest, background_tasks: BackgroundTasks):
                             pid = parts[-1]
                             subprocess.run(f"taskkill /F /PID {pid}", shell=True)
             else:
-                pids = subprocess.check_output("lsof -ti:8000", shell=True, text=True).strip()
+                pids = "\n".join(_posix_listening_pids(8000))
                 if pids:
                     for p in pids.splitlines():
                         subprocess.run(f"kill -9 {p}", shell=True)
@@ -678,7 +688,7 @@ def serve_model(req: ServeRequest, background_tasks: BackgroundTasks):
                             pid = parts[-1]
                             subprocess.run(f"taskkill /F /PID {pid}", shell=True)
             else:
-                pids = subprocess.check_output("lsof -ti:8003", shell=True, text=True).strip()
+                pids = "\n".join(_posix_listening_pids(8003))
                 if pids:
                     for p in pids.splitlines():
                         subprocess.run(f"kill -9 {p}", shell=True)
@@ -879,7 +889,7 @@ def offload_model(req: OffloadRequest):
                             pid = parts[-1]
                             subprocess.run(f"taskkill /F /PID {pid}", shell=True)
             else:
-                pids = subprocess.check_output("lsof -ti:8000", shell=True, text=True).strip()
+                pids = "\n".join(_posix_listening_pids(8000))
                 if pids:
                     for p in pids.splitlines():
                         subprocess.run(f"kill -9 {p}", shell=True)
@@ -908,7 +918,7 @@ def offload_model(req: OffloadRequest):
                             pid = parts[-1]
                             subprocess.run(f"taskkill /F /PID {pid}", shell=True)
             else:
-                pids = subprocess.check_output("lsof -ti:8001", shell=True, text=True).strip()
+                pids = "\n".join(_posix_listening_pids(8001))
                 if pids:
                     for p in pids.splitlines():
                         subprocess.run(f"kill -9 {p}", shell=True)
@@ -932,7 +942,7 @@ def offload_model(req: OffloadRequest):
                             pid = parts[-1]
                             subprocess.run(f"taskkill /F /PID {pid}", shell=True)
             else:
-                pids = subprocess.check_output("lsof -ti:8003", shell=True, text=True).strip()
+                pids = "\n".join(_posix_listening_pids(8003))
                 if pids:
                     for p in pids.splitlines():
                         subprocess.run(f"kill -9 {p}", shell=True)

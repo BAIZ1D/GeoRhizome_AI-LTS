@@ -221,3 +221,20 @@ def test_embedder_swap_launches_an_existing_script():
 
     assert os.path.isfile(hardware_server.BGE_SCRIPT)
     assert os.path.basename(os.path.dirname(hardware_server.BGE_SCRIPT)) == "services"
+
+
+def test_port_teardown_only_targets_listeners_and_never_the_hub(monkeypatch):
+    """`lsof -ti:8000` also lists the hub's own CLOSE_WAIT probe socket; kill -9 then killed the hub."""
+    import hardware_server
+
+    seen = {}
+
+    def fake_check_output(cmd, **_kw):
+        seen["cmd"] = " ".join(cmd) if isinstance(cmd, list) else cmd
+        return f"{os.getpid()}\n4242\n"
+
+    monkeypatch.setattr(hardware_server.subprocess, "check_output", fake_check_output)
+    assert hardware_server._posix_listening_pids(8000) == ["4242"]
+    assert "-sTCP:LISTEN" in seen["cmd"] and ":8000" in seen["cmd"]
+    src = inspect.getsource(hardware_server)
+    assert 'check_output("lsof -ti:' not in src

@@ -95,7 +95,7 @@ async function verifyContents(x, manifest) {
     throw err("KS_E_MANIFEST", "verify");
 }
 
-async function readRows(x, _manifest) {
+async function readRows(x, manifest) {
   let rows;
   try {
     rows = JSON.parse(
@@ -112,6 +112,20 @@ async function readRows(x, _manifest) {
     if (!fs.existsSync(path.join(x, "documents", d.file)))
       throw err("KS_E_MANIFEST", "rows");
   }
+  // WR-03: vectors must reference archive docs only; no duplicate docIds.
+  const docIds = new Set(rows.docs.map((d) => d.docId));
+  if (docIds.size !== rows.docs.length) throw err("KS_E_MANIFEST", "rows");
+  for (const v of rows.vectors) {
+    if (
+      !v ||
+      typeof v.docId !== "string" ||
+      typeof v.vectorId !== "string" ||
+      !docIds.has(v.docId)
+    )
+      throw err("KS_E_UNSAFE_ENTRY", "rows");
+  }
+  if (rows.vectors.length !== manifest.rowCount)
+    throw err("KS_E_MANIFEST", "rows");
   return rows;
 }
 
@@ -256,4 +270,5 @@ module.exports = {
   discardStaged,
   claimPreview,
   releasePreview,
+  _testOnly: { readRows },
 };

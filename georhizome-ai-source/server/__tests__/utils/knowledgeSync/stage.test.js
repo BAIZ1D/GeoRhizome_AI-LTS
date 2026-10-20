@@ -310,3 +310,63 @@ test("CR-02: discard refused while claimed or journaled; expired preview loadabl
   await journalLib.removeJournalDir(s.jobId);
   expect(leftovers()).toEqual([]);
 });
+
+describe("WR-03: readRows validates vectors", () => {
+  const { readRows } = stage._testOnly;
+  let x;
+  const write = (rows) => {
+    x = fs.mkdtempSync(path.join(os.tmpdir(), "ks-rows-"));
+    fs.mkdirSync(path.join(x, "db"), { recursive: true });
+    fs.mkdirSync(path.join(x, "documents"), { recursive: true });
+    fs.writeFileSync(path.join(x, "documents", "a.json"), "{}");
+    fs.writeFileSync(path.join(x, "documents", "b.json"), "{}");
+    fs.writeFileSync(path.join(x, "db", "rows.json"), JSON.stringify(rows));
+    return x;
+  };
+  afterEach(() => fs.rmSync(x, { recursive: true, force: true }));
+  const doc = (docId, file) => ({ docId, file });
+
+  test("valid rows pass", async () => {
+    const rows = {
+      docs: [doc("d1", "a.json")],
+      vectors: [{ docId: "d1", vectorId: "v1" }],
+    };
+    await expect(readRows(write(rows), { rowCount: 1 })).resolves.toEqual(rows);
+  });
+  test("vector pointing at a foreign docId is unsafe", async () => {
+    const rows = {
+      docs: [doc("d1", "a.json")],
+      vectors: [{ docId: "other-ws-doc", vectorId: "v1" }],
+    };
+    expect(await code(readRows(write(rows), { rowCount: 1 }))).toBe(
+      "KS_E_UNSAFE_ENTRY"
+    );
+  });
+  test("non-string vectorId is unsafe", async () => {
+    const rows = {
+      docs: [doc("d1", "a.json")],
+      vectors: [{ docId: "d1", vectorId: 5 }],
+    };
+    expect(await code(readRows(write(rows), { rowCount: 1 }))).toBe(
+      "KS_E_UNSAFE_ENTRY"
+    );
+  });
+  test("duplicate docId rejected", async () => {
+    const rows = {
+      docs: [doc("d1", "a.json"), doc("d1", "b.json")],
+      vectors: [{ docId: "d1", vectorId: "v1" }],
+    };
+    expect(await code(readRows(write(rows), { rowCount: 1 }))).toBe(
+      "KS_E_MANIFEST"
+    );
+  });
+  test("vector count must equal manifest.rowCount", async () => {
+    const rows = {
+      docs: [doc("d1", "a.json")],
+      vectors: [{ docId: "d1", vectorId: "v1" }],
+    };
+    expect(await code(readRows(write(rows), { rowCount: 2 }))).toBe(
+      "KS_E_MANIFEST"
+    );
+  });
+});

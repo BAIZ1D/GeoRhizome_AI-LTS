@@ -73,5 +73,22 @@
     "horizontal_psm": "--psm 6",
     "lang_horizontal": "jpn",
     "lang_vertical": "jpn_vert+jpn"
+  },
+  "knowledge_sync": {
+    "repo": "BAIZ1D/GeoRhizome_AI-LTS",
+    "part_size_bytes": 1073741824,
+    "chunk_size_bytes": 1048576,
+    "scrypt": {
+      "N": 131072,
+      "r": 8,
+      "p": 1,
+      "maxmem_bytes": 268435456,
+      "salt_bytes": 16
+    },
+    "passphrase_min_length": 12,
+    "catalog_release_tag": "ks-catalog-0001",
+    "staging_dir_name": "knowledge-sync-staging",
+    "max_extract_bytes": 4294967296,
+    "max_entries": 200000
   }
 }

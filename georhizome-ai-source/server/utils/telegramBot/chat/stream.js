@@ -226,6 +226,16 @@ async function buildSearchContext({
           topN: workspace?.topN,
           filterIdentifiers: pinnedDocIdentifiers,
           rerank: workspace?.vectorSearchMode === "rerank",
+        }).catch((e) => {
+          // D-02: surface the import/rollback gate readably (single authority: lance).
+          if (e?.code === "KS_E_SYNCING")
+            return {
+              contextTexts: [],
+              sources: [],
+              message:
+                "Workspace is syncing. Try again shortly. (KS_E_SYNCING)",
+            };
+          throw e;
         })
       : { contextTexts: [], sources: [], message: null };
 
@@ -233,7 +243,9 @@ async function buildSearchContext({
     return {
       contextTexts: [],
       sources: [],
-      error: "Vector search failed. Please try again.",
+      error: String(vectorSearchResults.message).includes("KS_E_SYNCING")
+        ? vectorSearchResults.message
+        : "Vector search failed. Please try again.",
     };
   }
 

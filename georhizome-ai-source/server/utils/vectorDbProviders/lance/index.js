@@ -8,6 +8,9 @@ const { sourceIdentifier } = require("../../chats");
 const { VectorDatabase } = require("../base");
 const rerankerClient = require("../../rerankerClient");
 const path = require("path");
+const locks = require("../../knowledgeSync/locks");
+const marker = require("../../knowledgeSync/marker");
+const { KnowledgeSyncError } = require("../../knowledgeSync/errors");
 
 /**
  * LancedDB Client connection object
@@ -127,6 +130,7 @@ class LanceDb extends VectorDatabase {
     // app_config.reranker.enabled, whatever the workspace vectorSearchMode is.
     rerank: _rerank = false,
   }) {
+    locks.assertNotSyncing(namespace);
     const cfg = rerankerClient.loadRerankerConfig();
     const finalLimit = cfg.final_top_k || topN || 10;
     const wideCount = Math.max(finalLimit, cfg.wide_candidate_count || 30);
@@ -220,6 +224,7 @@ class LanceDb extends VectorDatabase {
     topN = 4,
     filterIdentifiers = [],
   }) {
+    locks.assertNotSyncing(namespace);
     const collection = await client.openTable(namespace);
     const result = {
       contextTexts: [],
@@ -297,25 +302,37 @@ class LanceDb extends VectorDatabase {
     if (!data || data.length === 0) return true;
     const incomingDim = data[0]?.vector?.length;
 
+    locks.assertNotSyncing(namespace);
     const hasNamespace = await this.hasNamespace(namespace);
     if (hasNamespace) {
       const collection = await client.openTable(namespace);
-      // Validate schema vector dimension before inserting
+      // Best-effort schema read; only this read is allowed to fail silently.
+      let tableDim = null;
       try {
         const schema = await collection.schema();
         const vectorField = schema.fields.find((f) => f.name === "vector");
-        const tableDim = vectorField?.type?.listSize;
+        tableDim = vectorField?.type?.listSize || null;
+      } catch {
+        tableDim = null;
+      }
 
-        if (incomingDim && tableDim && incomingDim !== tableDim) {
-          console.warn(
-            `\x1b[33m[LanceDB Auto-Heal] Table '${namespace}' schema dimension (${tableDim}) differs from incoming vector dimension (${incomingDim}). Dropping old table and recreating with new ${incomingDim}-dim schema...\x1b[0m`
-          );
-          await client.dropTable(namespace);
-          await client.createTable(namespace, data);
-          return true;
+      // Comparison is OUTSIDE the swallowing try (IMP-06).
+      if (incomingDim && tableDim && incomingDim !== tableDim) {
+        let synced = true; // fail closed if the marker cannot be read
+        try {
+          synced = await marker.isSynced(namespace);
+        } catch {
+          synced = true;
         }
-      } catch (err) {
-        if (err.message.includes("[LanceDB Hard-Fail]")) throw err;
+        if (synced)
+          throw new KnowledgeSyncError("KS_E_DIM_MISMATCH", { phase: "heal" });
+        // Legacy auto-heal retained for unsynced local tables only.
+        console.warn(
+          `\x1b[33m[LanceDB Auto-Heal] Table '${namespace}' schema dimension (${tableDim}) differs from incoming vector dimension (${incomingDim}). Dropping old table and recreating with new ${incomingDim}-dim schema...\x1b[0m`
+        );
+        await client.dropTable(namespace);
+        await client.createTable(namespace, data);
+        return true;
       }
 
       await collection.add(data);
@@ -352,11 +369,13 @@ class LanceDb extends VectorDatabase {
    * @returns
    */
   async deleteVectorsInNamespace(client, namespace = null) {
+    locks.assertNotSyncing(namespace);
     await client.dropTable(namespace);
     return true;
   }
 
   async deleteDocumentFromNamespace(namespace, docId) {
+    locks.assertNotSyncing(namespace);
     const { client } = await this.connect();
     const exists = await this.namespaceExists(client, namespace);
     if (!exists) {
@@ -578,6 +597,7 @@ class LanceDb extends VectorDatabase {
   }) {
     if (!namespace || !input || !LLMConnector)
       throw new Error("Invalid request to performSimilaritySearch.");
+    locks.assertNotSyncing(namespace);
 
     const { client } = await this.connect();
     if (!(await this.namespaceExists(client, namespace))) {
@@ -628,6 +648,7 @@ class LanceDb extends VectorDatabase {
 
   async "delete-namespace"(reqBody = {}) {
     const { namespace = null } = reqBody;
+    locks.assertNotSyncing(namespace);
     const { client } = await this.connect();
     if (!(await this.namespaceExists(client, namespace)))
       throw new Error("Namespace by that name does not exist.");
@@ -639,6 +660,8 @@ class LanceDb extends VectorDatabase {
   }
 
   async reset() {
+    if (locks.heldCount() > 0)
+      throw new KnowledgeSyncError("KS_E_BUSY", { phase: "lock" });
     const { client } = await this.connect();
     const fs = require("fs");
     fs.rm(`${client.uri}`, { recursive: true }, () => null);

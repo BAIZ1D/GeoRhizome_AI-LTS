@@ -92,6 +92,16 @@ async function chatSync({
           topN: workspace?.topN,
           filterIdentifiers: pinnedDocIdentifiers,
           rerank: workspace?.vectorSearchMode === "rerank",
+        }).catch((e) => {
+          // D-02: surface the import/rollback gate readably (single authority: lance).
+          if (e?.code === "KS_E_SYNCING")
+            return {
+              contextTexts: [],
+              sources: [],
+              message:
+                "Workspace is syncing. Try again shortly. (KS_E_SYNCING)",
+            };
+          throw e;
         })
       : {
           contextTexts: [],
@@ -318,6 +328,16 @@ async function streamChat({
           topN: workspace?.topN,
           filterIdentifiers: pinnedDocIdentifiers,
           rerank: workspace?.vectorSearchMode === "rerank",
+        }).catch((e) => {
+          // D-02: surface the import/rollback gate readably (single authority: lance).
+          if (e?.code === "KS_E_SYNCING")
+            return {
+              contextTexts: [],
+              sources: [],
+              message:
+                "Workspace is syncing. Try again shortly. (KS_E_SYNCING)",
+            };
+          throw e;
         })
       : {
           contextTexts: [],

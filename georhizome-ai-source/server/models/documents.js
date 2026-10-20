@@ -1,5 +1,6 @@
 const { v4: uuidv4 } = require("uuid");
 const { getVectorDbClass } = require("../utils/helpers");
+const locks = require("../utils/knowledgeSync/locks");
 const prisma = require("../utils/prisma");
 const { Telemetry } = require("./telemetry");
 const { EventLogs } = require("./eventLogs");
@@ -81,6 +82,14 @@ const Document = {
   },
 
   addDocuments: async function (workspace, additions = [], userId = null) {
+    if (additions.length === 0) return { failed: [], embedded: [] };
+    // Shared "embed" lock (Pitfall 1): refused with KS_E_BUSY during export/import.
+    return locks.withWorkspaceLock(workspace.slug, "embed", () =>
+      this._addDocuments(workspace, additions, userId)
+    );
+  },
+
+  _addDocuments: async function (workspace, additions = [], userId = null) {
     const VectorDb = getVectorDbClass();
     if (additions.length === 0) return { failed: [], embedded: [] };
     const { fileData } = require("../utils/files");
@@ -117,6 +126,8 @@ const Document = {
       }
 
       const docId = uuidv4();
+      // NOTE: `path.split("/")[1]` below is a known filename quirk (Pitfall 7);
+      // the knowledge-sync importer sets filename itself (handled in Plan 05).
       const { pageContent: _pageContent, ...metadata } = data;
       const newDoc = {
         docId,
@@ -202,6 +213,13 @@ const Document = {
   },
 
   removeDocuments: async function (workspace, removals = [], userId = null) {
+    if (removals.length === 0) return;
+    return locks.withWorkspaceLock(workspace.slug, "delete", () =>
+      this._removeDocuments(workspace, removals, userId)
+    );
+  },
+
+  _removeDocuments: async function (workspace, removals = [], userId = null) {
     const VectorDb = getVectorDbClass();
     if (removals.length === 0) return;
 

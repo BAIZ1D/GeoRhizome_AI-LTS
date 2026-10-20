@@ -98,6 +98,16 @@ async function streamChatWithForEmbed(
           topN: embed.workspace?.topN,
           filterIdentifiers: pinnedDocIdentifiers,
           rerank: embed.workspace?.vectorSearchMode === "rerank",
+        }).catch((e) => {
+          // D-02: surface the import/rollback gate readably (single authority: lance).
+          if (e?.code === "KS_E_SYNCING")
+            return {
+              contextTexts: [],
+              sources: [],
+              message:
+                "Workspace is syncing. Try again shortly. (KS_E_SYNCING)",
+            };
+          throw e;
         })
       : {
           contextTexts: [],

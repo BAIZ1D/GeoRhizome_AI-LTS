@@ -68,3 +68,23 @@ test("no PAT-shaped tokens in working tree", () => {
   }
   expect(hits).toEqual([]);
 });
+
+test("legacy token/exec usage is gone from knowledge-sync code and legacy routes", () => {
+  const files = walk(path.join(serverRoot, "utils/knowledgeSync"), new Set());
+  files.push(path.join(serverRoot, "endpoints/knowledgeSync.js"));
+  files.push(path.join(serverRoot, "endpoints/system.js"));
+  for (const f of files) {
+    const src = fs.readFileSync(f, "utf8");
+    expect({ f, hit: /GHCR_READ_TOKEN|\bexecSync\b/.test(src) }).toEqual({
+      f,
+      hit: false,
+    });
+  }
+  const legacy =
+    /\/(?:api\/)?system\/(upload-workspace|sync-workspace|workspace-vectors)/;
+  const skip = new Set(["node_modules", "__tests__", "storage", "dist"]);
+  // Frontend scan deferred: KnowledgeSync.jsx is rewritten in the UI plan (07-06+).
+  const scan = [...walk(serverRoot, skip)].filter((f) => /\.(js|jsx)$/.test(f));
+  const hits = scan.filter((f) => legacy.test(fs.readFileSync(f, "utf8")));
+  expect(hits.map((f) => path.relative(repoRoot, f))).toEqual([]);
+});

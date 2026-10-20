@@ -47,6 +47,9 @@ jest.mock("../../utils/knowledgeSync/importer", () => ({
 jest.mock("../../utils/knowledgeSync/rollback", () => ({
   rollbackWorkspace: jest.fn(),
 }));
+jest.mock("../../utils/knowledgeSync/access", () => ({
+  assertWorkspaceAccess: jest.fn(async () => {}),
+}));
 jest.mock("../../utils/knowledgeSync/secrets", () => ({
   getPassphrase: jest.fn(async () => "stored-pass"),
   passphraseStatus: jest.fn(),
@@ -181,7 +184,9 @@ describe("default user can preview/confirm/rollback", () => {
       restoredVersionId: 1,
     });
     const r = await call("/knowledge-sync/rollback/ws", "3");
-    expect(r.status).toBe(200);
+    expect(r.status).toBe(202);
+    expect(typeof r.json.jobId).toBe("string");
+    await new Promise((res) => setTimeout(res, 50));
     expect(rollback.rollbackWorkspace).toHaveBeenCalledWith(
       expect.objectContaining({
         slug: "ws",
@@ -219,18 +224,18 @@ describe("error status mapping", () => {
     ["KS_E_VERSION_STALE", 400],
     ["KS_E_PASSPHRASE", 400],
   ])("%s -> %i", async (code, status) => {
-    rollback.rollbackWorkspace.mockRejectedValueOnce(
+    exporter.exportWorkspace.mockRejectedValueOnce(
       new KnowledgeSyncError(code)
     );
-    const r = await call("/knowledge-sync/rollback/ws", "3");
+    const r = await call("/knowledge-sync/export/ws", "1");
     expect(r.status).toBe(status);
     expect(r.json.error.code).toBe(code);
   });
   test("non-KS error becomes 500 KS_E_UNKNOWN without leaking", async () => {
-    rollback.rollbackWorkspace.mockRejectedValueOnce(
+    exporter.exportWorkspace.mockRejectedValueOnce(
       new Error("boom /etc/passwd")
     );
-    const r = await call("/knowledge-sync/rollback/ws", "3");
+    const r = await call("/knowledge-sync/export/ws", "1");
     expect(r.status).toBe(500);
     expect(r.text).not.toContain("passwd");
     expect(safeLog).toHaveBeenCalledWith("error", "request failed", {

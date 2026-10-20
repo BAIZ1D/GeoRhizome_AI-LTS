@@ -1,4 +1,5 @@
 const markerLabel = (slug) => "ks_synced_" + slug;
+const commitTokenLabel = (jobId) => "ks_commit_" + jobId;
 const exportCounterLabel = (slug) => "ks_export_ver_" + slug;
 
 const db = () => require("../prisma");
@@ -38,6 +39,30 @@ async function deleteMarker(tx, slug) {
   await tx.system_settings.deleteMany({ where: { label: markerLabel(slug) } });
 }
 
+/** Written in the same DB transaction as the swap rows: recovery authority. */
+async function writeCommitToken(tx, jobId) {
+  const label = commitTokenLabel(jobId);
+  const value = new Date().toISOString();
+  await tx.system_settings.upsert({
+    where: { label },
+    update: { value },
+    create: { label, value },
+  });
+}
+
+async function hasCommitToken(jobId, client) {
+  const row = await (client || db()).system_settings.findFirst({
+    where: { label: commitTokenLabel(jobId) },
+  });
+  return !!row;
+}
+
+async function deleteCommitToken(jobId, client) {
+  await (client || db()).system_settings.deleteMany({
+    where: { label: commitTokenLabel(jobId) },
+  });
+}
+
 async function nextExportVersion(slug) {
   const row = await db().system_settings.findFirst({
     where: { label: exportCounterLabel(slug) },
@@ -58,6 +83,10 @@ async function commitExportVersion(slug, n) {
 module.exports = {
   markerLabel,
   exportCounterLabel,
+  commitTokenLabel,
+  writeCommitToken,
+  hasCommitToken,
+  deleteCommitToken,
   readMarker,
   isSynced,
   writeMarker,

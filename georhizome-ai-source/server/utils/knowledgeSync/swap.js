@@ -116,6 +116,11 @@ async function finishSwap(journal) {
     }
     await rmrf(pend);
   }
+  try {
+    await marker.deleteCommitToken(journal.jobId);
+  } catch (e) {
+    safeLog("warn", "commit token cleanup failed", { code: e && e.code });
+  }
   await journalLib.removeJournalDir(journal.jobId);
 }
 
@@ -162,6 +167,8 @@ async function commitDb(ctx, cfg) {
           jobId: ctx.jobId,
         });
       else await marker.deleteMarker(tx, slug);
+      // Explicit commit token, atomic with the rest of the transaction.
+      await marker.writeCommitToken(tx, ctx.jobId);
     },
     { timeout: cfg.import_tx_timeout_ms, maxWait: cfg.import_tx_max_wait_ms }
   );

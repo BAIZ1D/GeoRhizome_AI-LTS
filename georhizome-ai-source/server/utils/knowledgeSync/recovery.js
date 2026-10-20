@@ -25,12 +25,13 @@ async function readPendingMarker(slug) {
 }
 
 /**
- * Did the DB transaction commit? The marker row decides.
- * marker.jobId === journal.jobId => committed. A deleted marker also proves
- * commit when the pre-swap marker (pending/marker.json) was non-null
- * (rollback jobs restoring an unsynced state delete the marker).
+ * Did the DB transaction commit? The explicit commit token (written in the
+ * same transaction, keyed by jobId) is the authority. Legacy fallback for
+ * journals from before the token existed: marker.jobId === journal.jobId, or a
+ * deleted marker when the pre-swap marker (pending/marker.json) was non-null.
  */
 async function dbCommitted(journal) {
+  if (await marker.hasCommitToken(journal.jobId)) return true;
   const m = await marker.readMarker(journal.slug);
   if (m && m.jobId === journal.jobId) return true;
   if (m === null) return (await readPendingMarker(journal.slug)) !== null;

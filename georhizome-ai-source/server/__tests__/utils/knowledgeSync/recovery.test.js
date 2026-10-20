@@ -330,3 +330,64 @@ test("never throws when the DB throws", async () => {
   // journal retained so a later boot can retry
   expect(await journalLib.readJournal(jobId)).not.toBeNull();
 });
+
+describe("explicit commit token (W3), pre-swap and target markers both null", () => {
+  const seedUnsynced = async () => {
+    await seedLiveFull();
+    memdb.state.settings.delete(marker.markerLabel(SLUG));
+  };
+  const crashBothNull = async (name) => {
+    await seedUnsynced();
+    const before = snap();
+    const { jobId, source } = await makeSource("new");
+    source.marker = null;
+    swap.setFailpoint("crash:" + name);
+    await expect(run(jobId, source, "rollback")).rejects.toBeInstanceOf(
+      swap.CrashSignal
+    );
+    swap.setFailpoint(null);
+    locks._resetForTests();
+    expect(await marker.readMarker(SLUG)).toBeNull();
+    return { before, jobId };
+  };
+
+  test("DB committed -> finishSwap", async () => {
+    const { jobId } = await crashBothNull("after:S5");
+    const fin = jest.spyOn(swap, "finishSwap");
+    const rb = jest.spyOn(swap, "rollbackSwap");
+    const r = await recoverKnowledgeSync();
+    expect(r.finished).toBe(1);
+    expect(r.rolledBack).toBe(0);
+    expect(fin).toHaveBeenCalled();
+    expect(rb).not.toHaveBeenCalled();
+    expect(await countRows(liveLance())).toBe(3);
+    expect(memdb.state.docs.map((d) => d.docId)).toEqual(["new1"]);
+    noResidue(jobId);
+    expect(await marker.hasCommitToken(jobId)).toBe(false);
+  });
+
+  test("DB not committed -> rollbackSwap", async () => {
+    const { before, jobId } = await crashBothNull("in:S5");
+    const fin = jest.spyOn(swap, "finishSwap");
+    const rb = jest.spyOn(swap, "rollbackSwap");
+    const r = await recoverKnowledgeSync();
+    expect(r.rolledBack).toBe(1);
+    expect(r.finished).toBe(0);
+    expect(rb).toHaveBeenCalled();
+    expect(fin).not.toHaveBeenCalled();
+    expect(snap()).toEqual(before);
+    noResidue(jobId);
+  });
+
+  test("token is authority and cleaned by finishSwap", async () => {
+    const { jobId, source } = await makeSource("tok");
+    await seedLiveFull();
+    swap.setFailpoint("crash:after:S5");
+    await expect(run(jobId, source)).rejects.toBeInstanceOf(swap.CrashSignal);
+    swap.setFailpoint(null);
+    locks._resetForTests();
+    expect(await marker.hasCommitToken(jobId)).toBe(true);
+    await recoverKnowledgeSync();
+    expect(await marker.hasCommitToken(jobId)).toBe(false);
+  });
+});

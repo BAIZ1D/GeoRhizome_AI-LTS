@@ -36,6 +36,7 @@ os.makedirs(MODELS_CACHE_DIR, exist_ok=True)
 app = FastAPI(title="GeoRhizome Hardware & Model Hub Server", version="1.0.0")
 
 ACTIVE_MODELS_STATE_PATH = os.path.join(CONFIG_DIR, "active_models.json")
+BGE_SCRIPT = os.path.abspath(os.path.join(os.path.dirname(__file__), "local_bge_server.py"))
 
 def load_active_state():
     """Load runtime model state. Seeds config/active_models.json from the tracked
@@ -647,11 +648,10 @@ def serve_model(req: ServeRequest, background_tasks: BackgroundTasks):
         except Exception:
             pass
 
-        bge_script = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "local_bge_server.py"))
         env = os.environ.copy()
         if req.model_id:
             env["EMBEDDING_MODEL_PREF"] = req.model_id
-        p = subprocess.Popen([sys.executable, bge_script], env=env)
+        p = subprocess.Popen([sys.executable, BGE_SCRIPT], env=env)
         ACTIVE_PROCESSES["embedding"] = {"pid": p.pid, "model_id": req.model_id, "name": req.model_id, "port": 8000, "start_time": time.time()}
         
         # Automatically probe live model for runtime dimension and update configs

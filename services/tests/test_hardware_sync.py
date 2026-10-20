@@ -213,3 +213,11 @@ def test_save_active_state_locked_atomic(hs, tmp_config_dir, monkeypatch):
     raw = open(os.path.join(tmp_config_dir, "active_models.json")).read()
     assert '"alive"' not in raw
     json.loads(raw)
+
+
+def test_embedder_swap_launches_an_existing_script():
+    """/hardware/serve embedding must spawn services/local_bge_server.py (E2E-05 swap died: wrong path)."""
+    import hardware_server
+
+    assert os.path.isfile(hardware_server.BGE_SCRIPT)
+    assert os.path.basename(os.path.dirname(hardware_server.BGE_SCRIPT)) == "services"

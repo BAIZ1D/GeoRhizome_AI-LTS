@@ -55,6 +55,9 @@ export default {
   docs: (path = "") => {
     return `https://docs.anythingllm.com${path}`;
   },
+  knowledgeSyncPage: () => {
+    return "/knowledge-sync";
+  },
   chatModes: () => {
     return "https://docs.anythingllm.com/features/chat-modes";
   },

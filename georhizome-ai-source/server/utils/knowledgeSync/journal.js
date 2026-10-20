@@ -138,7 +138,13 @@ async function removeJournalDir(jobId) {
   await fs.promises.rm(jobDir(jobId), { recursive: true, force: true });
 }
 
+/** Remove only journal.json (the job dir may be a still-valid preview). */
+async function removeJournalFile(jobId) {
+  await fs.promises.rm(journalPath(jobId), { force: true });
+}
+
 module.exports = {
+  removeJournalFile,
   createJournal,
   updateJournal,
   readJournal,

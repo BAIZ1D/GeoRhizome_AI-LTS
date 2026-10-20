@@ -11,6 +11,7 @@ const { validateConfirmable } = require("./preview");
 const { buildImportRows } = require("./docmap");
 const { assertSafeSlug } = require("./paths");
 const marker = require("./marker");
+const journalLib = require("./journal");
 const locks = require("./locks");
 const swap = require("./swap");
 const { assertWorkspaceAccess } = require("./access");
@@ -74,6 +75,18 @@ async function confirmImportClaimed({
       throw new KnowledgeSyncError("KS_E_UNKNOWN", { phase: "create" });
     workspace = res.workspace;
     createdWorkspaceId = workspace.id;
+    // WR-01: record the created workspace in a "prepared" journal right away
+    // so boot recovery deletes it if we crash before the swap starts.
+    try {
+      await journalLib.createJournal(staged.jobId, {
+        kind: "import",
+        slug: assertSafeSlug(workspace.slug),
+        createdWorkspaceId,
+      });
+    } catch (e) {
+      await W.delete({ id: createdWorkspaceId });
+      throw e;
+    }
   }
   const slug = assertSafeSlug(workspace.slug);
   const created = createdWorkspaceId !== null;
@@ -82,6 +95,9 @@ async function confirmImportClaimed({
     if (!created) return;
     if ((await marker.readMarker(slug).catch(() => null)) === null)
       await W.delete({ id: createdWorkspaceId });
+    const j = await journalLib.readJournal(staged.jobId);
+    if (j && j.state === "prepared")
+      await journalLib.removeJournalFile(staged.jobId);
   };
 
   try {

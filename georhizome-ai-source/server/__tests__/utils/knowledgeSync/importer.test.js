@@ -254,12 +254,13 @@ test("workspace is syncing during the swap", async () => {
 test("CR-03: concurrent confirm of the same preview is refused, one workspace created", async () => {
   mockWsList = [];
   let n = 0;
-  mockW.new.mockImplementation(async (name) => {
+  const mk = async (name) => {
     n += 1;
     const w = { id: 4 + n, name, slug: `ws-one-${n}`, openAiTemp: null };
     mockWsList.push(w);
     return { workspace: w, message: null };
-  });
+  };
+  mockW.new.mockImplementationOnce(mk);
   const p = await prev();
   const args = { previewId: p.previewId, userId: 7, passphrase: PW, config };
   const res = await Promise.allSettled([
@@ -272,4 +273,50 @@ test("CR-03: concurrent confirm of the same preview is refused, one workspace cr
   expect(mockW.new).toHaveBeenCalledTimes(1);
   expect(mockWsList).toHaveLength(1);
   expect(locks.heldCount()).toBe(0);
+});
+
+test("WR-01: crash between W.new and swap leaves a prepared journal that recovery uses to delete the workspace", async () => {
+  const journalLib = require("../../../utils/knowledgeSync/journal");
+  const {
+    recoverKnowledgeSync,
+  } = require("../../../utils/knowledgeSync/recovery");
+  mockWsList = [];
+  const p = await prev();
+  const spy = jest
+    .spyOn(locks, "withWorkspaceLock")
+    .mockImplementation(async () => {
+      throw new swap.CrashSignal("pre-swap");
+    });
+  try {
+    await expect(
+      confirmImport({
+        previewId: p.previewId,
+        userId: 7,
+        passphrase: PW,
+        config,
+      })
+    ).rejects.toBeInstanceOf(swap.CrashSignal);
+  } finally {
+    spy.mockRestore();
+  }
+  const j = await journalLib.readJournal(p.previewId);
+  expect(j).toMatchObject({ state: "prepared", createdWorkspaceId: 5 });
+  expect(mockWsList).toHaveLength(1);
+  await recoverKnowledgeSync();
+  expect(mockW.delete).toHaveBeenCalledWith({ id: 5 });
+  expect(mockWsList).toEqual([]);
+  expect(await journalLib.readJournal(p.previewId)).toBeNull();
+});
+
+test("WR-01: non-crash failure before swap removes the prepared journal but keeps the preview", async () => {
+  const journalLib = require("../../../utils/knowledgeSync/journal");
+  mockWsList = [];
+  const p = await prev();
+  locks.acquire("ws-one", "export");
+  await expect(
+    confirmImport({ previewId: p.previewId, userId: 7, passphrase: PW, config })
+  ).rejects.toMatchObject({ code: "KS_E_BUSY" });
+  expect(await journalLib.readJournal(p.previewId)).toBeNull();
+  expect(fs.existsSync(journalLib.jobDir(p.previewId))).toBe(true);
+  expect(mockWsList).toEqual([]);
 });

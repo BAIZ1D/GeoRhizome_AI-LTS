@@ -1,0 +1,10 @@
+CLAUDE.md
+.planning/
+__pycache__/
+*.pyc
+graphify-out/
+.env
+*.gguf
+*.safetensors
+*.db
+georhizome-ai-source/server/__tests__/utils/agents/models/

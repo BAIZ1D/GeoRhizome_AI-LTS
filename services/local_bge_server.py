@@ -35,6 +35,16 @@ FALLBACK_MODEL = "cl-nagoya/ruri-v3-310m"
 FALLBACK_IDLE_UNLOAD_SECONDS = 300
 FALLBACK_PARITY_MIN_COSINE = 0.999
 
+# Short Japanese + ASCII probes for the fp16-vs-fp32 cosine parity self-test.
+PARITY_PROBES: List[str] = [
+    "吾輩は猫である。名前はまだ無い。",
+    "検索拡張生成では、埋め込みモデルの精度が重要です。",
+    "The quick brown fox jumps over the lazy dog.",
+    "Retrieval-augmented generation relies on dense embeddings.",
+    "2024年度の売上高は前年比12.5%増加しました。",
+    "東京都千代田区丸の内1-9-1",
+]
+
 # Injection hook for tests: SentenceTransformer-compatible factory (None = real).
 ST_FACTORY: Optional[Callable[..., Any]] = None
 
@@ -154,8 +164,41 @@ class Engine:
             print(f"[Embedder] ready on {self.device} ({self.precision})", flush=True)
 
     def _select_precision(self, model: Any, device: str) -> Any:
-        """Hook for fp16 parity self-test (task 2); default fp32."""
-        return model
+        """MPS fp16 only if per-text cosine vs fp32 >= parity_min_cosine and all finite."""
+        if device != "mps":
+            print(f"[Embedder] precision fp32 ({device}: fp16 not attempted)", flush=True)
+            return model
+        if not self.cfg.get("mps_fp16", True):
+            print("[Embedder] precision fp32 (embedding.mps_fp16 disabled)", flush=True)
+            return model
+        import numpy as np
+
+        min_cos = float(self.cfg.get("parity_min_cosine", FALLBACK_PARITY_MIN_COSINE))
+        t0 = time.time()
+        bs = self.cfg["batch_size"]
+        ref = np.asarray(model.encode(PARITY_PROBES, batch_size=bs, normalize_embeddings=True), dtype=np.float64)
+        model.half()
+        half = np.asarray(model.encode(PARITY_PROBES, batch_size=bs, normalize_embeddings=True), dtype=np.float64)
+        finite = bool(np.isfinite(half).all())
+        if finite:
+            num = (ref * half).sum(axis=1)
+            den = np.linalg.norm(ref, axis=1) * np.linalg.norm(half, axis=1)
+            min_seen = float((num / np.where(den == 0, 1.0, den)).min())
+        else:
+            min_seen = float("nan")
+        elapsed = round(time.time() - t0, 3)
+        ok = finite and min_seen >= min_cos
+        self.selftest = {"verdict": "fp16" if ok else "fp32-fallback", "min_cosine": min_seen,
+                         "threshold": min_cos, "finite": finite, "seconds": elapsed}
+        if ok:
+            self.precision = "fp16"
+            print(f"[Embedder] fp16 accepted: min_cosine={min_seen:.6f} >= {min_cos} ({elapsed}s)", flush=True)
+            return model
+        reason = "non-finite output" if not finite else f"min_cosine={min_seen:.6f} < {min_cos}"
+        print(f"[Embedder] fp16 rejected ({reason}); reloading fresh fp32 model", flush=True)
+        del model, ref, half
+        _free_memory()
+        return self._new_model(device)  # fresh fp32 weights from disk, never .float() on halved
 
     def unload(self) -> None:
         with self._load_lock:

@@ -136,3 +136,82 @@ def test_handlers_are_sync(srv):
 
     assert not inspect.iscoroutinefunction(srv.create_embedding)
     assert not inspect.iscoroutinefunction(srv.health)
+
+
+# ---- fp16 parity self-test (task 2)
+class HalfST(FakeST):
+    """half() switches encode output; mode: 'same' | 'drift' | 'nan'."""
+
+    mode = "same"
+
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        self.halved = False
+
+    def half(self):
+        self.halved = True
+        return self
+
+    def encode(self, texts, batch_size=32, normalize_embeddings=False, **kw):
+        base = super().encode(texts, batch_size=batch_size, normalize_embeddings=normalize_embeddings)
+        if not self.halved or HalfST.mode == "same":
+            return base
+        if HalfST.mode == "nan":
+            return base * np.nan
+        return np.array([[0.9, 0.436, 0.0] for _ in texts], dtype=np.float32)  # cos ~0.9
+
+
+@pytest.fixture
+def mps_srv(srv, monkeypatch):
+    HalfST.mode = "same"
+    monkeypatch.setattr(srv, "ST_FACTORY", HalfST)
+    monkeypatch.setattr(srv, "_resolve_device", lambda: "mps")
+    srv.engine = srv.Engine()
+    return srv
+
+
+def test_fp16_accepted_on_parity(mps_srv):
+    with TestClient(mps_srv.app) as c:
+        c.post("/v1/embeddings", json={"input": "x"})
+        h = c.get("/health").json()
+    assert h["precision"] == "fp16" and h["selftest"]["verdict"] == "fp16"
+    assert len(FakeST.instances) == 1 and FakeST.instances[0].halved
+
+
+def test_fp16_rejected_on_low_cosine_reloads_fresh(mps_srv):
+    HalfST.mode = "drift"
+    with TestClient(mps_srv.app) as c:
+        c.post("/v1/embeddings", json={"input": "x"})
+        h = c.get("/health").json()
+    assert h["precision"] == "fp32" and h["selftest"]["verdict"] == "fp32-fallback"
+    assert len(FakeST.instances) == 2
+    assert mps_srv.engine.model is FakeST.instances[1] and not FakeST.instances[1].halved
+
+
+def test_fp16_rejected_on_nonfinite(mps_srv):
+    HalfST.mode = "nan"
+    with TestClient(mps_srv.app) as c:
+        c.post("/v1/embeddings", json={"input": "x"})
+        h = c.get("/health").json()
+    assert h["precision"] == "fp32" and h["selftest"]["finite"] is False
+    assert len(FakeST.instances) == 2
+
+
+def test_fp16_disabled_by_config(mps_srv):
+    mps_srv.engine.cfg["mps_fp16"] = False
+    mps_srv.load_settings = lambda d: {**mps_srv.engine.cfg}
+    with TestClient(mps_srv.app) as c:
+        c.post("/v1/embeddings", json={"input": "x"})
+        h = c.get("/health").json()
+    assert h["precision"] == "fp32" and h["selftest"] is None
+    assert not FakeST.instances[0].halved
+
+
+def test_cpu_always_fp32_no_selftest(srv, monkeypatch):
+    monkeypatch.setattr(srv, "ST_FACTORY", HalfST)
+    srv.engine = srv.Engine()
+    with TestClient(srv.app) as c:
+        c.post("/v1/embeddings", json={"input": "x"})
+        h = c.get("/health").json()
+    assert h["precision"] == "fp32" and h["selftest"] is None
+    assert not FakeST.instances[0].halved

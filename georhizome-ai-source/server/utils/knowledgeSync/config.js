@@ -44,6 +44,8 @@ const DEFAULTS = Object.freeze({
   import_tx_timeout_ms: 60000,
   /** Prisma transaction max wait (ms). */
   import_tx_max_wait_ms: 10000,
+  /** Rows per batch in import confirm DB loops. */
+  import_batch_size: 500,
   upload_attempts: 5,
   upload_backoff_min_ms: 2000,
   upload_backoff_max_ms: 60000,
@@ -155,6 +157,12 @@ function getKnowledgeSyncConfig({ configPath } = {}) {
       ks,
       "import_tx_timeout_ms",
       D.import_tx_timeout_ms,
+      posInt
+    ),
+    import_batch_size: pick(
+      ks,
+      "import_batch_size",
+      D.import_batch_size,
       posInt
     ),
     import_tx_max_wait_ms: pick(

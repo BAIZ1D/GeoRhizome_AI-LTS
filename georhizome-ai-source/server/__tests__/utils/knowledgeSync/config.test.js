@@ -89,3 +89,20 @@ test("transport keys: defaults and invalid fallback", () => {
   expect(b.catalog_tag_prefix).toBe("ks-catalog-");
   expect(b.job_poll_interval_ms).toBe(250);
 });
+
+test("import_batch_size default, override, invalid fallback", () => {
+  const d = getKnowledgeSyncConfig({ configPath: write("d1.json", {}) });
+  expect(d.import_batch_size).toBe(500);
+  const o = getKnowledgeSyncConfig({
+    configPath: write("d2.json", { knowledge_sync: { import_batch_size: 50 } }),
+  });
+  expect(o.import_batch_size).toBe(50);
+  for (const bad of [0, -3, 1.5, "9"]) {
+    const x = getKnowledgeSyncConfig({
+      configPath: write("d3.json", {
+        knowledge_sync: { import_batch_size: bad },
+      }),
+    });
+    expect(x.import_batch_size).toBe(500);
+  }
+});

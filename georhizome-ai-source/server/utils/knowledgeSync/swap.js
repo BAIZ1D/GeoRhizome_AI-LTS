@@ -10,7 +10,6 @@ const { buildSnapshotRows } = require("./docmap");
 const { safeLog } = require("./redact");
 
 const prisma = () => require("../prisma");
-const BATCH = 500;
 
 class CrashSignal extends Error {
   constructor(name) {
@@ -128,6 +127,7 @@ const toDate = (v) => (v instanceof Date ? v : v ? new Date(v) : undefined);
 
 async function commitDb(ctx, cfg) {
   const { slug, workspaceId, source } = ctx;
+  const BATCH = cfg.import_batch_size;
   await prisma().$transaction(
     async (tx) => {
       const old = await tx.workspace_documents.findMany({

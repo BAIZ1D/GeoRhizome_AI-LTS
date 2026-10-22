@@ -96,6 +96,7 @@
     "preview_ttl_minutes": 60,
     "import_tx_timeout_ms": 60000,
     "import_tx_max_wait_ms": 10000,
+    "import_batch_size": 500,
     "upload_attempts": 5,
     "upload_backoff_min_ms": 2000,
     "upload_backoff_max_ms": 60000,

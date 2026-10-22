@@ -4,6 +4,10 @@ const {
 } = require("../../models/workspaceAgentInvocation");
 const { writeResponseChunk } = require("../helpers/chat/responses");
 const { Workspace } = require("../../models/workspace");
+const { loadLlmSampling } = require("../helpers/llmSampling");
+
+// Low-variance query-rewrite temperature for non-local providers (unchanged).
+const OTHER_PROVIDER_REWRITE_TEMP = 0.1;
 
 /**
  * In-memory cache for attachments associated with agent invocations.
@@ -110,12 +114,18 @@ CRITICAL RULES:
             model: workspace?.chatModel,
           });
 
+          const rewriteProvider =
+            workspace?.chatProvider || process.env.LLM_PROVIDER || "openai";
+          const rewriteTemp =
+            rewriteProvider === "generic-openai"
+              ? loadLlmSampling().temperature
+              : OTHER_PROVIDER_REWRITE_TEMP;
           const responseText = await LLMConnector.getChatCompletion(
             [
               { role: "system", content: systemPrompt },
               { role: "user", content: userPrompt },
             ],
-            { temperature: 0.1 }
+            { temperature: rewriteTemp }
           );
 
           if (responseText && typeof responseText === "string") {

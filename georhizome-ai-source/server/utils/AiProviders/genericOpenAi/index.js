@@ -10,6 +10,7 @@ const {
 const { v4: uuidv4 } = require("uuid");
 const { toValidNumber } = require("../../http");
 const { getAnythingLLMUserAgent } = require("../../../endpoints/utils");
+const { loadLlmSampling } = require("../../helpers/llmSampling");
 
 class GenericOpenAiLLM {
   constructor(embedder = null, modelPreference = null) {
@@ -264,13 +265,32 @@ class GenericOpenAiLLM {
     };
   }
 
-  async getChatCompletion(messages = null, { temperature = 0.7 }) {
+  /**
+   * Pinned sampling (llm.sampling). Workspace openAiTemp is ignored; log once
+   * (never request bodies) when a differing override is dropped.
+   */
+  #pinnedSampling(temperature) {
+    const sampling = loadLlmSampling();
+    if (
+      typeof temperature === "number" &&
+      temperature !== sampling.temperature &&
+      !this._warnedTempIgnored
+    ) {
+      this._warnedTempIgnored = true;
+      this.log(
+        `Ignoring temperature override ${temperature}; using pinned ${sampling.temperature}`
+      );
+    }
+    return sampling;
+  }
+
+  async getChatCompletion(messages = null, { temperature = 0.7 } = {}) {
     const result = await LLMPerformanceMonitor.measureAsyncFunction(
       this.openai.chat.completions
         .create({
           model: this.model,
           messages,
-          temperature,
+          ...this.#pinnedSampling(temperature),
           max_tokens: this.maxTokens,
         })
         .catch((e) => {
@@ -304,13 +324,13 @@ class GenericOpenAiLLM {
     };
   }
 
-  async streamGetChatCompletion(messages = null, { temperature = 0.7 }) {
+  async streamGetChatCompletion(messages = null, { temperature = 0.7 } = {}) {
     const measuredStreamRequest = await LLMPerformanceMonitor.measureStream({
       func: this.openai.chat.completions.create({
         model: this.model,
         stream: true,
         messages,
-        temperature,
+        ...this.#pinnedSampling(temperature),
         max_tokens: this.maxTokens,
         ...this.#includeStreamOptionsUsage(),
       }),

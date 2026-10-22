@@ -7,6 +7,7 @@ const { RetryError } = require("../error.js");
 const { toValidNumber } = require("../../../http/index.js");
 const { getAnythingLLMUserAgent } = require("../../../../endpoints/utils");
 const { GenericOpenAiLLM } = require("../../../AiProviders/genericOpenAi");
+const { loadLlmSampling } = require("../../../helpers/llmSampling");
 
 /**
  * The agent provider for the Generic OpenAI provider.
@@ -113,7 +114,7 @@ class GenericOpenAiProvider extends InheritMultiple([Provider, UnTooled]) {
     return await this.client.chat.completions
       .create({
         model: this.model,
-        temperature: 0,
+        ...loadLlmSampling(),
         messages,
         max_tokens: this.maxTokens,
       })
@@ -134,6 +135,7 @@ class GenericOpenAiProvider extends InheritMultiple([Provider, UnTooled]) {
       model: this.model,
       stream: true,
       messages,
+      ...loadLlmSampling(),
     });
   }
 
@@ -166,7 +168,7 @@ class GenericOpenAiProvider extends InheritMultiple([Provider, UnTooled]) {
         messages,
         functions,
         eventHandler,
-        { provider: this }
+        { provider: this, sampling: loadLlmSampling() }
       );
     } catch (error) {
       console.error(error.message, error);
@@ -206,7 +208,7 @@ class GenericOpenAiProvider extends InheritMultiple([Provider, UnTooled]) {
         messages,
         functions,
         this.getCost.bind(this),
-        { provider: this }
+        { provider: this, sampling: loadLlmSampling() }
       );
 
       if (result.retryWithError) {

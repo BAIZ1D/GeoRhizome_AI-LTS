@@ -2,6 +2,10 @@ const { loadSummarizationChain } = require("langchain/chains");
 const { PromptTemplate } = require("@langchain/core/prompts");
 const { RecursiveCharacterTextSplitter } = require("@langchain/textsplitters");
 const Provider = require("../providers/ai-provider");
+const { loadLlmSampling } = require("../../../helpers/llmSampling");
+
+// Deterministic summarization temperature for non-local providers (unchanged).
+const NON_LOCAL_TEMP = 0;
 /**
  * @typedef {Object} LCSummarizationConfig
  * @property {string} provider The LLM to use for summarization (inherited)
@@ -21,10 +25,14 @@ async function summarizeContent({
   controllerSignal,
   content,
 }) {
-  const llm = Provider.LangChainChatModel(provider, {
-    temperature: 0,
-    model: model,
-  });
+  const llmConfig = { temperature: NON_LOCAL_TEMP, model: model };
+  if (provider === "generic-openai") {
+    const { temperature, top_p, ...extra } = loadLlmSampling();
+    llmConfig.temperature = temperature;
+    llmConfig.topP = top_p;
+    llmConfig.modelKwargs = extra;
+  }
+  const llm = Provider.LangChainChatModel(provider, llmConfig);
 
   const textSplitter = new RecursiveCharacterTextSplitter({
     separators: ["\n\n", "\n"],

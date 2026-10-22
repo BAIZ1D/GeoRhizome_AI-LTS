@@ -176,7 +176,7 @@ async function tooledStream(
   eventHandler = null,
   options = {}
 ) {
-  const { provider, ...formatOptions } = options;
+  const { provider, sampling, ...formatOptions } = options;
 
   // Auto-reset usage if provider is passed
   if (provider?.resetUsage) {
@@ -194,6 +194,7 @@ async function tooledStream(
     stream: true,
     stream_options: { include_usage: true },
     messages: formattedMessages,
+    ...(sampling || {}),
     ...(tools.length > 0 ? { tools } : {}),
   });
 
@@ -305,7 +306,7 @@ async function tooledComplete(
   getCostFn = () => 0,
   options = {}
 ) {
-  const { provider, ...formatOptions } = options;
+  const { provider, sampling, ...formatOptions } = options;
 
   // Auto-reset usage if provider is passed
   if (provider?.resetUsage) {
@@ -321,6 +322,7 @@ async function tooledComplete(
     model,
     stream: false,
     messages: formattedMessages,
+    ...(sampling || {}),
     ...(tools.length > 0 ? { tools } : {}),
   });
 

@@ -238,3 +238,58 @@ def test_port_teardown_only_targets_listeners_and_never_the_hub(monkeypatch):
     assert "-sTCP:LISTEN" in seen["cmd"] and ":8000" in seen["cmd"]
     src = inspect.getsource(hardware_server)
     assert 'check_output("lsof -ti:' not in src
+
+
+def _mock_ram(monkeypatch, gb):
+    from core import ram_profile
+
+    monkeypatch.setattr(ram_profile, "detect_ram_gb", lambda: gb)
+
+
+def test_startup_writes_effective_candidate_count(hs, tmp_config_dir, monkeypatch):
+    for gb, exp in ((8.0, 15), (16.0, 30)):
+        _mock_ram(monkeypatch, gb)
+        p = os.path.join(tmp_config_dir, "app_config.json")
+        c = json.load(open(p))
+        c["reranker"].pop("effective_candidate_count", None)
+        json.dump(c, open(p, "w"))
+        hs.load_active_state()
+        c = json.load(open(p))
+        assert c["reranker"]["effective_candidate_count"] == exp
+        assert c["reranker"]["wide_candidate_count"] == 30
+
+
+def test_llama_cmd_profile_flags(hs, monkeypatch):
+    _mock_ram(monkeypatch, 8.0)
+    cmd = hs._llama_cmd("m.gguf")
+    assert cmd[cmd.index("--n_ctx") + 1] == "8192"
+    assert "--type_k" in cmd and "--flash_attn" in cmd
+    _mock_ram(monkeypatch, 16.0)
+    cmd = hs._llama_cmd("m.gguf")
+    assert cmd[cmd.index("--n_ctx") + 1] == "16384" and "--type_k" not in cmd
+
+
+def test_update_llm_env_low_ram_budget(hs, monkeypatch):
+    _mock_ram(monkeypatch, 8.0)
+    open(hs.SERVER_ENV_PATH, "w").write("A=1\n")
+    hs.update_app_config_llm("x.gguf")
+    env = open(hs.SERVER_ENV_PATH).read()
+    assert "GENERIC_OPEN_AI_MODEL_TOKEN_LIMIT=5600" in env and "GENERIC_OPEN_AI_MAX_TOKENS=2048" in env
+
+
+def test_embedder_guard(hs, tmp_config_dir, monkeypatch):
+    p = os.path.join(tmp_config_dir, "app_config.json")
+    c = json.load(open(p))
+    m, d = c["embedding"]["model_name"], c["embedding"]["dimension"]
+    a = os.path.join(tmp_config_dir, "active_models.json")
+
+    def set_served(model, dim):
+        st = json.load(open(a))
+        st["embedding"] = {"model_id": model, "dimension": dim, "port": 8000}
+        json.dump(st, open(a, "w"))
+
+    set_served(m, d)
+    assert hs._embedder_matches_config(m) is True
+    set_served(m, d + 1)
+    assert hs._embedder_matches_config(m) is False
+    assert hs._embedder_matches_config("other/model") is False

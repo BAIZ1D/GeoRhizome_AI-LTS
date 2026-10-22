@@ -104,6 +104,18 @@ def sync_reranker_state(config_dir: str, enabled: bool, model_id: Optional[str] 
         return name
 
 
+def write_effective_candidate_count(config_dir: str, count: int) -> None:
+    """Write reranker.effective_candidate_count (separate key; wide_candidate_count untouched)."""
+    with CONFIG_LOCK:
+        cp = os.path.join(config_dir, APP)
+        app = read_json(cp)
+        csec = app.setdefault("reranker", {})
+        if csec.get("effective_candidate_count") == int(count):
+            return
+        csec["effective_candidate_count"] = int(count)
+        atomic_write_json(cp, app)
+
+
 def migrate_legacy_sentinel(config_dir: str) -> bool:
     """Replace a legacy reranker "Offloaded" sentinel in any of the three files
     with the default model and enabled=false. Returns True if anything changed."""

@@ -22,7 +22,7 @@ from hwfit.hardware import detect_system
 from hwfit.fit import rank_models, analyze_model
 from core.platform_compat import kill_process_tree, pid_alive
 from core.config_io import CONFIG_LOCK, atomic_write_json, get_config_dir, read_json
-from core import model_defaults
+from core import model_defaults, ram_profile
 import reranker_state
 
 CONFIG_DIR = get_config_dir()
@@ -49,6 +49,39 @@ def _posix_listening_pids(port: int) -> List[str]:
     me = str(os.getpid())
     return [p for p in out.split() if p and p != me]
 
+def _has_accel() -> bool:
+    import shutil
+    from core.platform_compat import IS_APPLE_SILICON
+    return bool(IS_APPLE_SILICON or shutil.which("nvidia-smi"))
+
+
+def _current_profile() -> Dict[str, Any]:
+    """RAM-tier profile from config (single resolver shared with the launchers)."""
+    cfg = ram_profile.load_app_config(CONFIG_DIR)
+    return ram_profile.resolve_profile(ram_profile.detect_ram_gb(), _has_accel(), cfg, CONFIG_DIR)
+
+
+def _llm_launch_args() -> List[str]:
+    return ram_profile.llm_cli_args(_current_profile())
+
+
+def _llama_cmd(model_path: str) -> List[str]:
+    return [sys.executable, "-m", "llama_cpp.server", "--model", model_path] + _llm_launch_args() + [
+        "--n_gpu_layers", "-1", "--port", "8003", "--host", "127.0.0.1"]
+
+
+def _token_limit(profile: Dict[str, Any]) -> int:
+    return int(profile["prompt_limit"]) if profile.get("tier") == "low" else int(profile["n_ctx"])
+
+
+def _write_effective_candidate_count() -> None:
+    """Write reranker.effective_candidate_count (tier candidate_count); wide_candidate_count untouched."""
+    try:
+        reranker_state.write_effective_candidate_count(CONFIG_DIR, _current_profile()["candidate_count"])
+    except Exception as e:
+        print("[Warning] Failed writing effective_candidate_count:", e)
+
+
 def load_active_state():
     """Load runtime model state. Seeds config/active_models.json from the tracked
     active_models.default.json when missing, strips persisted liveness flags and
@@ -57,6 +90,7 @@ def load_active_state():
     try:
         reranker_state.seed_active_models(CONFIG_DIR)
         reranker_state.migrate_legacy_sentinel(CONFIG_DIR)
+        _write_effective_candidate_count()
         st = read_json(ACTIVE_MODELS_STATE_PATH)
     except Exception as e:
         print("[Warning] Failed loading active models state:", e)
@@ -195,6 +229,28 @@ def update_app_config_embedding(model_id: str, dimension: int):
             print(f"[DynamicConfig Error] Failed updating server/.env: {e}")
 
 
+def _embedder_matches_config(model_id: Optional[str]) -> bool:
+    """True only when the served embedder model_id AND dimension both equal the configured
+    embedding.model_name / embedding.dimension (a merely-present dimension does not skip)."""
+    try:
+        emb = read_json(os.path.join(CONFIG_DIR, "app_config.json")).get("embedding") or {}
+        cfg_model, cfg_dim = emb.get("model_name"), emb.get("dimension")
+        served_model, served_dim = model_id, None
+        try:
+            import requests
+            h = requests.get("http://127.0.0.1:8000/health", timeout=2).json()
+            served_model = h.get("model") or served_model
+            served_dim = h.get("dimension")
+        except Exception:
+            pass
+        if served_dim is None:
+            info = read_json(ACTIVE_MODELS_STATE_PATH).get("embedding") or {}
+            served_dim = info.get("dimension")
+        return bool(cfg_model and cfg_dim and served_model == cfg_model and served_dim == cfg_dim)
+    except Exception:
+        return False
+
+
 def probe_and_sync_embedder(model_id: str):
     """Background task to poll Port 8000 until active, derive runtime vector dimension, and sync configs."""
     import time, requests
@@ -212,9 +268,11 @@ def probe_and_sync_embedder(model_id: str):
             time.sleep(1)
 
 
-def probe_and_sync_llm(model_id: str, default_n_ctx: int = 16384):
+def probe_and_sync_llm(model_id: str, default_n_ctx: Optional[int] = None):
     """Background task to poll Port 8003 until active, extract model name and context limit, and sync configs."""
     import time, requests
+    if default_n_ctx is None:
+        default_n_ctx = _token_limit(_current_profile())
     time.sleep(2)
     for _ in range(20):
         try:
@@ -234,8 +292,12 @@ def probe_and_sync_llm(model_id: str, default_n_ctx: int = 16384):
             time.sleep(1)
 
 
-def update_app_config_llm(model_id: str, token_limit: int = 16384):
+def update_app_config_llm(model_id: str, token_limit: Optional[int] = None):
     """Dynamically write LLM model name & token limit to app_config.json & server/.env."""
+    profile = _current_profile()
+    if token_limit is None:
+        token_limit = _token_limit(profile)
+    max_tokens = int(profile["max_tokens"]) if profile.get("tier") == "low" else None
     root_dir = ROOT_DIR
     app_config_path = os.path.join(CONFIG_DIR, "app_config.json")
     env_path = SERVER_ENV_PATH
@@ -254,28 +316,35 @@ def update_app_config_llm(model_id: str, token_limit: int = 16384):
 
     if os.path.exists(env_path):
         try:
-            with open(env_path, "r", encoding="utf-8") as f:
-                content = f.read()
-            lines = content.splitlines()
-            new_lines = []
-            has_pref = False
-            has_limit = False
-            for line in lines:
-                if line.startswith("GENERIC_OPEN_AI_MODEL_PREF="):
+            with CONFIG_LOCK:
+                with open(env_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                lines = content.splitlines()
+                new_lines = []
+                has_pref = False
+                has_limit = False
+                has_max = False
+                for line in lines:
+                    if line.startswith("GENERIC_OPEN_AI_MAX_TOKENS=") and max_tokens is not None:
+                        new_lines.append(f"GENERIC_OPEN_AI_MAX_TOKENS={max_tokens}")
+                        has_max = True
+                    elif line.startswith("GENERIC_OPEN_AI_MODEL_PREF="):
+                        new_lines.append(f"GENERIC_OPEN_AI_MODEL_PREF='{model_id}'")
+                        has_pref = True
+                    elif line.startswith("GENERIC_OPEN_AI_MODEL_TOKEN_LIMIT="):
+                        new_lines.append(f"GENERIC_OPEN_AI_MODEL_TOKEN_LIMIT={token_limit}")
+                        has_limit = True
+                    else:
+                        new_lines.append(line)
+                if not has_pref:
                     new_lines.append(f"GENERIC_OPEN_AI_MODEL_PREF='{model_id}'")
-                    has_pref = True
-                elif line.startswith("GENERIC_OPEN_AI_MODEL_TOKEN_LIMIT="):
+                if not has_limit:
                     new_lines.append(f"GENERIC_OPEN_AI_MODEL_TOKEN_LIMIT={token_limit}")
-                    has_limit = True
-                else:
-                    new_lines.append(line)
-            if not has_pref:
-                new_lines.append(f"GENERIC_OPEN_AI_MODEL_PREF='{model_id}'")
-            if not has_limit:
-                new_lines.append(f"GENERIC_OPEN_AI_MODEL_TOKEN_LIMIT={token_limit}")
-            with open(env_path, "w", encoding="utf-8") as f:
-                f.write("\n".join(new_lines) + "\n")
-            print(f"[DynamicConfig] Updated server/.env -> GENERIC_OPEN_AI_MODEL_PREF='{model_id}', GENERIC_OPEN_AI_MODEL_TOKEN_LIMIT={token_limit}")
+                if max_tokens is not None and not has_max:
+                    new_lines.append(f"GENERIC_OPEN_AI_MAX_TOKENS={max_tokens}")
+                with open(env_path, "w", encoding="utf-8") as f:
+                    f.write("\n".join(new_lines) + "\n")
+                print(f"[DynamicConfig] Updated server/.env -> GENERIC_OPEN_AI_MODEL_PREF='{model_id}', GENERIC_OPEN_AI_MODEL_TOKEN_LIMIT={token_limit}")
         except Exception as e:
             print(f"[DynamicConfig Error] Failed updating server/.env: {e}")
 
@@ -307,6 +376,7 @@ def update_retrieval_reranker(enabled: bool, model_id: str = "") -> str:
     real model name; the "Offloaded" sentinel is never written."""
     name = reranker_state.sync_reranker_state(CONFIG_DIR, enabled, model_id)
     print(f"[DynamicConfig] Reranker state synced -> enabled={enabled}, model={name}")
+    _write_effective_candidate_count()
     return name
 
 ACTIVE_PROCESSES: Dict[str, Dict[str, Any]] = load_active_state()
@@ -682,8 +752,9 @@ def serve_model(req: ServeRequest, background_tasks: BackgroundTasks):
         p = subprocess.Popen([sys.executable, BGE_SCRIPT], env=env)
         ACTIVE_PROCESSES["embedding"] = {"pid": p.pid, "model_id": req.model_id, "name": req.model_id, "port": 8000, "start_time": time.time()}
         
-        # Automatically probe live model for runtime dimension and update configs
-        background_tasks.add_task(probe_and_sync_embedder, req.model_id)
+        # Probe only when the served embedder does not already match the configured model AND dimension
+        if not _embedder_matches_config(req.model_id):
+            background_tasks.add_task(probe_and_sync_embedder, req.model_id)
         save_active_state()
         return {"status": "ok", "message": f"Successfully loaded embedder {req.model_id} on port 8000", "pid": p.pid}
 
@@ -693,7 +764,8 @@ def serve_model(req: ServeRequest, background_tasks: BackgroundTasks):
         if not (req.model_id or req.repo_id):
             req.model_id = actual_model_id
             req.quant = None  # use the catalog default quant for the default model
-        update_app_config_llm(actual_model_id, 16384)
+        update_app_config_llm(actual_model_id)
+        _write_effective_candidate_count()
         # Kill any old listener on port 8003
         try:
             import platform
@@ -799,7 +871,7 @@ def serve_model(req: ServeRequest, background_tasks: BackgroundTasks):
                 if is_mlx_local:
                     cmd = [sys.executable, "-m", "mlx_lm", "server", "--model", local_direct_path, "--port", "8003", "--host", "127.0.0.1"]
                 else:
-                    cmd = [sys.executable, "-m", "llama_cpp.server", "--model", local_direct_path, "--n_ctx", "16384", "--n_gpu_layers", "-1", "--port", "8003", "--host", "127.0.0.1"]
+                    cmd = _llama_cmd(local_direct_path)
                 
                 p = subprocess.Popen(cmd)
                 ACTIVE_PROCESSES["generative"] = {
@@ -810,7 +882,7 @@ def serve_model(req: ServeRequest, background_tasks: BackgroundTasks):
                     "port": 8003,
                     "start_time": time.time(),
                 }
-                background_tasks.add_task(probe_and_sync_llm, req.model_id, 16384)
+                background_tasks.add_task(probe_and_sync_llm, req.model_id)
                 save_active_state()
                 return
 
@@ -840,7 +912,7 @@ def serve_model(req: ServeRequest, background_tasks: BackgroundTasks):
                 return
             if os.path.exists(model_path):
                 print(f"[HardwareServer] Model file {target_file} already exists on disk. Serving directly...")
-                cmd = [sys.executable, "-m", "llama_cpp.server", "--model", model_path, "--n_ctx", "16384", "--n_gpu_layers", "-1", "--port", "8003", "--host", "127.0.0.1"]
+                cmd = _llama_cmd(model_path)
                 p = subprocess.Popen(cmd)
                 ACTIVE_PROCESSES["generative"] = {
                     "pid": p.pid,
@@ -850,7 +922,7 @@ def serve_model(req: ServeRequest, background_tasks: BackgroundTasks):
                     "port": 8003,
                     "start_time": time.time(),
                 }
-                background_tasks.add_task(probe_and_sync_llm, req.model_id, 16384)
+                background_tasks.add_task(probe_and_sync_llm, req.model_id)
                 save_active_state()
                 return
 
@@ -873,14 +945,7 @@ def serve_model(req: ServeRequest, background_tasks: BackgroundTasks):
                 ACTIVE_DOWNLOAD_STATE["is_downloading"] = False
 
             if os.path.exists(model_path):
-                cmd = [
-                    sys.executable, "-m", "llama_cpp.server",
-                    "--model", model_path,
-                    "--n_ctx", "16384",
-                    "--n_gpu_layers", "-1",
-                    "--port", "8003",
-                    "--host", "127.0.0.1"
-                ]
+                cmd = _llama_cmd(model_path)
                 p = subprocess.Popen(cmd)
                 ACTIVE_PROCESSES["generative"] = {
                     "pid": p.pid,
@@ -890,7 +955,7 @@ def serve_model(req: ServeRequest, background_tasks: BackgroundTasks):
                     "port": 8003,
                     "start_time": time.time(),
                 }
-                background_tasks.add_task(probe_and_sync_llm, req.model_id, 16384)
+                background_tasks.add_task(probe_and_sync_llm, req.model_id)
                 save_active_state()
             else:
                 print(f"[HardwareServer] Error: Model file {model_path} could not be downloaded.")

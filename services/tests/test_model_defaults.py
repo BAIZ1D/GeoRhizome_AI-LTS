@@ -84,7 +84,7 @@ def test_hardware_server_generative_fallback_and_catalog(tmp_config_dir, tmp_pat
     assert hs.resolve_generative_target(DEF_REPO, "Q4_K_M") == (DEF_REPO, DEF_FILE)
 
     seen = {}
-    monkeypatch.setattr(hs, "update_app_config_llm", lambda mid, n=16384: seen.setdefault("id", mid))
+    monkeypatch.setattr(hs, "update_app_config_llm", lambda mid, n=None: seen.setdefault("id", mid))
     from fastapi import BackgroundTasks
 
     res = hs.serve_model(hs.ServeRequest(category="generative"), BackgroundTasks())

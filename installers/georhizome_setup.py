@@ -4,6 +4,7 @@
   georhizome_setup.py download   --models-dir DIR   pre-download the 3 default models
   georhizome_setup.py llm-path   --models-dir DIR   print the GGUF path the launcher serves on :8003
   georhizome_setup.py write-env  --env PATH          create server/.env if missing (UTF-8, no BOM)
+  georhizome_setup.py llm-args [--degrade]           print llama_cpp.server flags for this machine's RAM tier
   georhizome_setup.py migrate    --env PATH          OTA: replace legacy default LLM only if still set
 
 Defaults come from config/app_config.json (`llm`, `embedding`, `reranker`) and
@@ -24,6 +25,8 @@ CONFIG_DIR = os.environ.get("GEORHIZOME_CONFIG_DIR") or os.path.join(SOURCE, "co
 sys.path.insert(0, os.path.join(SOURCE, "services"))
 
 from core import model_defaults as md  # noqa: E402
+from core import ram_profile  # noqa: E402
+from core.platform_compat import IS_APPLE_SILICON  # noqa: E402
 
 FALLBACK_EMBEDDER = "cl-nagoya/ruri-v3-310m"
 FALLBACK_RERANKER = "cl-nagoya/ruri-v3-reranker-310m"
@@ -110,13 +113,48 @@ def cmd_llm_path(models_dir: str) -> int:
     return 0
 
 
+def current_profile(config_dir: str = CONFIG_DIR) -> Dict[str, Any]:
+    cfg = _json(os.path.join(config_dir, "app_config.json"))
+    return ram_profile.resolve_profile(ram_profile.detect_ram_gb(), IS_APPLE_SILICON, cfg, config_dir)
+
+
+def token_budget(profile: Dict[str, Any]) -> Dict[str, int]:
+    """server/.env token budget: prompt_limit on low-RAM tier, n_ctx otherwise."""
+    limit = profile["prompt_limit"] if profile.get("tier") == "low" else profile["n_ctx"]
+    return {"GENERIC_OPEN_AI_MODEL_TOKEN_LIMIT": int(limit), "GENERIC_OPEN_AI_MAX_TOKENS": int(profile["max_tokens"])}
+
+
+def cmd_llm_args(degrade: bool = False) -> int:
+    print(" ".join(ram_profile.llm_cli_args(current_profile(), degrade=degrade)))
+    return 0
+
+
+def upsert_env_keys(text: str, values: Dict[str, int]) -> str:
+    lines = text.splitlines(keepends=True)
+    seen = set()
+    for i, line in enumerate(lines):
+        body = line.rstrip("\r\n")
+        for k, v in values.items():
+            if re.match(r"^\s*" + k + r"\s*=", body):
+                lines[i] = f"{k}={v}" + line[len(body):]
+                seen.add(k)
+    if lines and not lines[-1].endswith("\n"):
+        lines[-1] += "\n"
+    for k, v in values.items():
+        if k not in seen:
+            lines.append(f"{k}={v}\n")
+    return "".join(lines)
+
+
 def env_text(config_dir: str = CONFIG_DIR) -> str:
     a = default_artifacts(config_dir)
+    budget = token_budget(current_profile(config_dir))
     return "\n".join([
         "LLM_PROVIDER=generic-openai",
         "GENERIC_OPEN_AI_BASE_PATH=http://host.docker.internal:8003/v1",
         "GENERIC_OPEN_AI_API_KEY=sk-local",
         f"GENERIC_OPEN_AI_MODEL_PREF={a['llm_file']}",
+        *[f"{k}={v}" for k, v in budget.items()],
         "EMBEDDING_ENGINE=generic-openai",
         "EMBEDDING_BASE_PATH=http://host.docker.internal:8000/v1",
         f"EMBEDDING_MODEL_PREF={a['embedding']}",
@@ -142,8 +180,10 @@ def migrate(env_path: Optional[str], config_dir: str = CONFIG_DIR) -> Dict[str, 
     out = {"env": False, "active_models": False}
     if env_path and os.path.isfile(env_path):
         with open(env_path, encoding="utf-8-sig") as f:
-            text, changed = md.migrate_env_text(f.read(), legacy, new)
-        if changed:
+            original = f.read()
+        text, _ = md.migrate_env_text(original, legacy, new)
+        text = upsert_env_keys(text, token_budget(current_profile(config_dir)))
+        if text != original:
             _write_text(env_path, text)
             out["env"] = True
     am_path = os.path.join(config_dir, "active_models.json")
@@ -160,7 +200,8 @@ def migrate(env_path: Optional[str], config_dir: str = CONFIG_DIR) -> Dict[str, 
 
 def main(argv: Optional[list] = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("command", choices=["download", "llm-path", "write-env", "migrate"])
+    ap.add_argument("command", choices=["download", "llm-path", "llm-args", "write-env", "migrate"])
+    ap.add_argument("--degrade", action="store_true")
     ap.add_argument("--models-dir", default=os.path.join(SOURCE, "models"))
     ap.add_argument("--env", default=os.path.join(SOURCE, "georhizome-ai-source", "server", ".env"))
     a = ap.parse_args(argv)
@@ -168,6 +209,8 @@ def main(argv: Optional[list] = None) -> int:
         return cmd_download(a.models_dir)
     if a.command == "llm-path":
         return cmd_llm_path(a.models_dir)
+    if a.command == "llm-args":
+        return cmd_llm_args(a.degrade)
     if a.command == "write-env":
         return cmd_write_env(a.env)
     res = migrate(a.env)

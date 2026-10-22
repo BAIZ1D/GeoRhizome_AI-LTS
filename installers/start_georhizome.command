@@ -25,10 +25,29 @@ nohup "$VENV_PYTHON" "$SRC/services/hardware_server.py" > "$LOG_DIR/hardware.log
 # Chat LLM on port 8003 (model named in config)
 if LLM_PATH=$("$VENV_PYTHON" "$HELPER" llm-path --models-dir "$GR/storage/models"); then
     echo "[INFO] Chat LLM Server ($(basename "$LLM_PATH")) をポート 8003 で起動しています..."
-    nohup "$VENV_PYTHON" -m llama_cpp.server --model "$LLM_PATH" --n_ctx 16384 --n_gpu_layers -1 \
+    LLM_ARGS=$("$VENV_PYTHON" "$HELPER" llm-args)
+    # shellcheck disable=SC2086  # LLM_ARGS is fixed allow-listed flags from the helper
+    nohup "$VENV_PYTHON" -m llama_cpp.server --model "$LLM_PATH" $LLM_ARGS --n_gpu_layers -1 \
         --port 8003 --host 127.0.0.1 > "$LOG_DIR/chat.log" 2>&1 &
     LLM_PID=$!
-    sleep 3
+    # Bounded wait for port 8003; early exit only on the explicit failure text.
+    for i in $(seq 1 30); do
+        lsof -ti:8003 > /dev/null 2>&1 && break
+        /usr/bin/grep -qi 'requires flash' "$LOG_DIR/chat.log" 2> /dev/null && break
+        sleep 2
+    done
+    if ! lsof -ti:8003 > /dev/null 2>&1; then
+        echo "[WARN] Chat LLM Server did not open port 8003 with quantized KV; retrying with f16 KV cache (same n_ctx)."
+        echo "[WARN] degraded: f16 KV fallback" >> "$LOG_DIR/chat.log"
+        kill "$LLM_PID" 2> /dev/null
+        for p in $(lsof -ti:8003 2> /dev/null); do kill "$p" 2> /dev/null; done
+        LLM_ARGS=$("$VENV_PYTHON" "$HELPER" llm-args --degrade)
+        # shellcheck disable=SC2086
+        nohup "$VENV_PYTHON" -m llama_cpp.server --model "$LLM_PATH" $LLM_ARGS --n_gpu_layers -1 \
+            --port 8003 --host 127.0.0.1 >> "$LOG_DIR/chat.log" 2>&1 &
+        LLM_PID=$!
+        sleep 3
+    fi
     if ! kill -0 "$LLM_PID" 2> /dev/null; then
         echo "[ERROR] Chat LLM Server の起動に失敗しました。ログ: $LOG_DIR/chat.log"
         tail -n 20 "$LOG_DIR/chat.log"

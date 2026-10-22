@@ -297,7 +297,7 @@ def update_app_config_llm(model_id: str, token_limit: Optional[int] = None):
     profile = _current_profile()
     if token_limit is None:
         token_limit = _token_limit(profile)
-    max_tokens = int(profile["max_tokens"]) if profile.get("tier") == "low" else None
+    max_tokens = int(profile["max_tokens"])
     root_dir = ROOT_DIR
     app_config_path = os.path.join(CONFIG_DIR, "app_config.json")
     env_path = SERVER_ENV_PATH

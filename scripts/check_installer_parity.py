@@ -77,6 +77,12 @@ def _token_hits(text: str) -> list:
     return [p for p in pats if re.search(p, text, re.IGNORECASE)]
 
 
+def _launcher_flash_ok(path: str) -> bool:
+    t = _read(path)
+    bare = re.search(r"grep\s+-qi\s+['\"]?flash|/c:\"flash\"", t, re.I)
+    return "llm-args" in t and "16384" not in t and "requires flash" in t and not bare
+
+
 def checks() -> List[Tuple[str, Callable[[], bool]]]:
     sh, ps = _read(SH), _read(PS1)
     both = {"install.sh": sh, "install.ps1": ps}
@@ -139,6 +145,7 @@ def checks() -> List[Tuple[str, Callable[[], bool]]]:
         ("install.ps1 writes UTF-8 without BOM", lambda: "UTF8Encoding]::new($false)" in ps and "Out-File" not in ps),
         ("compose YAML blocks parse", compose_valid),
         ("launchers read LLM from config via helper", lambda: all("llm-path" in _read(p) and ".gguf" not in _read(p) for p in (LAUNCH_SH, LAUNCH_BAT))),
+        ("launchers use llm-args, no 16384, degrade only on 'requires flash'", lambda: all(_launcher_flash_ok(p) for p in (LAUNCH_SH, LAUNCH_BAT))),
         ("OTA updaters migrate .env", lambda: all("georhizome_setup.py" in t and " migrate" in t for t in both.values())),
         ("nested georhizome-ai-source/services removed", lambda: not os.path.exists(os.path.join(REPO, "georhizome-ai-source", "services"))),
     ]

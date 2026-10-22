@@ -31,14 +31,30 @@ for /f "usebackq delims=" %%M in (`""%PY%" "%HELPER%" llm-path --models-dir "%GR
 if not defined LLM_PATH goto llm_missing
 if not exist "%LLM_PATH%" goto llm_missing
 echo [INFO] Starting Local Chat LLM Server (Port 8003): %LLM_PATH%
-start "" /b "%PY%" -m llama_cpp.server --model "%LLM_PATH%" --n_ctx 16384 --n_gpu_layers -1 --port 8003 --host 127.0.0.1 > "%LOGS%\chat.log" 2>&1
+set "LLM_DEGRADE="
+type nul > "%LOGS%\chat.log"
+:llm_launch
+rem llm-args runs once normally and once with --degrade (llm-args --degrade) on fallback
+set "LLM_ARGS="
+for /f "delims=" %%A in ('""%PY%" "%HELPER%" llm-args %LLM_DEGRADE%"') do set "LLM_ARGS=%%A"
+start "" /b "%PY%" -m llama_cpp.server --model "%LLM_PATH%" %LLM_ARGS% --n_gpu_layers -1 --port 8003 --host 127.0.0.1 >> "%LOGS%\chat.log" 2>&1
 set /a TRIES=0
 :wait_llm
 timeout /t 2 >nul
 netstat -ano | findstr ":8003" | findstr "LISTENING" >nul
 if not errorlevel 1 goto llm_ok
+findstr /i /c:"requires flash" "%LOGS%\chat.log" >nul 2>&1
+if not errorlevel 1 goto llm_failed
 set /a TRIES+=1
 if %TRIES% lss 30 goto wait_llm
+:llm_failed
+if defined LLM_DEGRADE goto llm_dead
+echo [WARN] Chat LLM Server did not open port 8003 with quantized KV; retrying with f16 KV cache (same n_ctx).
+echo [WARN] degraded: f16 KV fallback>>"%LOGS%\chat.log"
+wmic process where "commandline like '%%llama_cpp.server%%'" call terminate >nul 2>&1
+set "LLM_DEGRADE=--degrade"
+goto llm_launch
+:llm_dead
 echo [ERROR] Chat LLM Server が起動していません。ログ: %LOGS%\chat.log
 powershell -NoProfile -Command "Get-Content -Tail 20 '%LOGS%\chat.log'"
 goto llm_done

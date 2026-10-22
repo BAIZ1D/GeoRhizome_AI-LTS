@@ -214,7 +214,8 @@ async function fetchPublicCatalog(o = {}) {
   try {
     let found = await probeCatalog(start, o, cfg);
     if (!found && start > 1) found = await probeCatalog(1, o, cfg);
-    if (!found) throw new KnowledgeSyncError("KS_E_CATALOG", { phase: "empty" });
+    if (!found)
+      throw new KnowledgeSyncError("KS_E_CATALOG", { phase: "empty" });
     if (o.persistHint !== false) {
       try {
         writeCatalogSeqHint(found.seq, o.pathOpts);

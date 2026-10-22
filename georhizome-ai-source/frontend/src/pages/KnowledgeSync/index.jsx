@@ -10,6 +10,9 @@ import SyncDialog from "@/components/KnowledgeSync/SyncDialog";
 import WipeModal from "@/components/KnowledgeSync/WipeModal";
 import RollbackModal from "@/components/KnowledgeSync/RollbackModal";
 import PassphrasePromptModal from "@/components/KnowledgeSync/PassphrasePromptModal";
+import { Link } from "react-router-dom";
+import paths from "@/utils/paths";
+import { formatKsError } from "@/utils/knowledgeSyncErrors";
 import { resetKsCatalogCache } from "@/components/KnowledgeSync/useKsCatalog";
 
 function statusKey(row, job, configured) {
@@ -164,7 +167,8 @@ function Row({ row, configured, onChanged }) {
 
 function KnowledgeSyncInner({ onPassphraseSaved }) {
   const { t } = useTranslation();
-  const { entries, configured, lastChecked, refresh, loading } = useKsCatalog();
+  const { entries, configured, lastChecked, refresh, loading, error } =
+    useKsCatalog();
   const [workspaces, setWorkspaces] = useState([]);
   const [prompt, setPrompt] = useState(false);
 
@@ -250,6 +254,15 @@ function KnowledgeSyncInner({ onPassphraseSaved }) {
             </div>
           )}
 
+          {error && (
+            <p
+              role="alert"
+              className="mt-4 p-3 rounded-lg border border-red-500 text-sm text-red-400"
+            >
+              {formatKsError(t, error)}
+            </p>
+          )}
+
           {rows.length === 0 ? (
             <div className="mt-8">
               <p className="text-sm font-semibold text-white">
@@ -271,6 +284,14 @@ function KnowledgeSyncInner({ onPassphraseSaved }) {
               ))}
             </ul>
           )}
+          <p className="mt-6 text-xs text-theme-text-secondary">
+            <Link
+              to={paths.settings.knowledgeSync()}
+              className="underline hover:text-white"
+            >
+              {t("knowledgeSync.sidebar.toSettings")}
+            </Link>
+          </p>
           <p className="mt-8 text-sm font-semibold text-white">
             {t("knowledgeSync.page.dangerZone")}
           </p>

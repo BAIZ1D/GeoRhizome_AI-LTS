@@ -247,6 +247,6 @@ describe("catalog", () => {
         fetchImpl: async () => resp(404),
         persistHint: false,
       })
-    ).rejects.toMatchObject({ code: "KS_E_CATALOG" });
+    ).rejects.toMatchObject({ code: "KS_E_CATALOG", phase: "empty" });
   });
 });

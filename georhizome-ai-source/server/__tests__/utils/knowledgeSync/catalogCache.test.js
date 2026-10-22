@@ -144,3 +144,31 @@ test("readCatalogAuthoritative picks highest published seq", async () => {
   });
   expect(empty).toMatchObject({ seq: 0 });
 });
+
+test("empty catalog (none published) is success: checkedAt set, no error, cached", async () => {
+  const { d, clock } = setup();
+  d.github.fetchPublicCatalog.mockRejectedValue(
+    new KnowledgeSyncError("KS_E_CATALOG", { phase: "empty" })
+  );
+  const r = await cache.getCatalogStatus({});
+  expect(r).toMatchObject({
+    configured: true,
+    error: null,
+    entries: [],
+    stale: false,
+  });
+  expect(typeof r.checkedAt).toBe("string");
+  await cache.getCatalogStatus({});
+  expect(d.github.fetchPublicCatalog).toHaveBeenCalledTimes(1);
+  clock.t += 1;
+});
+
+test("real catalog failure still reports error without checkedAt", async () => {
+  const { d } = setup();
+  d.github.fetchPublicCatalog.mockRejectedValue(
+    new KnowledgeSyncError("KS_E_GITHUB")
+  );
+  const r = await cache.getCatalogStatus({});
+  expect(r.error.code).toBe("KS_E_CATALOG");
+  expect(r.checkedAt).toBeNull();
+});

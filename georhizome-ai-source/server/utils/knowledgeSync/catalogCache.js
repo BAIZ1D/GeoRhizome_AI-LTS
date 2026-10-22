@@ -132,6 +132,22 @@ async function getCatalogStatus({ force = false, signal } = {}) {
       cache = { value, at: d.now() };
       return value;
     } catch (err) {
+      if (
+        isKnowledgeSyncError(err) &&
+        err.code === "KS_E_CATALOG" &&
+        err.phase === "empty"
+      ) {
+        const value = {
+          configured: true,
+          checkedAt: new Date(d.now()).toISOString(),
+          stale: false,
+          error: null,
+          entries: [],
+          localVersions: {},
+        };
+        cache = { value, at: d.now() };
+        return value;
+      }
       safeLog("warn", "catalog fetch failed", { code: err && err.code });
       const error = toError(err);
       if (cache)

@@ -83,8 +83,11 @@ test("legacy token/exec usage is gone from knowledge-sync code and legacy routes
   const legacy =
     /\/(?:api\/)?system\/(upload-workspace|sync-workspace|workspace-vectors)/;
   const skip = new Set(["node_modules", "__tests__", "storage", "dist"]);
-  // Frontend scan deferred: KnowledgeSync.jsx is rewritten in the UI plan (07-06+).
-  const scan = [...walk(serverRoot, skip)].filter((f) => /\.(js|jsx)$/.test(f));
+  const frontendSrc = path.join(serverRoot, "../frontend/src");
+  const scan = [
+    ...walk(serverRoot, skip),
+    ...walk(frontendSrc, new Set(["node_modules", "locales"])),
+  ].filter((f) => /\.(js|jsx)$/.test(f));
   const hits = scan.filter((f) => legacy.test(fs.readFileSync(f, "utf8")));
   expect(hits.map((f) => path.relative(repoRoot, f))).toEqual([]);
 });

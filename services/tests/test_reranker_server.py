@@ -19,7 +19,10 @@ def srv(tmp_config_dir, fake_ce, monkeypatch):
 
     reranker_state.seed_active_models(tmp_config_dir)
 
-    monkeypatch.setattr(rr, "_DETECT_CACHE", (7.6, False, False))
+    from core import ram_profile
+
+    monkeypatch.setattr(ram_profile, "detect_ram_gb", lambda: 8.0)
+    monkeypatch.setattr(rr, "_DETECT_CACHE", (8.0, False, False))
     monkeypatch.setattr(s, "CE_FACTORY", fake_ce)
     monkeypatch.delenv("RERANKER_MODEL_PREF", raising=False)
     s.engine = s.Engine()
@@ -54,8 +57,15 @@ def test_health_fields(srv):
     for k in ("model", "source", "tier", "device", "precision", "batch_size", "state", "rss_mb",
               "mps_driver_allocated_mb", "cuda_allocated_mb"):
         assert k in h, k
-    assert h["tier"] == "medium" and h["device"] == "cpu" and h["precision"] == "fp32"
-    assert h["batch_size"] == 8 and h["source"] == "active" and h["rss_mb"] > 0
+    assert h["tier"] == "low" and h["device"] == "cpu" and h["precision"] == "fp32"
+    assert h["batch_size"] == 4 and h["source"] == "active" and h["rss_mb"] > 0
+    assert h["candidate_count"] == 15
+
+
+def test_rerank_caps_candidates_at_tier(srv, fake_ce):
+    with TestClient(srv.app) as c:
+        r = c.post("/rerank", json=_req(40)).json()
+    assert r["count"] == 15 and len(r["results"]) == 15
 
 
 def test_response_shape_unchanged(srv):
@@ -83,7 +93,7 @@ def test_identity_batch_maxlen(srv, fake_ce):
     inst = fake_ce.instances[0]
     assert isinstance(inst.kwargs["activation_fn"], torch.nn.Identity)
     assert inst.kwargs["max_length"] == 512  # shipped app_config.reranker.max_length
-    assert inst.predict_calls[-1]["batch_size"] == 8
+    assert inst.predict_calls[-1]["batch_size"] == 4
 
 
 def test_reaper_unloads_idle(srv, monkeypatch):

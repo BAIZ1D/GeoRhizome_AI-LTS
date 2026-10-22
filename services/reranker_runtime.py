@@ -14,6 +14,7 @@ import time
 import unicodedata
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from core import ram_profile
 from core.config_io import get_config_dir, read_json, read_yaml
 
 log = logging.getLogger("reranker_runtime")
@@ -35,7 +36,13 @@ _fake_elapsed: float = 0.0  # test hook
 
 # ---------------------------------------------------------------- config
 def load_tiers_doc(config_dir: Optional[str] = None) -> Dict[str, Any]:
-    return read_yaml(os.path.join(config_dir or get_config_dir(), "reranker_tiers.yaml"))
+    """Tier YAML; medium min_ram_gb is injected from app_config llm.low_ram_max_gb (single boundary)."""
+    d = config_dir or get_config_dir()
+    doc = read_yaml(os.path.join(d, "reranker_tiers.yaml"))
+    medium = (doc.get("tiers") or {}).get("medium")
+    if isinstance(medium, dict):
+        medium["min_ram_gb"] = ram_profile.low_ram_max_gb(ram_profile.load_app_config(d))
+    return doc
 
 
 def load_tiers(config_dir: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
@@ -76,8 +83,20 @@ def load_selftest_pairs(path: str = SELFTEST_PAIRS_PATH) -> List[Tuple[str, str]
 
 
 # ---------------------------------------------------------------- resolvers
-def resolve_tier(tiers: Dict[str, Dict[str, Any]], ram_gb: float, has_accel: bool) -> str:
+def effective_candidate_count(tier_cfg: Optional[Dict[str, Any]], reranker_cfg: Optional[Dict[str, Any]]) -> int:
+    """Hard cap on candidates scored: tier candidate_count, else reranker.wide_candidate_count."""
+    cc = (tier_cfg or {}).get("candidate_count")
+    if cc:
+        return int(cc)
+    return int((reranker_cfg or {}).get("wide_candidate_count") or 0)
+
+
+def resolve_tier(
+    tiers: Dict[str, Dict[str, Any]], ram_gb: float, has_accel: bool, low_ram_max_gb: Optional[float] = None
+) -> str:
     """Highest tier whose min_ram_gb <= ram_gb and whose accelerator need is met."""
+    if low_ram_max_gb is not None and "medium" in tiers:
+        tiers = {**tiers, "medium": {**tiers["medium"], "min_ram_gb": float(low_ram_max_gb)}}
     order = sorted(tiers.items(), key=lambda kv: float(kv[1].get("min_ram_gb", 0)), reverse=True)
     for name, t in order:
         if ram_gb >= float(t.get("min_ram_gb", 0)) and (has_accel or not t.get("requires_accelerator")):
@@ -86,7 +105,7 @@ def resolve_tier(tiers: Dict[str, Dict[str, Any]], ram_gb: float, has_accel: boo
 
 
 def detect_ram_and_accel() -> Tuple[float, bool, bool]:
-    """(ram_gb, has_cuda, has_mps). hwfit detect_system first, psutil fallback. Cached."""
+    """(ram_gb, has_cuda, has_mps). RAM via core.ram_profile.detect_ram_gb only. Cached."""
     global _DETECT_CACHE
     if _DETECT_CACHE is not None:
         return _DETECT_CACHE
@@ -94,17 +113,7 @@ def detect_ram_and_accel() -> Tuple[float, bool, bool]:
 
     has_cuda = bool(torch.cuda.is_available())
     has_mps = bool(getattr(torch.backends, "mps", None) and torch.backends.mps.is_available())
-    ram_gb = 0.0
-    try:
-        from hwfit.hardware import detect_system
-
-        ram_gb = float(detect_system().get("total_ram_gb") or 0.0)
-    except Exception as e:  # noqa: BLE001
-        log.warning("detect_system failed (%s); using psutil", e)
-    if ram_gb <= 0:
-        import psutil
-
-        ram_gb = psutil.virtual_memory().total / (1024 ** 3)
+    ram_gb = ram_profile.detect_ram_gb()
     _DETECT_CACHE = (ram_gb, has_cuda, has_mps)
     return _DETECT_CACHE
 
@@ -246,6 +255,7 @@ def build_reranker(
     info: Dict[str, Any] = {
         "model": model_id, "source": source, "tier": tier.get("name"), "device": device,
         "precision": precision, "batch_size": bs, "max_length": max_len,
+        "candidate_count": effective_candidate_count(tier, cfg),
         "fallback": None, "selftest": None,
     }
 

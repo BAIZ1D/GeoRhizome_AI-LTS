@@ -91,7 +91,8 @@ class Engine:
             device = rr.resolve_device(tier.get("device", "auto"), has_cuda, has_mps)
             precision, _ = rr.resolve_precision(tier.get("precision"), device)
             return {"model": model, "source": source, "tier": tier.get("name"), "device": device,
-                    "precision": precision, "batch_size": tier.get("batch_size")}
+                    "precision": precision, "batch_size": tier.get("batch_size"),
+                    "candidate_count": rr.effective_candidate_count(tier, self.cfg)}
         except Exception as e:  # noqa: BLE001
             return {"error": str(e)}
 
@@ -164,6 +165,7 @@ class Engine:
             "device": base.get("device"),
             "precision": base.get("precision"),
             "batch_size": base.get("batch_size"),
+            "candidate_count": base.get("candidate_count"),
             "max_length": self.cfg.get("max_length"),
             "idle_unload_minutes": self.cfg.get("idle_unload_minutes"),
             "selftest": self.info.get("selftest") if self.model is not None else None,
@@ -216,7 +218,7 @@ def rerank(req: RerankRequest):
             engine.ensure_loaded()
         except Exception as e:  # noqa: BLE001
             raise HTTPException(status_code=503, detail=f"reranker load failed: {e}")
-        cap = 2 * int(engine.cfg.get("wide_candidate_count") or 0)
+        cap = rr.effective_candidate_count(engine._tier(), engine.cfg)
         candidates = req.candidates[:cap] if cap > 0 else req.candidates
         ranked = engine.score_and_rank(req.query, candidates)
         engine.last_used = time.time()

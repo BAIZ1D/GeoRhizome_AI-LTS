@@ -25,44 +25,41 @@ def test_tiers_yaml_all_ruri_and_values():
     for v in t.values():
         assert v["model"] == model
         assert "onnx" not in str(v) and "quantization" not in v
-    assert (t["low"]["precision"], t["low"]["batch_size"], t["low"]["device"], t["low"]["min_ram_gb"]) == ("fp16", 4, "cpu", 0)
-    assert (t["medium"]["precision"], t["medium"]["batch_size"], t["medium"]["device"], t["medium"]["min_ram_gb"]) == ("fp16", 8, "auto", 7)
+    assert (t["low"]["precision"], t["low"]["batch_size"], t["low"]["device"], t["low"]["min_ram_gb"]) == ("fp16", 4, "auto", 0)
+    assert t["low"]["candidate_count"] == 15
+    assert (t["medium"]["precision"], t["medium"]["batch_size"], t["medium"]["device"]) == ("fp16", 8, "auto")
+    assert t["medium"]["min_ram_gb"] == 9.0  # injected from llm.low_ram_max_gb
+    assert t["medium"]["candidate_count"] == 30
     assert (t["high"]["precision"], t["high"]["batch_size"], t["high"]["device"], t["high"]["min_ram_gb"]) == ("fp32", 16, "auto", 15)
+    assert t["high"]["candidate_count"] == 30
     assert t["high"]["requires_accelerator"] is True
 
 
 # ---- RRK-02 -------------------------------------------------------------
 @pytest.mark.parametrize(
     "ram,accel,want",
-    [(7.6, True, "medium"), (7.6, False, "medium"), (15.5, True, "high"), (15.5, False, "medium"), (4, False, "low"), (32, False, "medium")],
+    [(7.6, True, "low"), (7.6, False, "low"), (15.5, True, "high"), (15.5, False, "medium"), (4, False, "low"), (32, False, "medium"),
+     (8.0, False, "low"), (8.6, False, "low"), (9.0, False, "medium")],
 )
 def test_resolve_tier(ram, accel, want):
     assert rr.resolve_tier(_tiers(), ram, accel) == want
 
 
-def test_detect_ram_falls_back_to_psutil(monkeypatch):
-    import hwfit.hardware as hw
+def test_detect_ram_uses_ram_profile(monkeypatch):
+    from core import ram_profile
 
-    def boom(*a, **k):
-        raise RuntimeError("probe failed")
-
-    monkeypatch.setattr(hw, "detect_system", boom)
+    monkeypatch.setattr(ram_profile, "detect_ram_gb", lambda: 8.0)
     rr._DETECT_CACHE = None
     ram, has_cuda, has_mps = rr.detect_ram_and_accel()
-    assert ram > 0
+    assert ram == 8.0
     assert has_cuda == torch.cuda.is_available()
     assert has_mps == torch.backends.mps.is_available()
     rr._DETECT_CACHE = None
 
 
-def test_detect_ram_uses_detect_system(monkeypatch):
-    import hwfit.hardware as hw
-
-    monkeypatch.setattr(hw, "detect_system", lambda *a, **k: {"total_ram_gb": 7.6, "backend": "metal"})
-    rr._DETECT_CACHE = None
-    ram, _, _ = rr.detect_ram_and_accel()
-    assert ram == 7.6
-    rr._DETECT_CACHE = None
+def test_effective_candidate_count():
+    assert rr.effective_candidate_count({"candidate_count": 15}, {"wide_candidate_count": 30}) == 15
+    assert rr.effective_candidate_count({}, {"wide_candidate_count": 30}) == 30
 
 
 # ---- RRK-03 -------------------------------------------------------------

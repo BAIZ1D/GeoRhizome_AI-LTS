@@ -9,12 +9,35 @@ import {
   HouseLine,
   Info,
   LinkSimple,
+  CloudArrowDown,
 } from "@phosphor-icons/react";
 import React, { useEffect, useState } from "react";
 import SettingsButton from "../SettingsButton";
 import { isMobile } from "react-device-detect";
 import { Tooltip } from "react-tooltip";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import paths from "@/utils/paths";
+
+function KnowledgeSyncLink() {
+  const { t } = useTranslation();
+  return (
+    <div className="flex w-fit">
+      <Link
+        to={paths.knowledgeSyncPage()}
+        className="transition-all duration-300 p-2 rounded-full bg-theme-sidebar-footer-icon hover:bg-theme-sidebar-footer-icon-hover"
+        aria-label={t("knowledgeSync.sidebar.link")}
+        data-tooltip-id="footer-item"
+        data-tooltip-content={t("knowledgeSync.sidebar.link")}
+      >
+        <CloudArrowDown
+          weight="fill"
+          className="h-5 w-5 text-white light:text-slate-800"
+        />
+      </Link>
+    </div>
+  );
+}
 
 export const MAX_ICONS = 3;
 export const ICON_COMPONENTS = {
@@ -96,6 +119,8 @@ export default function Footer() {
               />
             </Link>
           </div>
+          <KnowledgeSyncLink />
+          <KnowledgeSyncLink />
           {!isMobile && <SettingsButton />}
         </div>
         <Tooltip

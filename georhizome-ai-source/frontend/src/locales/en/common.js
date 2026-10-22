@@ -1905,6 +1905,9 @@ const TRANSLATIONS = {
       updateAvailable: "Update available",
       syncVersion: "Sync",
       wipeThisMachine: "Wipe (this machine only)",
+      link: "Knowledge Sync",
+      toSettings: "Passphrase or GitHub token needed? Open Knowledge Sync settings.",
+      toSync: "Looking to sync workspaces on this machine? Open Knowledge Sync.",
     },
     phases: {
       preview: "Preview",

@@ -1921,6 +1921,9 @@ const TRANSLATIONS = {
       updateAvailable: "更新があります",
       syncVersion: "同期",
       wipeThisMachine: "消去（このマシンのみ）",
+      link: "ナレッジ同期",
+      toSettings: "パスフレーズやGitHubトークンの設定はナレッジ同期設定を開いてください。",
+      toSync: "このマシンのワークスペースを同期するにはナレッジ同期を開いてください。",
     },
     phases: {
       preview: "プレビュー",

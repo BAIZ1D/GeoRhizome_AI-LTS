@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { isMobile } from "react-device-detect";
 import { CheckCircle, Warning } from "@phosphor-icons/react";
+import { Link } from "react-router-dom";
+import paths from "@/utils/paths";
 import Sidebar from "@/components/SettingsSidebar";
 import KnowledgeSync from "@/models/knowledgeSync";
 import showToast from "@/utils/toast";
@@ -34,6 +36,14 @@ export default function KnowledgeSyncSettings() {
           </p>
           <p className="text-xs leading-[18px] text-white text-opacity-60 mt-2">
             {t("knowledgeSync.description")}
+          </p>
+          <p className="text-xs leading-[18px] text-white text-opacity-60 mt-1">
+            <Link
+              to={paths.knowledgeSyncPage()}
+              className="underline hover:text-white"
+            >
+              {t("knowledgeSync.sidebar.toSync")}
+            </Link>
           </p>
           {status && (
             <>

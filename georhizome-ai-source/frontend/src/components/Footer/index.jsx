@@ -70,7 +70,7 @@ export default function Footer() {
   if (!Array.isArray(footerData) || footerData.length === 0) {
     return (
       <div className="flex justify-center mb-2">
-        <div className="flex space-x-4">
+        <div className="flex flex-wrap justify-center gap-2">
           <div className="flex w-fit">
             <Link
               to="https://www.georhizome.net"
@@ -120,7 +120,6 @@ export default function Footer() {
             </Link>
           </div>
           <KnowledgeSyncLink />
-          <KnowledgeSyncLink />
           {!isMobile && <SettingsButton />}
         </div>
         <Tooltip
@@ -135,7 +134,7 @@ export default function Footer() {
 
   return (
     <div className="flex justify-center mb-2">
-      <div className="flex space-x-4">
+      <div className="flex flex-wrap justify-center gap-2">
         {footerData.map((item, index) => (
           <a
             key={index}
@@ -154,6 +153,7 @@ export default function Footer() {
             )}
           </a>
         ))}
+        <KnowledgeSyncLink />
         {!isMobile && <SettingsButton />}
       </div>
       <Tooltip

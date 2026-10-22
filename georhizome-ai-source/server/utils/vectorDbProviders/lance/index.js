@@ -133,7 +133,7 @@ class LanceDb extends VectorDatabase {
     locks.assertNotSyncing(namespace);
     const cfg = rerankerClient.loadRerankerConfig();
     const finalLimit = cfg.final_top_k || topN || 10;
-    const wideCount = Math.max(finalLimit, cfg.wide_candidate_count || 30);
+    const wideCount = rerankerClient.resolveWideCount(cfg, finalLimit);
     const empty = { contextTexts: [], sourceDocuments: [], scores: [] };
 
     const collection = await client.openTable(namespace);

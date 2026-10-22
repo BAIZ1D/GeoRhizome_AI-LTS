@@ -54,6 +54,21 @@ function num(value, fallback) {
     : fallback;
 }
 
+function positiveOrUndefined(value) {
+  const n = Number(value);
+  return value !== null && value !== undefined && Number.isFinite(n) && n > 0
+    ? n
+    : undefined;
+}
+
+/** Candidate fetch size: tier-effective count, else wide_candidate_count, else 30. */
+function resolveWideCount(cfg, finalLimit) {
+  return Math.max(
+    finalLimit,
+    cfg.effective_candidate_count || cfg.wide_candidate_count || 30
+  );
+}
+
 function loadRerankerConfig() {
   const r = readAppConfig()?.reranker;
   if (!r) return { ...DEFAULTS };
@@ -64,6 +79,7 @@ function loadRerankerConfig() {
       r.wide_candidate_count,
       DEFAULTS.wide_candidate_count
     ),
+    effective_candidate_count: positiveOrUndefined(r.effective_candidate_count),
     final_top_k: num(r.final_top_k, DEFAULTS.final_top_k),
     min_reranker_score: num(r.min_reranker_score, DEFAULTS.min_reranker_score),
     timeout_ms: num(r.timeout_ms, DEFAULTS.timeout_ms),
@@ -184,6 +200,7 @@ module.exports = {
   DEFAULTS,
   CONFIG_PATHS,
   loadRerankerConfig,
+  resolveWideCount,
   currentTimeoutMs,
   rerank,
   rerankHistory,

@@ -5,7 +5,10 @@
     "base_url": "http://127.0.0.1:8000/v1",
     "api_key": "sk-123abc",
     "max_chunk_length": 1024,
-    "max_concurrent_chunks": 2
+    "max_concurrent_chunks": 2,
+    "idle_unload_seconds": 300,
+    "mps_fp16": true,
+    "parity_min_cosine": 0.999
   },
   "text_splitter": {
     "chunk_size": 1024,
@@ -56,7 +59,25 @@
     "filename": "Q8_0-00001-of-00002.gguf",
     "base_url": "http://127.0.0.1:8003/v1",
     "api_key": "sk-123abc",
-    "token_limit": 16384
+    "token_limit": 16384,
+    "n_ctx": 16384,
+    "kv_cache_type": null,
+    "flash_attn": false,
+    "low_ram_max_gb": 9,
+    "low_ram_profile": {
+      "n_ctx": 8192,
+      "kv_cache_type": "q8_0",
+      "flash_attn": true,
+      "max_tokens": 2048,
+      "prompt_limit": 5600
+    },
+    "sampling": {
+      "temperature": 0.6,
+      "top_p": 0.95,
+      "top_k": 20,
+      "min_p": 0.0,
+      "send_llamacpp_fields": true
+    }
   },
   "paths": {
     "lancedb_dir": "server/storage/lancedb",

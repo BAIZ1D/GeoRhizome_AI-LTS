@@ -1,28 +1,32 @@
 # Every tier uses the same cross-encoder; tiers differ only in precision,
-# batch_size, device and RAM threshold.
-# RAM thresholds are effective (under-reporting tolerant):
-#   nominal 8 GB reports ~7.x GB -> medium; nominal 16 GB reports ~15.x GB -> high.
-# device "auto" = cuda > mps > cpu. A detected cuda/mps is never overridden,
-# so low-tier "cpu" only applies on machines without an accelerator.
+# batch_size, device and candidate_count.
+# RAM boundary: macOS reports exactly 8.0 GB (hw.memsize) for nominal 8 GB; Windows may
+# under-report (~7.x-8.6). The single low/medium boundary is app_config.json
+# llm.low_ram_max_gb (9): the medium tier's min_ram_gb is injected from it at load time,
+# so it is intentionally NOT defined here. high needs >= 15 GB and an accelerator.
+# device "auto" = cuda > mps > cpu. A detected cuda/mps is never overridden.
 # precision on cpu is always forced to fp32; mps fp16 requires a load-time self-test.
+# candidate_count is the hard server-side cap on candidates scored per /rerank call.
 model: "cl-nagoya/ruri-v3-reranker-310m"
 tiers:
   low:
     model: "cl-nagoya/ruri-v3-reranker-310m"
     precision: "fp16"
     batch_size: 4
-    device: "cpu"
+    device: "auto"
     min_ram_gb: 0
+    candidate_count: 15
   medium:
     model: "cl-nagoya/ruri-v3-reranker-310m"
     precision: "fp16"
     batch_size: 8
     device: "auto"
-    min_ram_gb: 7
+    candidate_count: 30
   high:
     model: "cl-nagoya/ruri-v3-reranker-310m"
     precision: "fp32"
     batch_size: 16
     device: "auto"
     min_ram_gb: 15
+    candidate_count: 30
     requires_accelerator: true

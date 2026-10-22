@@ -1,10 +1,20 @@
 {
   "generative": [
     {
-      "name": "Qwen2.5 1.5B Instruct Japanese imatrix (Default)",
+      "name": "Qwen3 0.6B WBD (Default)",
+      "repo_id": "webbigdata/Qwen3-0.6B_WBD",
+      "use_case": "chat",
+      "description": "Default lightweight Japanese chat model, split Q8_0 GGUF (~640 MB, served with n_ctx 16384).",
+      "default_quant": "Q8_0",
+      "files": {
+        "q8_0": "Q8_0-00001-of-00002.gguf"
+      }
+    },
+    {
+      "name": "Qwen2.5 1.5B Instruct Japanese imatrix",
       "repo_id": "dahara1/Qwen2.5-1.5B-Instruct-gguf-japanese-imatrix-128K",
       "use_case": "chat",
-      "description": "Default lightweight Japanese chat model (served with n_ctx 16384).",
+      "description": "Lightweight Japanese chat model (former default).",
       "default_quant": "Q3_K_M",
       "files": {
         "q3_k_m": "Qwen2.5-1.5B-Instruct-Q3_K_M.gguf",
@@ -96,7 +106,8 @@
     "generative": [
       "Qwen3.5-0.8B-Japanese-SFT-v2-Q4_K_M.gguf",
       "Qwen3-0.6B-Q8_0.gguf",
-      "Takenoko12345678/Qwen3.5-0.8B-Japanese-SFT-v2-GGUF"
+      "Takenoko12345678/Qwen3.5-0.8B-Japanese-SFT-v2-GGUF",
+      "Qwen2.5-1.5B-Instruct-Q3_K_M.gguf"
     ]
   }
 }

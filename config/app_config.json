@@ -51,9 +51,9 @@
     }
   },
   "llm": {
-    "model_name": "Qwen2.5-1.5B-Instruct-Q3_K_M.gguf",
-    "repo_id": "dahara1/Qwen2.5-1.5B-Instruct-gguf-japanese-imatrix-128K",
-    "filename": "Qwen2.5-1.5B-Instruct-Q3_K_M.gguf",
+    "model_name": "Q8_0-00001-of-00002.gguf",
+    "repo_id": "webbigdata/Qwen3-0.6B_WBD",
+    "filename": "Q8_0-00001-of-00002.gguf",
     "base_url": "http://127.0.0.1:8003/v1",
     "api_key": "sk-123abc",
     "token_limit": 16384

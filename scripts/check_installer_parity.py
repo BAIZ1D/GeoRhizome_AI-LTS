@@ -20,20 +20,20 @@ LAUNCH_BAT = os.path.join(INST, "start_georhizome.bat")
 HELPER = os.path.join(INST, "georhizome_setup.py")
 
 # Built by concatenation so this file does not itself match the stale-name scan.
-STALE = ["Qwen3.5" + "-0.8B", "Qwen3" + "-0.6B", "Takenoko" + "12345678"]
+STALE = ["Qwen3.5" + "-0.8B", "Takenoko" + "12345678"]
 HF_LEGACY_CLI = "huggingface" + "-cli"
 EXPECTED_DEFAULTS = {
     "embedding": "cl-nagoya/ruri-v3-310m",
     "reranker": "cl-nagoya/ruri-v3-reranker-310m",
-    "llm_repo": "dahara1/Qwen2.5-1.5B-Instruct-gguf-japanese-imatrix-128K",
-    "llm_file": "Qwen2.5-1.5B-Instruct-Q3_K_M.gguf",
+    "llm_repo": "webbigdata/Qwen3-0.6B_WBD",
+    "llm_file": "Q8_0-00001-of-00002.gguf",
 }
 PINS = [
     "torch==2.5.1",
     "transformers==5.18.0",
     "sentence-transformers==6.1.0",
     "huggingface_hub>=1.31,<2",
-    "llama-cpp-python[server]==0.3.4",
+    "llama-cpp-python[server]==0.3.19",
     "requests",
 ]
 SCAN_SKIP_DIRS = {".git", "node_modules", ".planning", "graphify-out", "__pycache__", ".venv", "data", "dist"}

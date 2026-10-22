@@ -10,9 +10,9 @@ import re
 from typing import Any, Dict, List, Optional, Tuple
 
 FALLBACK_LLM: Dict[str, str] = {
-    "model_name": "Qwen2.5-1.5B-Instruct-Q3_K_M.gguf",
-    "repo_id": "dahara1/Qwen2.5-1.5B-Instruct-gguf-japanese-imatrix-128K",
-    "filename": "Qwen2.5-1.5B-Instruct-Q3_K_M.gguf",
+    "model_name": "Q8_0-00001-of-00002.gguf",
+    "repo_id": "webbigdata/Qwen3-0.6B_WBD",
+    "filename": "Q8_0-00001-of-00002.gguf",
 }
 
 ENV_KEY = "GENERIC_OPEN_AI_MODEL_PREF"

@@ -6,15 +6,15 @@ import os
 from core import model_defaults as md
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-DEF_REPO = "dahara1/Qwen2.5-1.5B-Instruct-gguf-japanese-imatrix-128K"
-DEF_FILE = "Qwen2.5-1.5B-Instruct-Q3_K_M.gguf"
+DEF_REPO = "webbigdata/Qwen3-0.6B_WBD"
+DEF_FILE = "Q8_0-00001-of-00002.gguf"
 
 
 def _cfg(name):
     return json.load(open(os.path.join(REPO, "config", name), encoding="utf-8"))
 
 
-def test_fallback_is_qwen25_q3():
+def test_fallback_is_qwen3_wbd():
     assert md.FALLBACK_LLM["filename"] == DEF_FILE
     assert md.FALLBACK_LLM["repo_id"] == DEF_REPO
 
@@ -81,7 +81,7 @@ def test_hardware_server_generative_fallback_and_catalog(tmp_config_dir, tmp_pat
     assert hs.default_generative_model() == DEF_FILE
     assert hs.resolve_generative_target(DEF_FILE, None) == (DEF_REPO, DEF_FILE)
     assert hs.resolve_generative_target(DEF_REPO, None) == (DEF_REPO, DEF_FILE)
-    assert hs.resolve_generative_target(DEF_REPO, "Q4_K_M") == (DEF_REPO, "Qwen2.5-1.5B-Instruct-Q4_K_M.gguf")
+    assert hs.resolve_generative_target(DEF_REPO, "Q4_K_M") == (DEF_REPO, DEF_FILE)
 
     seen = {}
     monkeypatch.setattr(hs, "update_app_config_llm", lambda mid, n=16384: seen.setdefault("id", mid))

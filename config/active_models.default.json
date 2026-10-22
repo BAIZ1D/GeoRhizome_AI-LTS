@@ -1,7 +1,7 @@
 {
   "generative": {
-    "model_id": "Qwen2.5-1.5B-Instruct-Q3_K_M.gguf",
-    "name": "Qwen2.5-1.5B-Instruct-Q3_K_M.gguf",
+    "model_id": "Q8_0-00001-of-00002.gguf",
+    "name": "Q8_0-00001-of-00002.gguf",
     "port": 8003
   },
   "embedding": {

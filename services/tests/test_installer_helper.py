@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.join(REPO, "installers"))
 
 import georhizome_setup as gs  # noqa: E402
 
-DEF_FILE = "Qwen2.5-1.5B-Instruct-Q3_K_M.gguf"
+DEF_FILE = "Q8_0-00001-of-00002.gguf"
 OLD = "Qwen3.5" + "-0.8B-Japanese-SFT-v2-Q4_K_M.gguf"
 
 
@@ -59,3 +59,8 @@ def test_write_env_no_bom_and_keeps_existing(tmp_config_dir, tmp_path, monkeypat
     env.write_text("CUSTOM=1\n")
     gs.cmd_write_env(str(env))
     assert env.read_text() == "CUSTOM=1\n"
+
+
+def test_gguf_shards():
+    assert gs.gguf_shards("a.gguf") == ["a.gguf"]
+    assert gs.gguf_shards("Q8_0-00001-of-00002.gguf") == ["Q8_0-00001-of-00002.gguf", "Q8_0-00002-of-00002.gguf"]

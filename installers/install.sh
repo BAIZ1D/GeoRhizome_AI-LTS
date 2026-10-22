@@ -99,9 +99,10 @@ echo "   依存パッケージをインストールしています (数分かか
 "$VENV_PYTHON" -m pip install --upgrade pip
 "$VENV_PYTHON" -m pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1
 if [ "$OS_TYPE" = "Darwin" ]; then
-    CMAKE_ARGS="-DGGML_METAL=on" "$VENV_PYTHON" -m pip install "llama-cpp-python[server]==0.3.4"
+    CMAKE_ARGS="-DGGML_METAL=on" "$VENV_PYTHON" -m pip install "llama-cpp-python[server]==0.3.19" --only-binary llama-cpp-python \
+        --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/metal
 else
-    "$VENV_PYTHON" -m pip install "llama-cpp-python[server]==0.3.4"
+    "$VENV_PYTHON" -m pip install "llama-cpp-python[server]==0.3.19"
 fi
 "$VENV_PYTHON" -m pip install "transformers==5.18.0" "sentence-transformers==6.1.0" "huggingface_hub>=1.31,<2" \
     fastapi uvicorn psutil pyyaml requests

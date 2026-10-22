@@ -14,8 +14,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SOURCE = os.path.abspath(os.path.join(HERE, ".."))
@@ -55,6 +56,15 @@ def _write_text(path: str, text: str) -> None:
     os.replace(tmp, path)
 
 
+def gguf_shards(filename: str) -> List[str]:
+    """All shard names of a split GGUF ("x-00001-of-00002.gguf"); [filename] when not split."""
+    m = re.match(r"^(.*)-00001-of-(\d{5})\.gguf$", filename)
+    if not m:
+        return [filename]
+    n = int(m.group(2))
+    return [f"{m.group(1)}-{i:05d}-of-{m.group(2)}.gguf" for i in range(1, n + 1)]
+
+
 def cmd_download(models_dir: str) -> int:
     from huggingface_hub import hf_hub_download, snapshot_download
 
@@ -65,7 +75,8 @@ def cmd_download(models_dir: str) -> int:
     print(f"-> Reranker: {a['reranker']} (HF cache)", flush=True)
     snapshot_download(a["reranker"])
     print(f"-> LLM: {a['llm_repo']} / {a['llm_file']} -> {models_dir}", flush=True)
-    hf_hub_download(repo_id=a["llm_repo"], filename=a["llm_file"], local_dir=models_dir)
+    for f in gguf_shards(a["llm_file"]):
+        hf_hub_download(repo_id=a["llm_repo"], filename=f, local_dir=models_dir)
     path = os.path.join(models_dir, a["llm_file"])
     if not os.path.isfile(path):
         print(f"[ERROR] LLM file missing after download: {path}", file=sys.stderr)

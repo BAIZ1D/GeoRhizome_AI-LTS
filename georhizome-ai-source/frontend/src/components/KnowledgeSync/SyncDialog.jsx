@@ -119,7 +119,7 @@ export default function SyncDialog({
           <button
             type="button"
             onClick={onWipe}
-            className="mt-4 text-xs text-theme-text-secondary underline hover:text-white"
+            className="mt-4 px-3 py-1.5 text-xs font-semibold text-red-400 rounded-lg border border-red-400/50 hover:bg-red-400/10 focus:outline-none focus:ring-2 focus:ring-red-400 transition-colors"
           >
             {t("knowledgeSync.syncDialog.wipeLink")}
           </button>

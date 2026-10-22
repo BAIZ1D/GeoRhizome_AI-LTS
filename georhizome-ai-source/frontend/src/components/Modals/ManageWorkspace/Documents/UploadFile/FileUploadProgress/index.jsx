@@ -90,7 +90,7 @@ function FileUploadProgressComponent({
               setProgressPercent((prev) => (prev < 20 ? prev + 1 : 20)); // Fake initial queue progress
             }
           }
-        } catch (e) {}
+        } catch {}
       }, 1500);
 
       const formData = new FormData();

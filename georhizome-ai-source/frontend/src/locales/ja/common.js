@@ -1875,7 +1875,8 @@ const TRANSLATIONS = {
         "暗号化された新しいバージョンを GitHub に作成します。新しいバージョンの公開が完了するまで、従来のバージョンは残ります。",
       noPassphrase: "公開する前にチームパスフレーズを設定してください。",
       readOnly: "バージョンの公開と削除は管理者のみ行えます。",
-      setupNeeded: "公開するには、ナレッジ同期設定で GitHub トークンとチームパスフレーズを追加してください。",
+      setupNeeded:
+        "公開するには、ナレッジ同期設定で GitHub トークンとチームパスフレーズを追加してください。",
       openSettings: "ナレッジ同期設定を開く",
     },
     versions: {
@@ -1924,8 +1925,10 @@ const TRANSLATIONS = {
       syncVersion: "同期",
       wipeThisMachine: "消去（このマシンのみ）",
       link: "ナレッジ同期",
-      toSettings: "パスフレーズやGitHubトークンの設定はナレッジ同期設定を開いてください。",
-      toSync: "このマシンのワークスペースを同期するにはナレッジ同期を開いてください。",
+      toSettings:
+        "パスフレーズやGitHubトークンの設定はナレッジ同期設定を開いてください。",
+      toSync:
+        "このマシンのワークスペースを同期するにはナレッジ同期を開いてください。",
     },
     phases: {
       preview: "プレビュー",

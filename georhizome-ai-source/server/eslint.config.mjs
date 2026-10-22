@@ -35,4 +35,8 @@ export default defineConfig([
     },
   },
   { files: ["**/*.js"], languageOptions: { sourceType: "commonjs" } },
+  {
+    files: ["__mocks__/**", "__tests__/**", "__testhelpers__/**"],
+    languageOptions: { globals: { ...globals.node, ...globals.jest } },
+  },
 ]);

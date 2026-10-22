@@ -44,7 +44,7 @@ export default function TextSizeMenu() {
   const [hfFiles, setHfFiles] = useState([]);
   const [searchingHf, setSearchingHf] = useState(false);
 
-  const [downloadMsg, setDownloadMsg] = useState("");
+  const [downloadMsg, _setDownloadMsg] = useState("");
 
   const [downloadedFiles, setDownloadedFiles] = useState([]);
   const [onboardingStatus, setOnboardingStatus] = useState("");
@@ -233,24 +233,6 @@ export default function TextSizeMenu() {
       setHfFiles([]);
     } finally {
       setSearchingHf(false);
-    }
-  };
-
-  const handleDownload = async (repoId, filename) => {
-    setDownloadMsg(`Downloading ${filename || repoId}...`);
-    try {
-      const res = await fetch("/api/hardware/download", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ repo_id: repoId, filename }),
-      });
-      const data = await res.json();
-      if (data.status === "started") {
-        setDownloadMsg(`Download task initiated for ${repoId}`);
-        setTimeout(() => setDownloadMsg(""), 3500);
-      }
-    } catch {
-      setDownloadMsg("Download failed");
     }
   };
 

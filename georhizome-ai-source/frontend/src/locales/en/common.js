@@ -1860,7 +1860,8 @@ const TRANSLATIONS = {
         "Creates a new encrypted version on GitHub. The previous version stays until the new one is published.",
       noPassphrase: "Set the team passphrase before publishing.",
       readOnly: "Only administrators can publish or delete versions.",
-      setupNeeded: "Add a GitHub token and team passphrase in Knowledge Sync settings to publish.",
+      setupNeeded:
+        "Add a GitHub token and team passphrase in Knowledge Sync settings to publish.",
       openSettings: "Open Knowledge Sync settings",
     },
     versions: {
@@ -1908,8 +1909,10 @@ const TRANSLATIONS = {
       syncVersion: "Sync",
       wipeThisMachine: "Wipe (this machine only)",
       link: "Knowledge Sync",
-      toSettings: "Passphrase or GitHub token needed? Open Knowledge Sync settings.",
-      toSync: "Looking to sync workspaces on this machine? Open Knowledge Sync.",
+      toSettings:
+        "Passphrase or GitHub token needed? Open Knowledge Sync settings.",
+      toSync:
+        "Looking to sync workspaces on this machine? Open Knowledge Sync.",
     },
     phases: {
       preview: "Preview",

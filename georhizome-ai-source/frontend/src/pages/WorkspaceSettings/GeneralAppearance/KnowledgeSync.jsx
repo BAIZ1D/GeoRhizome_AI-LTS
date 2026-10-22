@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CloudArrowUp, Trash } from "@phosphor-icons/react";
@@ -7,6 +8,8 @@ import DeleteVersionModal from "@/components/KnowledgeSync/DeleteVersionModal";
 import useKsJob from "@/components/KnowledgeSync/useKsJob";
 import useKsCatalog from "@/components/KnowledgeSync/useKsCatalog";
 import { humanFileSize } from "@/utils/numbers";
+import useUser from "@/hooks/useUser";
+import paths from "@/utils/paths";
 
 function statusKey(entry) {
   if (!entry) return "localOnly";
@@ -21,7 +24,9 @@ export default function KnowledgeSync({ workspace }) {
   const slug = workspace.slug;
   const { entries } = useKsCatalog();
   const entry = entries.find((e) => e.slug === slug) || null;
-  const [admin, setAdmin] = useState(false);
+  const { user } = useUser();
+  const admin = !user || user.role === "admin";
+  const [versionsError, setVersionsError] = useState(null);
   const [hasPassphrase, setHasPassphrase] = useState(false);
   const [versions, setVersions] = useState([]);
   const [next, setNext] = useState(1);
@@ -30,10 +35,10 @@ export default function KnowledgeSync({ workspace }) {
   const loadVersions = useCallback(async () => {
     const res = await KnowledgeSyncModel.versions(slug);
     if (!res.ok) {
-      setAdmin(false);
+      setVersionsError(res.error?.code || "KS_E_UNKNOWN");
       return;
     }
-    setAdmin(true);
+    setVersionsError(null);
     setVersions(res.data.versions || []);
     setNext(res.data.next || 1);
   }, [slug]);
@@ -48,9 +53,9 @@ export default function KnowledgeSync({ workspace }) {
     (async () => {
       const st = await KnowledgeSyncModel.status();
       setHasPassphrase(!!st.data?.passphrase?.configured);
-      if (st.ok && st.data?.passphrase?.configured) loadVersions();
+      if (admin) loadVersions();
     })();
-  }, [loadVersions]);
+  }, [loadVersions, admin]);
 
   const running = job?.state === "running" || job?.state === "awaiting_confirm";
   const busy = running || startError?.code === "KS_E_BUSY";
@@ -96,9 +101,12 @@ export default function KnowledgeSync({ workspace }) {
       </div>
 
       {!admin ? (
-        <p className="text-sm text-theme-text-secondary">
+        <div
+          role="note"
+          className="rounded-lg border border-theme-border bg-theme-bg-primary p-4 text-sm text-theme-text-secondary"
+        >
           {t("knowledgeSync.tab.readOnly")}
-        </p>
+        </div>
       ) : (
         <>
           <div className="rounded-lg border border-theme-border p-4 flex flex-col gap-y-3">
@@ -118,6 +126,24 @@ export default function KnowledgeSync({ workspace }) {
                 ? t("knowledgeSync.tab.publishHelper")
                 : t("knowledgeSync.tab.noPassphrase")}
             </p>
+            {versionsError && (
+              <div
+                role="alert"
+                className="rounded-lg border border-yellow-600/60 p-3 flex flex-col gap-y-2"
+              >
+                <p className="text-sm text-white">
+                  {t("knowledgeSync.tab.setupNeeded")}
+                </p>
+                <div>
+                  <Link
+                    to={paths.settings.knowledgeSync()}
+                    className="inline-flex px-3 py-1.5 text-xs font-semibold text-white rounded-lg border border-theme-border hover:bg-theme-bg-primary focus:outline-none focus:ring-2 focus:ring-white"
+                  >
+                    {t("knowledgeSync.tab.openSettings")}
+                  </Link>
+                </div>
+              </div>
+            )}
             <JobProgress
               job={job?.kind === "publish" ? job : null}
               onCancel={cancel}

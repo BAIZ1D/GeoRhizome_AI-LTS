@@ -1860,6 +1860,8 @@ const TRANSLATIONS = {
         "Creates a new encrypted version on GitHub. The previous version stays until the new one is published.",
       noPassphrase: "Set the team passphrase before publishing.",
       readOnly: "Only administrators can publish or delete versions.",
+      setupNeeded: "Add a GitHub token and team passphrase in Knowledge Sync settings to publish.",
+      openSettings: "Open Knowledge Sync settings",
     },
     versions: {
       title: "Published versions",

@@ -49,12 +49,12 @@ def test_gate_baseline_na():
 
 
 def test_gate_pass():
-    v, r = m.gate_verdict("new", 0, 0, 1024.0, {"passed": True})
+    v, r = m.gate_verdict("new", 0, 0, float(m.SWAP_GROWTH_LIMIT_MB), {"passed": True})
     assert v == "PASS" and r == []
 
 
 def test_gate_growth_boundary_fail():
-    v, r = m.gate_verdict("new", 0, 0, 1025.0, {"passed": True})
+    v, r = m.gate_verdict("new", 0, 0, m.SWAP_GROWTH_LIMIT_MB + 1.0, {"passed": True})
     assert v == "FAIL" and any("swap growth" in x for x in r)
 
 

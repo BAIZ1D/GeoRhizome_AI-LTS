@@ -47,6 +47,17 @@ const KnowledgeSync = {
     call(`workspaces/${encodeURIComponent(slug)}/job`, "GET"),
   confirmJob: (id) => call(`jobs/${encodeURIComponent(id)}/confirm`, "POST"),
   cancelJob: (id) => call(`jobs/${encodeURIComponent(id)}/cancel`, "POST"),
+  exportArchive: (slug) =>
+    call(`export/${encodeURIComponent(slug)}`, "POST"),
+  importPreview: (archive, passphrase) =>
+    call("import/preview", "POST", {
+      archive,
+      ...(passphrase ? { passphrase } : {}),
+    }),
+  importConfirm: (previewId, allowUnsynced = false) =>
+    call("import/confirm", "POST", { previewId, allowUnsynced }),
+  importDiscard: (previewId) =>
+    call("import/discard", "POST", { previewId }),
 };
 
 export default KnowledgeSync;

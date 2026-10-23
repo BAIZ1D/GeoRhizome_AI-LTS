@@ -36,7 +36,28 @@ if LLM_PATH=$("$VENV_PYTHON" "$HELPER" llm-path --models-dir "$GR/storage/models
         /usr/bin/grep -qi 'requires flash' "$LOG_DIR/chat.log" 2> /dev/null && break
         sleep 2
     done
+    NEED_DEGRADE=0
     if ! lsof -ti:8003 > /dev/null 2>&1; then
+        if /usr/bin/grep -qi 'requires flash' "$LOG_DIR/chat.log" 2> /dev/null || ! kill -0 "$LLM_PID" 2> /dev/null; then
+            NEED_DEGRADE=1
+        else
+            echo "[INFO] Chat LLM still loading (slow cold start on low RAM); waiting up to 180 s more"
+            for i in $(seq 1 90); do
+                lsof -ti:8003 > /dev/null 2>&1 && break
+                /usr/bin/grep -qi 'requires flash' "$LOG_DIR/chat.log" 2> /dev/null && break
+                kill -0 "$LLM_PID" 2> /dev/null || break
+                sleep 2
+            done
+            if lsof -ti:8003 > /dev/null 2>&1; then
+                NEED_DEGRADE=0
+            elif /usr/bin/grep -qi 'requires flash' "$LOG_DIR/chat.log" 2> /dev/null || ! kill -0 "$LLM_PID" 2> /dev/null; then
+                NEED_DEGRADE=1
+            else
+                echo "[WARN] Chat LLM is still loading after the extended wait; leaving it running (not restarting). Check $LOG_DIR/chat.log"
+            fi
+        fi
+    fi
+    if [ "$NEED_DEGRADE" = "1" ]; then
         echo "[WARN] Chat LLM Server did not open port 8003 with quantized KV; retrying with f16 KV cache (same n_ctx)."
         echo "[WARN] degraded: f16 KV fallback" >> "$LOG_DIR/chat.log"
         kill "$LLM_PID" 2> /dev/null

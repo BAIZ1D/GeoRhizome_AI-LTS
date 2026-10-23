@@ -49,6 +49,23 @@ set /a TRIES+=1
 if %TRIES% lss 30 goto wait_llm
 :llm_failed
 if defined LLM_DEGRADE goto llm_dead
+findstr /i /c:"requires flash" "%LOGS%\chat.log" >nul 2>&1
+if not errorlevel 1 goto llm_degrade
+wmic process where "commandline like '%%llama_cpp.server%%'" get processid | findstr /r "[0-9]" >nul 2>&1
+if errorlevel 1 goto llm_degrade
+echo [INFO] Chat LLM still loading (slow cold start on low RAM); waiting up to 180 s more
+set /a TRIES=0
+:wait_llm_slow
+timeout /t 2 >nul
+netstat -ano | findstr ":8003" | findstr "LISTENING" >nul
+if not errorlevel 1 goto llm_ok
+findstr /i /c:"requires flash" "%LOGS%\chat.log" >nul 2>&1
+if not errorlevel 1 goto llm_degrade
+set /a TRIES+=1
+if %TRIES% lss 90 goto wait_llm_slow
+echo [WARN] Chat LLM is still loading after the extended wait; leaving it running (not restarting). Log: %LOGS%\chat.log
+goto llm_done
+:llm_degrade
 echo [WARN] Chat LLM Server did not open port 8003 with quantized KV; retrying with f16 KV cache (same n_ctx).
 echo [WARN] degraded: f16 KV fallback>>"%LOGS%\chat.log"
 wmic process where "commandline like '%%llama_cpp.server%%'" call terminate >nul 2>&1

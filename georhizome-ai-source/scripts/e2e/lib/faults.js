@@ -63,7 +63,7 @@ async function waitForPhase(fetchJob, phase, intervalMs, timeoutMs) {
     if (job && job.phase && seen[seen.length - 1] !== job.phase)
       seen.push(job.phase);
     if (job && job.phase === phase) return { job, seen };
-    if (job && ["done", "failed", "cancelled"].includes(job.state))
+    if (job && ["succeeded", "failed", "cancelled", "interrupted"].includes(job.state))
       throw new Error(`job ended (${job.state}) before phase ${phase}`);
     await sleep(intervalMs);
   }

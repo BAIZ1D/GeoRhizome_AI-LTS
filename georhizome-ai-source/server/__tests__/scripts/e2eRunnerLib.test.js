@@ -103,4 +103,17 @@ describe("faults", () => {
     const r = await faults.waitForPhase(async () => seq[Math.min(i++, 1)], "upload", 1, 1000);
     expect(r.seen).toEqual(["a", "upload"]);
   });
+  test("waitForPhase stops on server terminal state succeeded", async () => {
+    await expect(
+      faults.waitForPhase(async () => ({ phase: "publish", state: "succeeded" }), "upload", 1, 1000)
+    ).rejects.toThrow(/job ended \(succeeded\)/);
+  });
+  test("runner only uses server terminal state names", () => {
+    const src = require("fs").readFileSync(
+      require("path").resolve(__dirname, "../../../scripts/e2e/ks-e2e-runner.js"),
+      "utf8"
+    );
+    expect(src).not.toMatch(/"done"/);
+    expect(src).toMatch(/"succeeded"/);
+  });
 });

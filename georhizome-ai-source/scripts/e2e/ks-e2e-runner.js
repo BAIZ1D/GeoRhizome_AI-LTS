@@ -122,7 +122,7 @@ async function main() {
     const end = Date.now() + timeout;
     while (Date.now() < end) {
       const j = await pollJob(base, id);
-      if (j && ["done", "failed", "cancelled", "interrupted"].includes(j.state)) return j;
+      if (j && ["succeeded", "failed", "cancelled", "interrupted", "awaiting_confirm"].includes(j.state)) return j;
       await faults.sleep(interval);
     }
     throw new Error("job timeout");
@@ -179,7 +179,7 @@ async function main() {
       need(r.json?.jobId, `publish rejected (${r.status})`);
       const j = await waitDone(baseA, r.json.jobId);
       L(`publish state=${j.state} phase=${j.phase}`);
-      if (j.state !== "done") process.exitCode = 1;
+      if (j.state !== "succeeded") process.exitCode = 1;
       break;
     }
     case "sync": {
@@ -196,7 +196,7 @@ async function main() {
       }
       const after = await counts(baseB);
       L(`sync state=${j.state} docs ${before.docs}->${after.docs} settings_unchanged=${before.settings === after.settings}`);
-      if (j.state !== "done") process.exitCode = 1;
+      if (j.state !== "succeeded") process.exitCode = 1;
       break;
     }
     case "drill-upload": {
@@ -242,7 +242,7 @@ async function main() {
       const after = await counts(baseB);
       const same = before.docs === after.docs && before.settings === after.settings;
       L(`wrong-passphrase state=${j.state} unchanged=${same}`);
-      if (!same || j.state === "done") process.exitCode = 1;
+      if (!same || j.state === "succeeded") process.exitCode = 1;
       break;
     }
     case "scan": {

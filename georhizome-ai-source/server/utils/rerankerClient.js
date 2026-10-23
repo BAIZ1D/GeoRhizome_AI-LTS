@@ -11,7 +11,7 @@ const path = require("path");
  * - final_top_k: null -> caller falls back to workspace topN
  * - min_reranker_score: -1.6 raw logits (Phase 1 calibration)
  * - timeout_ms: 23000 warm budget (8 GB loaded p95 14760 ms x 1.5)
- * - cold_timeout_ms: 38000 budget when the model may need loading
+ * - cold_timeout_ms: 60000 budget (M1 8 GB cold load under memory pressure exceeded 38000) when the model may need loading
  * - idle_unload_minutes: 15 (after this much idle time the next call is cold)
  */
 const DEFAULTS = Object.freeze({
@@ -21,7 +21,7 @@ const DEFAULTS = Object.freeze({
   final_top_k: null,
   min_reranker_score: -1.6,
   timeout_ms: 23000,
-  cold_timeout_ms: 38000,
+  cold_timeout_ms: 60000,
   idle_unload_minutes: 15,
 });
 

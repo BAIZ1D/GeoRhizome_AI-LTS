@@ -28,7 +28,7 @@
     "max_length": 512,
     "idle_unload_minutes": 15,
     "timeout_ms": 23000,
-    "cold_timeout_ms": 38000,
+    "cold_timeout_ms": 60000,
     "wide_candidate_count": 30,
     "final_top_k": 10,
     "min_reranker_score": -1.6,

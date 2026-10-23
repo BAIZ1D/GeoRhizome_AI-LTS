@@ -211,7 +211,7 @@ def main() -> int:
     except Exception:
         cfgr = {}
     timeout_ms = float(cfgr.get("timeout_ms", 23000))
-    cold_ms = float(cfgr.get("cold_timeout_ms", 38000))
+    cold_ms = float(cfgr.get("cold_timeout_ms", 60000))
 
     if not wait_unload(emb, rer, args.wait_unload_max):
         print("ABORT: embedder/reranker still loaded after wait; retry later.", file=sys.stderr)

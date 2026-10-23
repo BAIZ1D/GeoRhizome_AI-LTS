@@ -12,5 +12,5 @@ retrieval:
   reranker_server_url: http://host.docker.internal:8001/rerank
   reranker_enabled: true
   timeout_ms: 23000
-  cold_timeout_ms: 38000
+  cold_timeout_ms: 60000
   reranker_model: cl-nagoya/ruri-v3-reranker-310m

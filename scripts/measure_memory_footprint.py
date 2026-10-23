@@ -223,7 +223,7 @@ class Sampler(threading.Thread):
         self._stop_evt.set()
 
 
-def main() -> int:
+def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--label", required=True, choices=["baseline", "new"])
     ap.add_argument("--queries", type=int, default=20)
@@ -231,7 +231,15 @@ def main() -> int:
     ap.add_argument("--out", default=DEFAULT_OUT)
     ap.add_argument("--node-log", default=None)
     ap.add_argument("--wait-unload-max", type=float, default=360)
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
+
+    if args.label == "new" and not (args.node_log and os.path.exists(args.node_log)):
+        print(
+            "ABORT: --node-log required for label new "
+            "(capture `docker logs georhizome-core` before the run)",
+            file=sys.stderr,
+        )
+        return 2
 
     with open(os.path.join(HERE, "measure_queries.json"), encoding="utf-8") as f:
         d = json.load(f)
@@ -262,10 +270,55 @@ def main() -> int:
     sampler.start()
     t_start = time.monotonic()
     script_fail = 0
+
+    # Warm-up: exercise embedder and chat so all three services are resident.
+    chat = _cfg_url("llm", DEFAULT_PORTS["chat"])
+    emb_model: Optional[str] = None
+    try:
+        from core.config_io import get_config_dir
+
+        with open(os.path.join(get_config_dir(), "active_models.json"), encoding="utf-8") as f:
+            emb_model = (json.load(f).get("embedding") or {}).get("model_id")
+    except Exception:
+        pass
+    emb_body: Dict[str, Any] = {"input": ["本規程は従業員の権利と義務を定める。"]}
+    if emb_model:
+        emb_body["model"] = emb_model
+    warm_emb_ms: Optional[float] = None
+    try:
+        status, warm_emb_ms = _post_json(emb + "/v1/embeddings", emb_body, 120)
+        if status != 200:
+            script_fail += 1
+    except Exception:
+        script_fail += 1
+    chat_id: Optional[str] = None
+    warm_chat_ms: Optional[float] = None
+    try:
+        chat_id = chat_model_id(_get_json(chat + "/v1/models", 30))
+    except Exception:
+        script_fail += 1
+    try:
+        chat_body: Dict[str, Any] = {
+            "messages": [{"role": "user", "content": "こんにちは。一言で答えてください。"}],
+            "max_tokens": 16,
+        }
+        if chat_id:
+            chat_body["model"] = chat_id
+        status, warm_chat_ms = _post_json(chat + "/v1/chat/completions", chat_body, 180)
+        if status != 200:
+            script_fail += 1
+    except Exception:
+        script_fail += 1
+
     cold: Optional[float] = None
     warm: List[float] = []
     url = rer + "/rerank"
-    n_cand = int(cfgr.get("wide_candidate_count", 30))
+    pre_health: Dict[str, Any] = {}
+    try:
+        pre_health = _get_json(rer + "/health")
+    except Exception:
+        pass
+    n_cand = pick_candidate_count(pre_health, cfgr)
     for i, q in enumerate(queries):
         body = {"query": q, "candidates": build_candidates(n_cand, i)}
         is_cold = i == 0
@@ -322,6 +375,10 @@ def main() -> int:
         f"- Reranker /health: tier={health.get('tier')} device={health.get('device')} "
         f"precision={health.get('precision')} candidate_count={health.get('candidate_count')}",
         f"- Reranker selftest verdict: {json.dumps(selftest, ensure_ascii=False)}",
+        f"- Chat model: {chat_id}",
+        f"- Warm-up ms: embed={warm_emb_ms} chat={warm_chat_ms}",
+        f"- Embedder /health: dimension={emb_health.get('dimension')} "
+        f"device={emb_health.get('device')} precision={emb_health.get('precision')}",
         f"- Embedder selftest verdict: {json.dumps(emb_health.get('selftest'), ensure_ascii=False)}",
     ]
     if selftest and (
@@ -344,10 +401,12 @@ def main() -> int:
     ]
     if args.label == "new":
         growth = summ["swap_growth_mb"]
-        ok = node_fb is not None and total_fb == 0 and growth is not None and growth <= 1024
+        verdict, reasons = gate_verdict(
+            args.label, node_fb, total_fb, growth, emb_health.get("selftest")
+        )
         lines.append(
-            f"\nGate verdict: {'PASS' if ok else 'FAIL'} (swap growth {growth} MB, fallbacks {total_fb})"
-            + ("" if node_fb is not None else " [node-side fallbacks not measured]")
+            f"\nGate verdict: {verdict} (swap growth {growth} MB, fallbacks {total_fb})"
+            + (f" [{'; '.join(reasons)}]" if reasons else "")
         )
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     with open(args.out, "a", encoding="utf-8") as f:

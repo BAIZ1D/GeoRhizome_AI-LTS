@@ -83,3 +83,18 @@ def test_chat_model_id():
     assert m.chat_model_id({"data": [{"id": "abc"}, {"id": "d"}]}) == "abc"
     assert m.chat_model_id({"data": []}) is None
     assert m.chat_model_id({}) is None
+
+
+def test_main_new_without_node_log_aborts(monkeypatch, capsys):
+    import subprocess
+
+    def boom(*a, **k):
+        raise AssertionError("must not touch network/subprocess")
+
+    for name in ("_get_json", "_post_json", "listener_pid", "wait_unload"):
+        monkeypatch.setattr(m, name, boom)
+    monkeypatch.setattr(subprocess, "run", boom)
+    monkeypatch.setattr(subprocess, "Popen", boom)
+    monkeypatch.setattr(m.urllib.request, "urlopen", boom)
+    assert m.main(["--label", "new"]) == 2
+    assert "--node-log required" in capsys.readouterr().err

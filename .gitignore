@@ -8,3 +8,9 @@ graphify-out/
 *.safetensors
 *.db
 georhizome-ai-source/server/__tests__/utils/agents/models/
+
+# runtime storage and stray root artifacts
+georhizome-ai-source/server/storage/
+georhizome-ai-source/server/storage/comkey
+/ex/
+/sdist.tar.gz

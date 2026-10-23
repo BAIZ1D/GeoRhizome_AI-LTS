@@ -41,6 +41,9 @@ SCAN_SKIP_FILES = {
     os.path.join(REPO, "config", "model_catalog.json"),
     os.path.join(REPO, "CLAUDE.md"),
     os.path.join(REPO, "config", "active_models.json"),  # gitignored live runtime state
+    # third-party Hugging Face model listings, not project config
+    os.path.join(REPO, "services", "hwfit", "data", "hf_models.json"),
+    os.path.join(REPO, "services", "hwfit", "data", "mlx_community_models.json"),
 }
 SCAN_EXT = {".py", ".js", ".jsx", ".mjs", ".json", ".sh", ".ps1", ".bat", ".command", ".yml", ".yaml", ".env", ".example", ".md"}
 
@@ -90,7 +93,7 @@ def checks() -> List[Tuple[str, Callable[[], bool]]]:
     def stale_scan() -> bool:
         hits = []
         for root, dirs, files in os.walk(REPO):
-            dirs[:] = [d for d in dirs if d not in SCAN_SKIP_DIRS]
+            dirs[:] = [d for d in dirs if d not in SCAN_SKIP_DIRS and os.path.join(root, d) != os.path.join(REPO, "ex")]
             for fn in files:
                 p = os.path.join(root, fn)
                 if p in SCAN_SKIP_FILES or os.path.splitext(fn)[1] not in SCAN_EXT and fn != ".env":

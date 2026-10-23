@@ -42,3 +42,44 @@ def test_count_fallbacks():
 def test_p95():
     assert m.p95([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) == 10
     assert m.p95([]) is None
+
+
+def test_gate_baseline_na():
+    assert m.gate_verdict("baseline", None, 0, None, None) == ("N/A", [])
+
+
+def test_gate_pass():
+    v, r = m.gate_verdict("new", 0, 0, 1024.0, {"passed": True})
+    assert v == "PASS" and r == []
+
+
+def test_gate_growth_boundary_fail():
+    v, r = m.gate_verdict("new", 0, 0, 1025.0, {"passed": True})
+    assert v == "FAIL" and any("swap growth" in x for x in r)
+
+
+def test_gate_node_log_missing():
+    v, r = m.gate_verdict("new", None, 0, 10.0, {"passed": True})
+    assert v == "FAIL" and "node log missing" in r
+
+
+def test_gate_embedder_selftest_null():
+    v, r = m.gate_verdict("new", 0, 0, 10.0, None)
+    assert v == "FAIL" and "embedder selftest verdict null" in r
+
+
+def test_gate_fallbacks_and_unknown_growth():
+    v, r = m.gate_verdict("new", 0, 2, None, {"passed": True})
+    assert v == "FAIL" and "fallbacks 2" in r and any("swap growth" in x for x in r)
+
+
+def test_pick_candidate_count():
+    assert m.pick_candidate_count({"candidate_count": 15}, {"wide_candidate_count": 30}) == 15
+    assert m.pick_candidate_count({}, {"wide_candidate_count": 25}) == 25
+    assert m.pick_candidate_count({"candidate_count": 0}, {}) == 30
+
+
+def test_chat_model_id():
+    assert m.chat_model_id({"data": [{"id": "abc"}, {"id": "d"}]}) == "abc"
+    assert m.chat_model_id({"data": []}) is None
+    assert m.chat_model_id({}) is None

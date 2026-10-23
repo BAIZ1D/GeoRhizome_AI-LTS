@@ -98,6 +98,43 @@ def summarize(samples: List[Dict[str, Any]]) -> Dict[str, Any]:
             "swap_peak_mb": peak_swap, "swap_growth_mb": growth}
 
 
+SWAP_GROWTH_LIMIT_MB = 1024
+
+
+def gate_verdict(
+    label: str,
+    node_fb: Optional[int],
+    total_fb: int,
+    growth_mb: Optional[float],
+    emb_selftest: Any,
+) -> Tuple[str, List[str]]:
+    if label != "new":
+        return "N/A", []
+    reasons: List[str] = []
+    if node_fb is None:
+        reasons.append("node log missing")
+    if emb_selftest is None:
+        reasons.append("embedder selftest verdict null")
+    if growth_mb is None or growth_mb > SWAP_GROWTH_LIMIT_MB:
+        reasons.append(f"swap growth {growth_mb} MB > {SWAP_GROWTH_LIMIT_MB}")
+    if total_fb > 0:
+        reasons.append(f"fallbacks {total_fb}")
+    return ("FAIL" if reasons else "PASS"), reasons
+
+
+def pick_candidate_count(health: Dict[str, Any], cfgr: Dict[str, Any]) -> int:
+    try:
+        n = int(health.get("candidate_count") or 0)
+    except (TypeError, ValueError):
+        n = 0
+    return n if n > 0 else int(cfgr.get("wide_candidate_count", 30))
+
+
+def chat_model_id(models_json: Dict[str, Any]) -> Optional[str]:
+    data = (models_json or {}).get("data") or []
+    return data[0].get("id") if data else None
+
+
 def p95(values: List[float]) -> Optional[float]:
     if not values:
         return None

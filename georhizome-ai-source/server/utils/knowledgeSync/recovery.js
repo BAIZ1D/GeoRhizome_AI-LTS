@@ -11,6 +11,35 @@ const { safeLog } = require("./redact");
 const { UUID_RE } = require("./util");
 
 const rmrf = (p) => fs.promises.rm(p, { recursive: true, force: true });
+// Mirrors the names syncRunner creates (runners.js).
+const DL_RE = /^dl-[A-Za-z0-9]+-v\d+$/;
+const SYNC_ARCHIVE_RE =
+  /^sync-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.grks$/i;
+
+/**
+ * Recovery runs before HTTP binds, so no sync job can own a reassembled
+ * archive; any left in exports/ was orphaned by a crash.
+ */
+async function sweepSyncArchives(counts) {
+  const dir = paths.exportsDir();
+  let names;
+  try {
+    names = await fs.promises.readdir(dir);
+  } catch {
+    return;
+  }
+  for (const name of names) {
+    if (!SYNC_ARCHIVE_RE.test(name)) continue;
+    try {
+      await fs.promises.rm(path.join(dir, name), { force: true });
+      counts.cleaned++;
+    } catch (err) {
+      safeLog("warn", "orphan sync archive cleanup failed", {
+        code: err && err.code,
+      });
+    }
+  }
+}
 
 async function readPendingMarker(slug) {
   try {
@@ -96,7 +125,23 @@ async function sweepStale(cfg, counts) {
     return;
   }
   const cutoff = Date.now() - cfg.stale_staging_hours * 3600 * 1000;
+  await sweepSyncArchives(counts);
   for (const e of ents) {
+    if (e.isDirectory() && DL_RE.test(e.name)) {
+      // Part downloads are kept for resume; only drop them once stale.
+      try {
+        const dir = path.join(root, e.name);
+        if ((await fs.promises.stat(dir)).mtimeMs < cutoff) {
+          await rmrf(dir);
+          counts.cleaned++;
+        }
+      } catch (err) {
+        safeLog("warn", "stale download cleanup failed", {
+          code: err && err.code,
+        });
+      }
+      continue;
+    }
     if (!e.isDirectory() || !UUID_RE.test(e.name)) continue;
     try {
       if (await journalLib.readJournal(e.name)) continue;

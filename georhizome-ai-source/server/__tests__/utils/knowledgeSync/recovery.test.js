@@ -318,6 +318,24 @@ describe("quarantine and stale cleanup", () => {
     expect(fs.existsSync(fresh)).toBe(true);
     expect(fs.existsSync(corruptFresh)).toBe(true);
   });
+
+  test("crash-orphaned sync archive removed; dl dir kept until stale; export archives kept", async () => {
+    const exp = path.join(stagingDir(), "exports");
+    fs.mkdirSync(exp, { recursive: true });
+    const orphan = path.join(exp, `sync-${uuidv4()}.grks`);
+    const published = path.join(exp, "ws-v1.grks");
+    fs.writeFileSync(orphan, "x");
+    fs.writeFileSync(published, "x");
+    const freshDl = mk("dl-abcd1234-v2");
+    const oldDl = mk("dl-abcd1234-v1");
+    age(oldDl, 100);
+    const r = await recoverKnowledgeSync();
+    expect(fs.existsSync(orphan)).toBe(false);
+    expect(fs.existsSync(published)).toBe(true);
+    expect(fs.existsSync(freshDl)).toBe(true);
+    expect(fs.existsSync(oldDl)).toBe(false);
+    expect(r.cleaned).toBe(2);
+  });
 });
 
 test("never throws when the DB throws", async () => {

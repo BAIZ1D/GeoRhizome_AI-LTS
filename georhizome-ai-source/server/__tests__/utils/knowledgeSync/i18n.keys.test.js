@@ -4,10 +4,7 @@ const { KS_CODES } = require("../../../utils/knowledgeSync/errors");
 
 const loc = (l) =>
   fs.readFileSync(
-    path.resolve(
-      __dirname,
-      `../../../../frontend/src/locales/${l}/common.js`
-    ),
+    path.resolve(__dirname, `../../../../frontend/src/locales/${l}/common.js`),
     "utf8"
   );
 
@@ -42,4 +39,16 @@ test("en and ja knowledgeSync key sets match", () => {
 test.each(Object.keys(KS_CODES))("errors.%s exists in en and ja", (code) => {
   expect(en.has(`errors.${code}`)).toBe(true);
   expect(ja.has(`errors.${code}`)).toBe(true);
+});
+
+const LOCALES_DIR = path.resolve(__dirname, "../../../../frontend/src/locales");
+const LOCALES = fs
+  .readdirSync(LOCALES_DIR)
+  .filter(
+    (d) => d !== "en" && fs.existsSync(path.join(LOCALES_DIR, d, "common.js"))
+  );
+
+test.each(LOCALES)("%s has every en knowledgeSync key", (l) => {
+  const have = keysOf(loc(l));
+  expect([...en].filter((k) => !have.has(k))).toEqual([]);
 });

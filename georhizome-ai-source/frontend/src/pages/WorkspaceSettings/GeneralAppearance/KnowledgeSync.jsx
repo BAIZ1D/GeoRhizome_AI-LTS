@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { CloudArrowUp, Trash } from "@phosphor-icons/react";
 import KnowledgeSyncModel from "@/models/knowledgeSync";
 import JobProgress from "@/components/KnowledgeSync/JobProgress";
+import LocalArchivePanel from "@/components/KnowledgeSync/LocalArchivePanel";
 import DeleteVersionModal from "@/components/KnowledgeSync/DeleteVersionModal";
 import useKsJob from "@/components/KnowledgeSync/useKsJob";
 import useKsCatalog from "@/components/KnowledgeSync/useKsCatalog";
@@ -251,6 +252,8 @@ export default function KnowledgeSync({ workspace }) {
           </div>
         </>
       )}
+
+      <LocalArchivePanel slug={slug} admin={admin} onImported={loadVersions} />
 
       {deleting != null && (
         <DeleteVersionModal

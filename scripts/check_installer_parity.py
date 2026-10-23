@@ -149,9 +149,21 @@ def checks() -> List[Tuple[str, Callable[[], bool]]]:
         ("compose YAML blocks parse", compose_valid),
         ("launchers read LLM from config via helper", lambda: all("llm-path" in _read(p) and ".gguf" not in _read(p) for p in (LAUNCH_SH, LAUNCH_BAT))),
         ("launchers use llm-args, no 16384, degrade only on 'requires flash'", lambda: all(_launcher_flash_ok(p) for p in (LAUNCH_SH, LAUNCH_BAT))),
+        ("OTA updaters download models before migrate", lambda: _ota_download_first(sh, ps)),
         ("OTA updaters migrate .env", lambda: all("georhizome_setup.py" in t and " migrate" in t for t in both.values())),
         ("nested georhizome-ai-source/services removed", lambda: not os.path.exists(os.path.join(REPO, "georhizome-ai-source", "services"))),
     ]
+
+
+def _ota_download_first(sh: str, ps: str) -> bool:
+    i = sh.find("update_georhizome")
+    j = ps.find("$UpdatePs1 = @'")
+    blocks = [sh[i:] if i >= 0 else "", ps[j:ps.find("\n'@", j)] if j >= 0 else ""]
+    for b in blocks:
+        d, m = b.find("georhizome_setup.py\" download"), b.find("georhizome_setup.py\" migrate")
+        if d < 0 or m < 0 or d > m:
+            return False
+    return True
 
 
 def main() -> int:

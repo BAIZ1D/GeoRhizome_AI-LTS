@@ -200,6 +200,7 @@ try {
     Remove-Item $Zip -Force; Remove-Item $Tmp -Recurse -Force
     $Bat = [System.IO.File]::ReadAllText("$GR\source\installers\start_georhizome.bat") -replace "`r?`n", "`r`n"
     [System.IO.File]::WriteAllText("$GR\start_georhizome.bat", $Bat, $Utf8NoBom)
+    & "$GR\source\.venv\Scripts\python.exe" "$GR\source\installers\georhizome_setup.py" download --models-dir "$GR\storage\models"; Check "download"
     & "$GR\source\.venv\Scripts\python.exe" "$GR\source\installers\georhizome_setup.py" migrate --env "$GR\source\georhizome-ai-source\server\.env"; Check "migrate"
     Write-Host "[SUCCESS] アップデートが完了しました！ GeoRhizome AI を一度閉じて、再度起動してください。" -ForegroundColor Green
 } catch {

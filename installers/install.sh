@@ -135,6 +135,7 @@ curl -fsSL https://api.github.com/repos/BAIZ1D/GeoRhizome_AI-LTS/tarball/main \
     | tar -xz -C "$GR/source" --strip-components=1
 cp "$GR/source/installers/start_georhizome.command" "$GR/start_georhizome.command"
 chmod +x "$GR/start_georhizome.command"
+"$GR/source/.venv/bin/python3" "$GR/source/installers/georhizome_setup.py" download --models-dir "$GR/storage/models" || { echo "[ERROR] model download failed"; exit 1; }
 "$GR/source/.venv/bin/python3" "$GR/source/installers/georhizome_setup.py" migrate --env "$GR/source/georhizome-ai-source/server/.env"
 echo ""
 echo "[SUCCESS] アップデートが完了しました！"

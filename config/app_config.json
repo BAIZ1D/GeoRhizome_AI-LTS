@@ -39,18 +39,19 @@
     "calibration": {
       "status": "measured",
       "measured_on": "M1 8GB",
-      "date": "2026-10-16",
+      "date": "2026-10-23",
       "device": "mps",
-      "precision": "fp32",
-      "batch_size": 8,
-      "candidates": "30 x 1024 chars",
-      "p95_ms_mps": 7988,
+      "precision": "fp16",
+      "batch_size": 4,
+      "candidates": "15 x 1024 chars",
+      "p95_ms_mps": 4610,
       "p95_ms_cpu_batch4": 14230,
       "p95_ms_cpu_batch8": 26907,
       "timeout_formula": "ceil(p95_ms*1.5/100)*100",
       "relevant_min": 1.03,
       "irrelevant_max": -4.04,
-      "score_unit": "raw logits"
+      "score_unit": "raw logits",
+      "cold_ms_mps": 25075
     }
   },
   "llm": {

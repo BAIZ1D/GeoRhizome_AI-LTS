@@ -146,6 +146,18 @@ def upsert_env_keys(text: str, values: Dict[str, int]) -> str:
     return "".join(lines)
 
 
+_CONTAINER_URL_KEYS = ("GENERIC_OPEN_AI_BASE_PATH", "EMBEDDING_BASE_PATH", "HARDWARE_SERVER_URL")
+
+
+def rewrite_container_loopback(text: str) -> str:
+    """Rewrite loopback hosts to host.docker.internal on the container URL keys only."""
+    pat = re.compile(r"^(\s*(?:" + "|".join(_CONTAINER_URL_KEYS) + r")\s*=.*?)(127\.0\.0\.1|localhost)", re.I)
+    out = []
+    for line in text.splitlines(keepends=True):
+        out.append(pat.sub(r"\1host.docker.internal", line, count=1))
+    return "".join(out)
+
+
 def env_text(config_dir: str = CONFIG_DIR) -> str:
     a = default_artifacts(config_dir)
     budget = token_budget(current_profile(config_dir))
@@ -182,6 +194,7 @@ def migrate(env_path: Optional[str], config_dir: str = CONFIG_DIR) -> Dict[str, 
         with open(env_path, encoding="utf-8-sig") as f:
             original = f.read()
         text, _ = md.migrate_env_text(original, legacy, new)
+        text = rewrite_container_loopback(text)
         text = upsert_env_keys(text, token_budget(current_profile(config_dir)))
         if text != original:
             _write_text(env_path, text)

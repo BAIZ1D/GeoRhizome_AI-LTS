@@ -101,3 +101,56 @@ def test_write_env_and_migrate_token_budget(tmp_config_dir, tmp_path, monkeypatc
     assert t1.count("TOKEN_LIMIT") == 1
     assert gs.migrate(str(old), tmp_config_dir)["env"] is False  # idempotent
     assert old.read_text() == t1
+
+
+_LOOP_KEYS = ("GENERIC_OPEN_AI_BASE_PATH", "EMBEDDING_BASE_PATH", "HARDWARE_SERVER_URL")
+
+
+def _budget_text(cfg):
+    return "".join(f"{k}={v}\n" for k, v in gs.token_budget(gs.current_profile(cfg)).items())
+
+
+def test_migrate_rewrites_loopback_generic_base_path(tmp_config_dir, tmp_path, monkeypatch):
+    monkeypatch.setattr(gs.ram_profile, "detect_ram_gb", lambda: 16.0)
+    env = tmp_path / ".env"
+    env.write_text("GENERIC_OPEN_AI_BASE_PATH=http://127.0.0.1:8003/v1\n" + _budget_text(tmp_config_dir), encoding="utf-8")
+    res = gs.migrate(str(env), tmp_config_dir)
+    assert res["env"] is True
+    out = env.read_text(encoding="utf-8")
+    assert "GENERIC_OPEN_AI_BASE_PATH=http://host.docker.internal:8003/v1" in out
+    assert "127.0.0.1" not in out
+
+
+def test_migrate_rewrites_loopback_embedding_and_hardware(tmp_config_dir, tmp_path, monkeypatch):
+    monkeypatch.setattr(gs.ram_profile, "detect_ram_gb", lambda: 16.0)
+    env = tmp_path / ".env"
+    env.write_text(
+        "EMBEDDING_BASE_PATH=http://localhost:8000/v1\nHARDWARE_SERVER_URL=http://127.0.0.1:8002\n" + _budget_text(tmp_config_dir),
+        encoding="utf-8",
+    )
+    assert gs.migrate(str(env), tmp_config_dir)["env"] is True
+    out = env.read_text(encoding="utf-8")
+    assert "EMBEDDING_BASE_PATH=http://host.docker.internal:8000/v1" in out
+    assert "HARDWARE_SERVER_URL=http://host.docker.internal:8002" in out
+    assert "localhost" not in out and "127.0.0.1" not in out
+
+
+def test_migrate_loopback_idempotent_and_leaves_other_lines(tmp_config_dir, tmp_path, monkeypatch):
+    monkeypatch.setattr(gs.ram_profile, "detect_ram_gb", lambda: 16.0)
+    env = tmp_path / ".env"
+    env.write_text(
+        "# note 127.0.0.1 stays\nOTHER_URL=http://127.0.0.1:9\nGENERIC_OPEN_AI_BASE_PATH=http://127.0.0.1:8003/v1\n" + _budget_text(tmp_config_dir),
+        encoding="utf-8",
+    )
+    assert gs.migrate(str(env), tmp_config_dir)["env"] is True
+    out = env.read_text(encoding="utf-8")
+    assert "# note 127.0.0.1 stays" in out and "OTHER_URL=http://127.0.0.1:9" in out
+    assert gs.migrate(str(env), tmp_config_dir)["env"] is False
+    assert env.read_text(encoding="utf-8") == out
+
+
+def test_env_text_has_no_loopback(tmp_config_dir):
+    t = gs.env_text(tmp_config_dir)
+    assert "127.0.0.1" not in t
+    for k in _LOOP_KEYS:
+        assert any(l.startswith(k + "=http://host.docker.internal:") for l in t.splitlines())

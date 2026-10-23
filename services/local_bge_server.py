@@ -72,6 +72,7 @@ def load_settings(config_dir: str) -> Dict[str, Any]:
         "model": model,
         "chunk_size": int(os.getenv("EMBEDDING_MAX_CHUNK_LENGTH", ts.get("chunk_size", 1024))),
         "batch_size": int(os.getenv("EMBEDDING_BATCH_SIZE", emb.get("max_concurrent_chunks", 2))),
+        "dimension": emb.get("dimension"),
         "idle_unload_seconds": float(emb.get("idle_unload_seconds", FALLBACK_IDLE_UNLOAD_SECONDS) or 0),
         "mps_fp16": bool(emb.get("mps_fp16", True)),
         "parity_min_cosine": float(emb.get("parity_min_cosine", FALLBACK_PARITY_MIN_COSINE)),
@@ -226,7 +227,26 @@ class Engine:
 
     # ---- inference
     def encode(self, texts: List[str]) -> Any:
-        return self.model.encode(texts, batch_size=self.cfg["batch_size"], normalize_embeddings=True)
+        out = self.model.encode(texts, batch_size=self.cfg["batch_size"], normalize_embeddings=True)
+        try:
+            self.last_dim = int(len(out[0]))
+        except Exception:  # noqa: BLE001
+            pass
+        return out
+
+    def _dimension(self) -> Optional[int]:
+        if self.model is None:
+            dim = self.cfg.get("dimension")
+            return int(dim) if dim else None
+        getter = getattr(self.model, "get_sentence_embedding_dimension", None)
+        if callable(getter):
+            try:
+                d = getter()
+                if d:
+                    return int(d)
+            except Exception:  # noqa: BLE001
+                pass
+        return getattr(self, "last_dim", None)
 
     def health(self) -> Dict[str, Any]:
         return {
@@ -237,6 +257,7 @@ class Engine:
             "device": self.device,
             "precision": self.precision,
             "batch_size": self.cfg.get("batch_size"),
+            "dimension": self._dimension(),
             "idle_unload_seconds": self.cfg.get("idle_unload_seconds"),
             "selftest": self.selftest,
             "error": self.error,

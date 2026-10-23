@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import json
+import os
+import sys
 import threading
 import time
+import types
 
 import numpy as np
 import pytest
@@ -20,6 +24,21 @@ class FakeST:
         self.encode_calls.append({"n": len(texts), "batch_size": batch_size, "texts": list(texts),
                                   "normalize": normalize_embeddings})
         return np.array([[1.0, 0.0, 0.0] for _ in texts], dtype=np.float32)
+
+    def get_sentence_embedding_dimension(self):
+        return 3
+
+
+@pytest.fixture(autouse=True)
+def _stub_heavy_modules(monkeypatch):
+    torch_stub = types.SimpleNamespace(
+        backends=types.SimpleNamespace(mps=types.SimpleNamespace(is_available=lambda: False)),
+        cuda=types.SimpleNamespace(is_available=lambda: False),
+        float16="float16",
+        float32="float32",
+    )
+    monkeypatch.setitem(sys.modules, "torch", torch_stub)
+    monkeypatch.setitem(sys.modules, "sentence_transformers", types.SimpleNamespace(SentenceTransformer=FakeST))
 
 
 @pytest.fixture
@@ -197,9 +216,9 @@ def test_fp16_rejected_on_nonfinite(mps_srv):
     assert len(FakeST.instances) == 2
 
 
-def test_fp16_disabled_by_config(mps_srv):
+def test_fp16_disabled_by_config(mps_srv, monkeypatch):
     mps_srv.engine.cfg["mps_fp16"] = False
-    mps_srv.load_settings = lambda d: {**mps_srv.engine.cfg}
+    monkeypatch.setattr(mps_srv, "load_settings", lambda d: {**mps_srv.engine.cfg})
     with TestClient(mps_srv.app) as c:
         c.post("/v1/embeddings", json={"input": "x"})
         h = c.get("/health").json()
@@ -215,3 +234,40 @@ def test_cpu_always_fp32_no_selftest(srv, monkeypatch):
         h = c.get("/health").json()
     assert h["precision"] == "fp32" and h["selftest"] is None
     assert not FakeST.instances[0].halved
+
+
+def _set_cfg_dim(cfg_dir, value):
+    p = os.path.join(cfg_dir, "app_config.json")
+    with open(p, encoding="utf-8") as f:
+        cfg = json.load(f)
+    if value is None:
+        cfg.setdefault("embedding", {}).pop("dimension", None)
+    else:
+        cfg.setdefault("embedding", {})["dimension"] = value
+    with open(p, "w", encoding="utf-8") as f:
+        json.dump(cfg, f)
+
+
+def test_health_dimension_unloaded_uses_configured(srv, tmp_config_dir):
+    _set_cfg_dim(tmp_config_dir, 768)
+    srv.engine = srv.Engine()
+    with TestClient(srv.app) as c:
+        h = c.get("/health").json()
+    assert h["loaded"] is False and h["dimension"] == 768
+
+
+def test_health_dimension_unloaded_none_without_config(srv, tmp_config_dir):
+    _set_cfg_dim(tmp_config_dir, None)
+    srv.engine = srv.Engine()
+    with TestClient(srv.app) as c:
+        h = c.get("/health").json()
+    assert h["dimension"] is None
+
+
+def test_health_dimension_loaded_wins(srv, tmp_config_dir):
+    _set_cfg_dim(tmp_config_dir, 768)
+    srv.engine = srv.Engine()
+    with TestClient(srv.app) as c:
+        assert c.post("/v1/embeddings", json={"input": "x"}).status_code == 200
+        h = c.get("/health").json()
+    assert h["dimension"] == 3

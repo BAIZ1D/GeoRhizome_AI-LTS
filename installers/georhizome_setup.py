@@ -105,10 +105,11 @@ def resolve_llm_file(config_dir: str = CONFIG_DIR) -> str:
 
 
 def cmd_llm_path(models_dir: str) -> int:
-    path = os.path.join(models_dir, resolve_llm_file())
-    print(path)
-    if not os.path.isfile(path):
-        print(f"[ERROR] LLM model file not found: {path}", file=sys.stderr)
+    name = resolve_llm_file()
+    print(os.path.join(models_dir, gguf_shards(name)[0]))
+    missing = [f for f in gguf_shards(name) if not os.path.isfile(os.path.join(models_dir, f))]
+    if missing:
+        print(f"[ERROR] LLM shard(s) missing: {', '.join(missing)}", file=sys.stderr)
         return 1
     return 0
 

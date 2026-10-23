@@ -154,3 +154,29 @@ def test_env_text_has_no_loopback(tmp_config_dir):
     assert "127.0.0.1" not in t
     for k in _LOOP_KEYS:
         assert any(l.startswith(k + "=http://host.docker.internal:") for l in t.splitlines())
+
+
+SPLIT = "Q8_0-00001-of-00002.gguf"
+
+
+def test_llm_path_missing_shard(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(gs, "resolve_llm_file", lambda *a, **k: SPLIT)
+    (tmp_path / SPLIT).write_bytes(b"")
+    assert gs.cmd_llm_path(str(tmp_path)) == 1
+    cap = capsys.readouterr()
+    assert "Q8_0-00002-of-00002.gguf" in cap.err and "shard(s) missing" in cap.err
+
+
+def test_llm_path_all_shards(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(gs, "resolve_llm_file", lambda *a, **k: SPLIT)
+    for f in gs.gguf_shards(SPLIT):
+        (tmp_path / f).write_bytes(b"")
+    assert gs.cmd_llm_path(str(tmp_path)) == 0
+    assert capsys.readouterr().out.strip() == str(tmp_path / SPLIT)
+
+
+def test_llm_path_single_file(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(gs, "resolve_llm_file", lambda *a, **k: "a.gguf")
+    assert gs.cmd_llm_path(str(tmp_path)) == 1
+    (tmp_path / "a.gguf").write_bytes(b"")
+    assert gs.cmd_llm_path(str(tmp_path)) == 0

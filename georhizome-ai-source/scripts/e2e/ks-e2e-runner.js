@@ -142,8 +142,10 @@ async function main() {
     const r = await api(base, `/workspace/${slug}`);
     const ws = r.json?.workspace;
     const w = Array.isArray(ws) ? ws[0] : ws;
+    const cat = await api(base, "/knowledge-sync/catalog");
     return {
       docs: (w?.documents || []).length,
+      version: cat.json?.localVersions?.[slug] ?? null,
       settings: JSON.stringify({
         p: w?.openAiPrompt,
         t: w?.openAiTemp,
@@ -228,8 +230,9 @@ async function main() {
       await faults.restartServer({ mode: "container", composeFile: flags["compose-file"] });
       await waitHealth(baseB);
       const post = await counts(baseB);
-      L(`rollback docs ${pre.docs}->${post.docs} equal=${pre.docs === post.docs}`);
-      if (pre.docs !== post.docs) process.exitCode = 1;
+      const same = pre.docs === post.docs && pre.version === post.version;
+      L(`rollback docs ${pre.docs}->${post.docs} version ${pre.version}->${post.version} equal=${same}`);
+      if (!same) process.exitCode = 1;
       break;
     }
     case "drill-passphrase": {
@@ -240,7 +243,10 @@ async function main() {
       const r = await api(baseB, `/knowledge-sync/sync/${slug}`, { method: "POST", body: {} });
       const j = r.json?.jobId ? await waitDone(baseB, r.json.jobId) : { state: `rejected:${r.status}` };
       const after = await counts(baseB);
-      const same = before.docs === after.docs && before.settings === after.settings;
+      const same =
+        before.docs === after.docs &&
+        before.version === after.version &&
+        before.settings === after.settings;
       L(`wrong-passphrase state=${j.state} unchanged=${same}`);
       if (!same || j.state === "succeeded") process.exitCode = 1;
       break;

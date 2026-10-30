@@ -131,5 +131,31 @@
     "max_redirect_hops": 5,
     "catalog_max_probe": 20,
     "catalog_tag_prefix": "ks-catalog-"
+  },
+  "sparse": {
+    "enabled": false,
+    "model_name": "bizreach-inc/light-splade-japanese-56M",
+    "revision": "25950b4237923f3b5de13cf86a44bf06c4ae04e1",
+    "base_url": "http://127.0.0.1:8004/v1",
+    "port": 8004,
+    "batch_size": 2,
+    "max_length": 1024,
+    "max_input_chars": 1024,
+    "max_inputs_per_request": 16,
+    "idle_unload_minutes": 15,
+    "timeout_ms": 5000,
+    "cold_timeout_ms": 233000,
+    "device": "cpu",
+    "precision": "fp32",
+    "weighting": "splade_logmaxpool",
+    "pool_chunk": 128
+  },
+  "hybrid": {
+    "enabled": false,
+    "rrf_k": 60,
+    "dense_top_n": 50,
+    "sparse_top_n": 50,
+    "scan_budget_p95_ms": 300,
+    "storage_method": "column_scan"
   }
 }

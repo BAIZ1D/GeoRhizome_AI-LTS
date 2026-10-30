@@ -14,5 +14,11 @@
     "name": "cl-nagoya/ruri-v3-reranker-310m",
     "port": 8001,
     "enabled": true
+  },
+  "sparse": {
+    "model_id": "bizreach-inc/light-splade-japanese-56M",
+    "name": "bizreach-inc/light-splade-japanese-56M",
+    "port": 8004,
+    "enabled": false
   }
 }

@@ -102,6 +102,18 @@
       "default_quant": "FP16"
     }
   ],
+  "sparse": [
+    {
+      "name": "Bizreach Light SPLADE Japanese 56M",
+      "repo_id": "bizreach-inc/light-splade-japanese-56M",
+      "revision": "25950b4237923f3b5de13cf86a44bf06c4ae04e1",
+      "use_case": "sparse",
+      "description": "Lightweight Japanese SPLADE sparse retrieval model (56M parameters).",
+      "default_quant": "Safetensors",
+      "size_bytes": 223835216,
+      "license": "apache-2.0"
+    }
+  ],
   "legacy_defaults": {
     "generative": [
       "Qwen3.5-0.8B-Japanese-SFT-v2-Q4_K_M.gguf",

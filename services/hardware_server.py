@@ -20,10 +20,11 @@ import uvicorn
 sys.path.insert(0, os.path.dirname(__file__))
 from hwfit.hardware import detect_system
 from hwfit.fit import rank_models, analyze_model
-from core.platform_compat import kill_process_tree, pid_alive
+from core.platform_compat import kill_process_tree, pid_alive, kill_port_listeners, detached_popen_kwargs
 from core.config_io import CONFIG_LOCK, atomic_write_json, get_config_dir, read_json
 from core import model_defaults, ram_profile
 import reranker_state
+import sparse_state
 
 CONFIG_DIR = get_config_dir()
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -90,6 +91,10 @@ def load_active_state():
     try:
         reranker_state.seed_active_models(CONFIG_DIR)
         reranker_state.migrate_legacy_sentinel(CONFIG_DIR)
+        try:
+            sparse_state.seed_sparse_entry(CONFIG_DIR)
+        except Exception as e:
+            print("[Warning] Failed seeding sparse state:", e)
         _write_effective_candidate_count()
         st = read_json(ACTIVE_MODELS_STATE_PATH)
     except Exception as e:
@@ -166,6 +171,28 @@ def _refresh_reranker_state(pid: Optional[int] = None) -> None:
             rr["pid"] = pid
             rr["start_time"] = time.time()
         ACTIVE_PROCESSES["reranker"] = rr
+
+def _refresh_sparse_state(pid: Optional[int] = None) -> None:
+    """Reload the sparse entry written by sync_sparse_state into memory."""
+    with CONFIG_LOCK:
+        sp = dict((read_json(ACTIVE_MODELS_STATE_PATH).get("sparse") or {}))
+        if pid is not None:
+            sp["pid"] = pid
+            sp["start_time"] = time.time()
+        ACTIVE_PROCESSES["sparse"] = sp
+
+def _sparse_settings_or_400() -> Dict[str, Any]:
+    try:
+        return sparse_state.get_sparse_settings(CONFIG_DIR)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"sparse config unavailable: {e}")
+
+def _check_sparse_model(requested: Optional[str], settings: Dict[str, Any]) -> str:
+    """Only the configured sparse model id is accepted; empty keeps the configured one."""
+    configured = settings["model_name"]
+    if requested and requested != configured:
+        raise HTTPException(status_code=400, detail=f"unsupported sparse model id: {requested}")
+    return configured
 
 def _active_model_id(cat: str) -> Optional[str]:
     info = ACTIVE_PROCESSES.get(cat) or {}
@@ -434,13 +461,33 @@ def get_catalog(
         annotated_categories = {}
 
         # Categories mapping
-        valid_cats = ["generative", "embedding", "reranker"]
+        valid_cats = ["generative", "embedding", "reranker", "sparse"]
         if category and category.lower() in valid_cats:
             categories_to_process = [category.lower()]
         else:
             categories_to_process = valid_cats
 
         for cat in categories_to_process:
+            if cat == "sparse":
+                # Sparse: only the configured/catalog model, no ranking or live HF search.
+                sp_items = []
+                for item in local_catalog.get("sparse", []):
+                    sp_items.append({
+                        "name": item.get("name"),
+                        "repo_id": item.get("repo_id"),
+                        "revision": item.get("revision"),
+                        "provider": "HuggingFace",
+                        "use_case": "sparse",
+                        "quant": item.get("default_quant", "Safetensors"),
+                        "size_bytes": item.get("size_bytes"),
+                        "fit_badge": "good",
+                        "run_mode": "cpu",
+                        "description": item.get("description", ""),
+                        "active": _active_model_id("sparse") == item.get("repo_id"),
+                        "gguf_sources": [],
+                    })
+                annotated_categories[cat] = sp_items
+                continue
             use_case_filter = None
             if cat == "generative":
                 use_case_filter = None  # Returns top general, chat, coding & reasoning models
@@ -652,6 +699,11 @@ def hf_files(repo_id: str = Query(...)):
 @app.post("/hardware/download")
 def download_model(req: DownloadRequest, bg_tasks: BackgroundTasks):
     """Initiate 1-click model download."""
+    sparse_cfg = None
+    if (req.category or "").lower() == "sparse":
+        sparse_cfg = _sparse_settings_or_400()
+        _check_sparse_model(req.repo_id or req.model_id, sparse_cfg)
+        req.repo_id = sparse_cfg["model_name"]
     job_id = f"dl-{req.repo_id.replace('/', '_')}"
     if job_id in DOWNLOAD_JOBS and DOWNLOAD_JOBS[job_id]["status"] == "downloading":
         return {"status": "downloading", "job_id": job_id, "message": "Download already in progress"}
@@ -663,6 +715,19 @@ def download_model(req: DownloadRequest, bg_tasks: BackgroundTasks):
         "progress": 0,
         "message": "Starting HuggingFace download..."
     }
+
+    def _async_sparse_download():
+        try:
+            from huggingface_hub import snapshot_download
+            print(f"[HardwareServer] Downloading sparse model {sparse_cfg['model_name']}...")
+            snapshot_download(repo_id=sparse_cfg["model_name"], revision=sparse_cfg["revision"])
+            DOWNLOAD_JOBS[job_id]["status"] = "complete"
+            DOWNLOAD_JOBS[job_id]["progress"] = 100
+            DOWNLOAD_JOBS[job_id]["message"] = "Download complete!"
+        except Exception as e:
+            print(f"[HardwareServer] Sparse download error: {e}")
+            DOWNLOAD_JOBS[job_id]["status"] = "error"
+            DOWNLOAD_JOBS[job_id]["message"] = str(e)
 
     def _async_download():
         cat_repo, cat_file = resolve_generative_target(req.repo_id, req.quant)
@@ -685,7 +750,7 @@ def download_model(req: DownloadRequest, bg_tasks: BackgroundTasks):
         finally:
             ACTIVE_DOWNLOAD_STATE["is_downloading"] = False
 
-    bg_tasks.add_task(_async_download)
+    bg_tasks.add_task(_async_sparse_download if sparse_cfg else _async_download)
     return {"status": "started", "job_id": job_id}
 
 ACTIVE_DOWNLOAD_STATE = {"is_downloading": False, "filename": "", "target_model": "", "start_time": 0}
@@ -694,6 +759,28 @@ ACTIVE_DOWNLOAD_STATE = {"is_downloading": False, "filename": "", "target_model"
 def serve_model(req: ServeRequest, background_tasks: BackgroundTasks):
     """1-Click Onload model into local server."""
     cat = req.category.lower()
+
+    if cat == "sparse":
+        cfg = _sparse_settings_or_400()
+        _check_sparse_model(req.model_id or req.repo_id, cfg)
+        port = int(cfg["port"])
+        try:
+            kill_port_listeners(port)
+        except Exception as e:
+            print(f"[HardwareServer] sparse port teardown failed: {e}")
+        # State is written before the child starts so it reads the enabled model.
+        model_id = sparse_state.sync_sparse_state(CONFIG_DIR, True, cfg["model_name"])
+        sparse_script = os.path.abspath(os.path.join(os.path.dirname(__file__), "local_sparse_server.py"))
+        try:
+            p = subprocess.Popen([sys.executable, sparse_script], **detached_popen_kwargs())
+        except Exception as e:
+            sparse_state.sync_sparse_state(CONFIG_DIR, False, model_id)
+            _refresh_sparse_state()
+            save_active_state()
+            raise HTTPException(status_code=500, detail=f"failed to start sparse server: {e}")
+        _refresh_sparse_state(pid=p.pid)
+        save_active_state()
+        return {"status": "ok", "message": f"Successfully loaded sparse {model_id} on port {port}", "pid": p.pid}
 
     if cat == "reranker":
         try:
@@ -970,6 +1057,17 @@ def offload_model(req: OffloadRequest):
     """1-Click Offload model to free VRAM/RAM immediately."""
     cat = req.category.lower()
 
+    if cat == "sparse":
+        cfg = _sparse_settings_or_400()
+        try:
+            kill_port_listeners(int(cfg["port"]))
+        except Exception as e:
+            print(f"[HardwareServer] sparse port teardown failed: {e}")
+        sparse_state.sync_sparse_state(CONFIG_DIR, False, "")
+        _refresh_sparse_state()
+        save_active_state()
+        return {"status": "ok", "message": f"Successfully offloaded sparse encoder from port {cfg['port']} and reclaimed RAM."}
+
     if cat == "embedding":
         # Kill processes listening on port 8000 (Fast-BGE Embedder)
         try:
@@ -1171,6 +1269,8 @@ def hardware_status():
             "port": port,
             "alive": is_alive,
         }
+        if cat == "sparse":
+            entry["enabled"] = enabled
         if cat == "reranker":
             entry["enabled"] = enabled
             if not enabled:

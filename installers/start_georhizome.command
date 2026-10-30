@@ -20,6 +20,8 @@ cd "$GR" || exit 1
 echo "[INFO] ネイティブAI推論サーバーを起動しています... (ログ: $LOG_DIR)"
 nohup "$VENV_PYTHON" "$SRC/services/local_bge_server.py" > "$LOG_DIR/bge.log" 2>&1 &
 nohup "$VENV_PYTHON" "$SRC/services/local_reranker_server.py" > "$LOG_DIR/reranker.log" 2>&1 &
+# Sparse encoder on port 8004 (lazy-load, no model resident at launch)
+nohup "$VENV_PYTHON" "$SRC/services/local_sparse_server.py" > "$LOG_DIR/sparse.log" 2>&1 &
 nohup "$VENV_PYTHON" "$SRC/services/hardware_server.py" > "$LOG_DIR/hardware.log" 2>&1 &
 
 # Chat LLM on port 8003 (model named in config)
@@ -97,6 +99,7 @@ cleanup() {
     docker compose down
     pkill -f local_bge_server.py
     pkill -f local_reranker_server.py
+    pkill -f local_sparse_server.py
     pkill -f hardware_server.py
     pkill -f llama_cpp.server
     echo "[SUCCESS] シャットダウンが完了しました。"

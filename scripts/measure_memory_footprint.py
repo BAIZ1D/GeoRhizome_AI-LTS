@@ -25,7 +25,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, ".."))
 sys.path.insert(0, os.path.join(REPO, "services"))
 
-DEFAULT_PORTS = {"embedder": 8000, "reranker": 8001, "hardware": 8002, "chat": 8003}
+DEFAULT_PORTS = {"embedder": 8000, "reranker": 8001, "hardware": 8002, "chat": 8003, "sparse": 8004}
 DEFAULT_OUT = os.path.join(
     REPO, ".planning", "phases", "08.1-8-gb-memory-footprint-reduction", "08.1-MEASUREMENT.md"
 )

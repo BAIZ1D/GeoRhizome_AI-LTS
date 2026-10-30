@@ -98,3 +98,7 @@ def test_main_new_without_node_log_aborts(monkeypatch, capsys):
     monkeypatch.setattr(m.urllib.request, "urlopen", boom)
     assert m.main(["--label", "new"]) == 2
     assert "--node-log required" in capsys.readouterr().err
+
+
+def test_default_ports_include_sparse():
+    assert m.DEFAULT_PORTS["sparse"] == 8004

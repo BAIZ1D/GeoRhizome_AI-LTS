@@ -23,6 +23,8 @@ echo [INFO] Starting Local Embedder (Port 8000)... log: %LOGS%\bge.log
 start "" /b "%PY%" "%SRC%\services\local_bge_server.py" > "%LOGS%\bge.log" 2>&1
 echo [INFO] Starting Local Reranker Server (Port 8001)... log: %LOGS%\reranker.log
 start "" /b "%PY%" "%SRC%\services\local_reranker_server.py" > "%LOGS%\reranker.log" 2>&1
+echo [INFO] Starting Local Sparse Server (Port 8004)... log: %LOGS%\sparse.log
+start "" /b "%PY%" "%SRC%\services\local_sparse_server.py" > "%LOGS%\sparse.log" 2>&1
 echo [INFO] Starting Hardware ^& Model Hub Server (Port 8002)... log: %LOGS%\hardware.log
 start "" /b "%PY%" "%SRC%\services\hardware_server.py" > "%LOGS%\hardware.log" 2>&1
 
@@ -106,6 +108,7 @@ echo [INFO] GeoRhizome AI をシャットダウンしています...
 docker compose down >> "%LOGS%\docker.log" 2>&1
 wmic process where "commandline like '%%local_bge_server.py%%'" call terminate >nul 2>&1
 wmic process where "commandline like '%%local_reranker_server.py%%'" call terminate >nul 2>&1
+wmic process where "commandline like '%%local_sparse_server.py%%'" call terminate >nul 2>&1
 wmic process where "commandline like '%%hardware_server.py%%'" call terminate >nul 2>&1
 wmic process where "commandline like '%%llama_cpp.server%%'" call terminate >nul 2>&1
 echo [SUCCESS] システムのシャットダウンが完了しました。

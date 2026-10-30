@@ -24,7 +24,7 @@ import { isMobile } from "react-device-detect";
 export default function TextSizeMenu() {
   const { t } = useTranslation();
   const [showWindow, setShowWindow] = useState(false);
-  const [activeTab, setActiveTab] = useState("current"); // current, generative, embedding, reranker, hf_search
+  const [activeTab, setActiveTab] = useState("current"); // current, generative, embedding, reranker, sparse, hf_search
   const [hardware, setHardware] = useState(null);
   const [catalog, setCatalog] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -85,9 +85,12 @@ export default function TextSizeMenu() {
   const fetchData = async (isSilent = false) => {
     if (!isSilent) setLoading(true);
     try {
-      const catParam = ["generative", "embedding", "reranker"].includes(
-        activeTab
-      )
+      const catParam = [
+        "generative",
+        "embedding",
+        "reranker",
+        "sparse",
+      ].includes(activeTab)
         ? activeTab
         : "generative";
       let url = `/api/hardware/catalog?category=${catParam}`;
@@ -430,6 +433,13 @@ export default function TextSizeMenu() {
                   icon: Target,
                 },
                 {
+                  id: "sparse",
+                  label: t("modelHub.tabs.sparse", {
+                    defaultValue: "Sparse Search",
+                  }),
+                  icon: MagnifyingGlass,
+                },
+                {
                   id: "hf_search",
                   label: t("modelHub.tabs.hfSearch", {
                     defaultValue: "HuggingFace Search",
@@ -460,6 +470,7 @@ export default function TextSizeMenu() {
 
             {/* Dynamic Filter Tools */}
             {activeTab !== "hf_search" &&
+              activeTab !== "sparse" &&
               activeTab !== "current" &&
               activeTab !== "downloaded" && (
                 <div className="flex items-center justify-between gap-x-2 pb-2.5 pt-1">
@@ -696,6 +707,95 @@ export default function TextSizeMenu() {
                     </span>
                   </div>
                 </div>
+              </div>
+            ) : activeTab === "sparse" ? (
+              <div className="grid grid-cols-1 gap-3">
+                {(catalog?.sparse || []).map((item, idx) => {
+                  const sp = activeProcesses.sparse || {};
+                  const isActive = !!(sp.enabled || sp.alive);
+                  const isRunning = !!sp.alive;
+                  return (
+                    <div
+                      key={idx}
+                      className={`p-4 rounded-xl border space-y-2 ${
+                        isActive
+                          ? "bg-[#7bbd34]/10 border-[#7bbd34]/40"
+                          : "bg-white/[0.02] border-white/10"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-x-2">
+                          <MagnifyingGlass
+                            size={18}
+                            className="text-[#7bbd34]"
+                          />
+                          <h4 className="text-xs font-bold text-white tracking-tight">
+                            {t("modelHub.sparse.title", {
+                              defaultValue: "Sparse Search Encoder",
+                            })}
+                          </h4>
+                          <span className="text-[9px] px-2 py-0.5 rounded bg-[#7bbd34]/10 text-[#7bbd34] border border-[#7bbd34]/30 font-mono">
+                            PORT {sp.port || 8004}
+                          </span>
+                        </div>
+                        {isActive ? (
+                          <button
+                            onClick={() => handleOffload("sparse")}
+                            className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 font-semibold text-xs rounded-xl flex items-center gap-x-1 transition-colors border-none cursor-pointer"
+                          >
+                            <Stop size={13} />{" "}
+                            {t("modelHub.sparse.offload", {
+                              defaultValue: "Stop and free memory",
+                            })}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() =>
+                              handleServe("sparse", item.repo_id, item.quant)
+                            }
+                            className="px-3 py-1.5 bg-[#7bbd34] hover:bg-[#90d441] text-[#050609] font-bold text-xs rounded-xl flex items-center gap-x-1 transition-colors border-none cursor-pointer"
+                          >
+                            <Play size={13} />{" "}
+                            {t("modelHub.sparse.serve", {
+                              defaultValue: "Start",
+                            })}
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-zinc-400 leading-normal">
+                        {t("modelHub.sparse.description", {
+                          defaultValue:
+                            "Keyword-aware sparse encoder that complements dense search.",
+                        })}
+                      </p>
+                      <div className="text-xs text-white font-mono">
+                        {sp.model_id || item.repo_id}
+                      </div>
+                      <div className="text-[10px] text-zinc-400 font-mono">
+                        Status:{" "}
+                        <strong
+                          className={
+                            isRunning ? "text-[#7bbd34]" : "text-zinc-300"
+                          }
+                        >
+                          {isRunning
+                            ? t("modelHub.sparse.statusRunning", {
+                                defaultValue: "Running",
+                              })
+                            : t("modelHub.sparse.statusStopped", {
+                                defaultValue: "Stopped",
+                              })}
+                        </strong>
+                      </div>
+                      <p className="text-[10px] text-zinc-500">
+                        {t("modelHub.sparse.memoryNote", {
+                          defaultValue:
+                            "Loads on demand; stopping it releases its memory.",
+                        })}
+                      </p>
+                    </div>
+                  );
+                })}
               </div>
             ) : activeTab === "downloaded" ? (
               /* Downloaded Models Tab */

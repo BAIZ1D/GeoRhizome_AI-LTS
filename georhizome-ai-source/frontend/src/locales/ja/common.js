@@ -1694,7 +1694,19 @@ const TRANSLATIONS = {
       chat: "チャットと推論",
       embedder: "埋め込みモデル",
       reranker: "リランカー",
+      sparse: "スパース検索",
       hfSearch: "HuggingFace 検索",
+    },
+    sparse: {
+      title: "スパース検索エンコーダー",
+      description:
+        "ベクトル検索を補完する、キーワードに強いスパース検索用エンコーダーです。",
+      statusRunning: "稼働中",
+      statusStopped: "停止中",
+      serve: "起動",
+      offload: "停止してメモリを解放",
+      memoryNote:
+        "必要なときに読み込まれます。停止するとメモリが解放されます。",
     },
     quants: {
       all: "すべての量子化",

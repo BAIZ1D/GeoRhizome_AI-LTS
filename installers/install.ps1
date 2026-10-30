@@ -166,6 +166,8 @@ Invoke-Native "pip の更新に失敗しました" { & $VenvPy -m pip install --
 Invoke-Native "torch のインストールに失敗しました" { & $VenvPy -m pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu121 }
 Invoke-Native "llama-cpp-python のインストールに失敗しました" { & $VenvPy -m pip install "llama-cpp-python[server]==0.3.19" --only-binary llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu }
 Invoke-Native "依存パッケージのインストールに失敗しました" { & $VenvPy -m pip install "transformers==5.18.0" "sentence-transformers==6.1.0" "huggingface_hub>=1.31,<2" fastapi uvicorn psutil pyyaml requests }
+# Sparse (SPLADE) tokenizer deps: sdist-only unidic-lite (built from source; binary-only mode must not be used).
+Invoke-Native "形態素解析パッケージのインストールに失敗しました" { & $VenvPy -m pip install "fugashi==1.5.2" "unidic-lite==1.0.8" }
 Write-Host "   ネイティブAI環境の構築が完了しました。" -ForegroundColor Green
 
 # 8. server\.env (created if missing, UTF-8 without BOM) + legacy-default migration on re-install

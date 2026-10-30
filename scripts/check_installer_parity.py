@@ -35,7 +35,10 @@ PINS = [
     "huggingface_hub>=1.31,<2",
     "llama-cpp-python[server]==0.3.19",
     "requests",
+    "fugashi==1.5.2",
+    "unidic-lite==1.0.8",
 ]
+HEX40_RE = re.compile(r"\b[0-9a-f]{40}\b")
 SCAN_SKIP_DIRS = {".git", "node_modules", ".planning", "graphify-out", "__pycache__", ".venv", "data", "dist"}
 SCAN_SKIP_FILES = {
     os.path.join(REPO, "config", "model_catalog.json"),
@@ -86,6 +89,25 @@ def _launcher_flash_ok(path: str) -> bool:
     return "llm-args" in t and "16384" not in t and "requires flash" in t and not bare
 
 
+def sparse_pins_ok(text: str) -> bool:
+    """Installer carries fugashi/unidic-lite pins (sdist, no --only-binary on them), invokes the
+    helper download, and carries neither a 40-hex revision nor SPARSE_BASE_PATH (W1)."""
+    pins = "fugashi==1.5.2" in text and "unidic-lite==1.0.8" in text
+    no_binary = not [l for l in text.splitlines() if "only-binary" in l and ("fugashi" in l or "unidic" in l)]
+    helper = re.search(r"georhizome_setup\.py\"?\s+download", text) is not None
+    return pins and no_binary and helper and not HEX40_RE.search(text) and "SPARSE_BASE_PATH" not in text
+
+
+def helper_sparse_ok(text: str) -> bool:
+    return "SPARSE_BASE_PATH" in text and '"sparse"' in text and '"revision"' in text and not HEX40_RE.search(text)
+
+
+def revision_equal(cfg: dict, cat: dict) -> bool:
+    rev = (cfg.get("sparse") or {}).get("revision")
+    items = cat.get("sparse") or [{}]
+    return bool(rev) and rev == items[0].get("revision")
+
+
 def checks() -> List[Tuple[str, Callable[[], bool]]]:
     sh, ps = _read(SH), _read(PS1)
     both = {"install.sh": sh, "install.ps1": ps}
@@ -113,7 +135,8 @@ def checks() -> List[Tuple[str, Callable[[], bool]]]:
 
     def defaults_same() -> bool:
         ok = all(re.search(r"georhizome_setup\.py\"?\s+download", t) for t in both.values())
-        return ok and _helper_defaults() == EXPECTED_DEFAULTS
+        got = _helper_defaults()
+        return ok and {k: got.get(k) for k in EXPECTED_DEFAULTS} == EXPECTED_DEFAULTS
 
     def no_other_models() -> bool:
         return all(not re.search(r"[\w.-]+\.gguf", t) for t in both.values())
@@ -149,6 +172,11 @@ def checks() -> List[Tuple[str, Callable[[], bool]]]:
         ("compose YAML blocks parse", compose_valid),
         ("launchers read LLM from config via helper", lambda: all("llm-path" in _read(p) and ".gguf" not in _read(p) for p in (LAUNCH_SH, LAUNCH_BAT))),
         ("launchers use llm-args, no 16384, degrade only on 'requires flash'", lambda: all(_launcher_flash_ok(p) for p in (LAUNCH_SH, LAUNCH_BAT))),
+        ("sparse pins + helper download, no revision/env literal in installers", lambda: all(sparse_pins_ok(t) for t in both.values())),
+        ("helper has SPARSE_BASE_PATH and config-driven revision (no 40-hex)", lambda: helper_sparse_ok(_read(HELPER))),
+        ("config sparse.revision == catalog sparse[0].revision", lambda: revision_equal(
+            json.loads(_read(os.path.join(REPO, "config", "app_config.json"))),
+            json.loads(_read(os.path.join(REPO, "config", "model_catalog.json"))))),
         ("OTA updaters download models before migrate", lambda: _ota_download_first(sh, ps)),
         ("OTA updaters migrate .env", lambda: all("georhizome_setup.py" in t and " migrate" in t for t in both.values())),
         ("nested georhizome-ai-source/services removed", lambda: not os.path.exists(os.path.join(REPO, "georhizome-ai-source", "services"))),

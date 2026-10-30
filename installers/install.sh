@@ -106,6 +106,8 @@ else
 fi
 "$VENV_PYTHON" -m pip install "transformers==5.18.0" "sentence-transformers==6.1.0" "huggingface_hub>=1.31,<2" \
     fastapi uvicorn psutil pyyaml requests
+# Sparse (SPLADE) tokenizer deps: sdist-only unidic-lite (built from source; binary-only mode must not be used).
+"$VENV_PYTHON" -m pip install "fugashi==1.5.2" "unidic-lite==1.0.8" || { echo "[ERROR] 形態素解析パッケージ (fugashi/unidic-lite) のインストールに失敗しました"; exit 1; }
 echo "   ネイティブAI環境の構築が完了しました。"
 
 # 8. server/.env (created if missing) + legacy-default migration on re-install
@@ -115,7 +117,7 @@ SERVER_ENV="$SOURCE_DIR/georhizome-ai-source/server/.env"
 
 # 9. Default models: LLM GGUF -> storage/models, embedder + reranker -> default HF cache
 echo "[STEP] デフォルトのAIモデルをダウンロードしています (初期化用)..."
-"$VENV_PYTHON" "$SOURCE_DIR/installers/georhizome_setup.py" download --models-dir "$MODELS_DIR"
+"$VENV_PYTHON" "$SOURCE_DIR/installers/georhizome_setup.py" download --models-dir "$MODELS_DIR" || { echo "[ERROR] モデルのダウンロードに失敗しました"; exit 1; }
 
 # 10. Launcher + OTA updater
 cp "$SOURCE_DIR/installers/start_georhizome.command" "$INSTALL_DIR/start_georhizome.command"

@@ -45,10 +45,11 @@ def test_migrate_only_legacy(tmp_config_dir, tmp_path, monkeypatch):
     g = json.load(open(am))["generative"]
     assert g["model_id"] == DEF_FILE and "pid" not in g
     budget = "".join(f"{k}={v}\n" for k, v in gs.token_budget(gs.current_profile(tmp_config_dir)).items())
-    env.write_text("GENERIC_OPEN_AI_MODEL_PREF=mine.gguf\n" + budget, encoding="utf-8")
+    sp = f"SPARSE_BASE_PATH={gs.sparse_base_path(tmp_config_dir)}\n"
+    env.write_text("GENERIC_OPEN_AI_MODEL_PREF=mine.gguf\n" + budget + sp, encoding="utf-8")
     _am(tmp_config_dir, "mine.gguf")
     assert gs.migrate(str(env), tmp_config_dir) == {"env": False, "active_models": False}
-    assert env.read_text(encoding="utf-8") == "GENERIC_OPEN_AI_MODEL_PREF=mine.gguf\n" + budget
+    assert env.read_text(encoding="utf-8") == "GENERIC_OPEN_AI_MODEL_PREF=mine.gguf\n" + budget + sp
 
 
 def test_write_env_no_bom_and_keeps_existing(tmp_config_dir, tmp_path, monkeypatch):
@@ -107,7 +108,7 @@ _LOOP_KEYS = ("GENERIC_OPEN_AI_BASE_PATH", "EMBEDDING_BASE_PATH", "HARDWARE_SERV
 
 
 def _budget_text(cfg):
-    return "".join(f"{k}={v}\n" for k, v in gs.token_budget(gs.current_profile(cfg)).items())
+    return "".join(f"{k}={v}\n" for k, v in gs.token_budget(gs.current_profile(cfg)).items()) + f"SPARSE_BASE_PATH={gs.sparse_base_path(cfg)}\n"
 
 
 def test_migrate_rewrites_loopback_generic_base_path(tmp_config_dir, tmp_path, monkeypatch):
@@ -180,3 +181,49 @@ def test_llm_path_single_file(tmp_path, monkeypatch, capsys):
     assert gs.cmd_llm_path(str(tmp_path)) == 1
     (tmp_path / "a.gguf").write_bytes(b"")
     assert gs.cmd_llm_path(str(tmp_path)) == 0
+
+
+def test_default_artifacts_sparse_from_config(tmp_config_dir):
+    a = gs.default_artifacts(tmp_config_dir)
+    cfg = json.load(open(os.path.join(tmp_config_dir, "app_config.json")))
+    assert a["sparse"] == cfg["sparse"]["model_name"]
+    assert a["sparse_revision"] == cfg["sparse"]["revision"]
+
+
+def test_env_text_has_sparse_base_path(tmp_config_dir):
+    t = gs.env_text(tmp_config_dir)
+    assert "SPARSE_BASE_PATH=http://host.docker.internal:8004/v1" in t.splitlines()
+
+
+def test_migrate_sparse_base_path(tmp_config_dir, tmp_path, monkeypatch):
+    monkeypatch.setattr(gs.ram_profile, "detect_ram_gb", lambda: 16.0)
+    env = tmp_path / ".env"
+    env.write_text("SPARSE_BASE_PATH=http://127.0.0.1:8004/v1\n")
+    gs.migrate(str(env), tmp_config_dir)
+    assert "SPARSE_BASE_PATH=http://host.docker.internal:8004/v1" in env.read_text().splitlines()
+    env.write_text("VECTOR_DB=lancedb\n")
+    gs.migrate(str(env), tmp_config_dir)
+    assert "SPARSE_BASE_PATH=http://host.docker.internal:8004/v1" in env.read_text().splitlines()
+    gs.migrate(str(env), tmp_config_dir)
+    assert env.read_text().count("SPARSE_BASE_PATH") == 1
+
+
+def test_download_sparse_pinned_revision_and_failure(tmp_config_dir, tmp_path, monkeypatch):
+    import huggingface_hub as hh
+    calls = []
+    monkeypatch.setattr(hh, "snapshot_download", lambda repo, **kw: calls.append((repo, kw.get("revision"))))
+    monkeypatch.setattr(hh, "hf_hub_download", lambda **kw: None)
+    monkeypatch.setattr(gs, "CONFIG_DIR", tmp_config_dir)
+    a = gs.default_artifacts(tmp_config_dir)
+    md_ = tmp_path / "m"
+    md_.mkdir()
+    for f in gs.gguf_shards(a["llm_file"]):
+        (md_ / f).write_text("x")
+    assert gs.cmd_download(str(md_)) == 0
+    assert (a["sparse"], a["sparse_revision"]) in calls
+
+    def boom(repo, **kw):
+        if kw.get("revision"):
+            raise OSError("net")
+    monkeypatch.setattr(hh, "snapshot_download", boom)
+    assert gs.cmd_download(str(md_)) != 0

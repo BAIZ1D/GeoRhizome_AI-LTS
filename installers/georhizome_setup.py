@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """GeoRhizome installer/launcher helper (macOS, Linux, Windows). Run with the venv python.
 
-  georhizome_setup.py download   --models-dir DIR   pre-download the 3 default models
+  georhizome_setup.py download   --models-dir DIR   pre-download the default models (embedder, reranker, LLM, pinned sparse)
   georhizome_setup.py llm-path   --models-dir DIR   print the GGUF path the launcher serves on :8003
   georhizome_setup.py write-env  --env PATH          create server/.env if missing (UTF-8, no BOM)
   georhizome_setup.py llm-args [--degrade]           print llama_cpp.server flags for this machine's RAM tier
@@ -48,6 +48,8 @@ def default_artifacts(config_dir: str = CONFIG_DIR) -> Dict[str, str]:
         "reranker": (cfg.get("reranker") or {}).get("model_name") or FALLBACK_RERANKER,
         "llm_repo": llm["repo_id"],
         "llm_file": llm["filename"],
+        "sparse": (cfg.get("sparse") or {}).get("model_name") or "",
+        "sparse_revision": (cfg.get("sparse") or {}).get("revision") or "",
     }
 
 
@@ -83,6 +85,15 @@ def cmd_download(models_dir: str) -> int:
     path = os.path.join(models_dir, a["llm_file"])
     if not os.path.isfile(path):
         print(f"[ERROR] LLM file missing after download: {path}", file=sys.stderr)
+        return 1
+    if not a["sparse"] or not a["sparse_revision"]:
+        print("[ERROR] config sparse.model_name / sparse.revision missing", file=sys.stderr)
+        return 1
+    print(f"-> Sparse: {a['sparse']} @ {a['sparse_revision']} (HF cache)", flush=True)
+    try:
+        snapshot_download(a["sparse"], revision=a["sparse_revision"])
+    except Exception as e:  # noqa: BLE001
+        print(f"[ERROR] sparse model download failed: {e}", file=sys.stderr)
         return 1
     return 0
 
@@ -147,7 +158,20 @@ def upsert_env_keys(text: str, values: Dict[str, int]) -> str:
     return "".join(lines)
 
 
-_CONTAINER_URL_KEYS = ("GENERIC_OPEN_AI_BASE_PATH", "EMBEDDING_BASE_PATH", "HARDWARE_SERVER_URL")
+_CONTAINER_URL_KEYS = ("GENERIC_OPEN_AI_BASE_PATH", "EMBEDDING_BASE_PATH", "HARDWARE_SERVER_URL", "SPARSE_BASE_PATH")
+
+
+def sparse_base_path(config_dir: str = CONFIG_DIR) -> str:
+    port = (_json(os.path.join(config_dir, "app_config.json")).get("sparse") or {}).get("port") or 8004
+    return f"http://host.docker.internal:{int(port)}/v1"
+
+
+def ensure_sparse_base_path(text: str, config_dir: str = CONFIG_DIR) -> str:
+    if re.search(r"^\s*SPARSE_BASE_PATH\s*=", text, re.M):
+        return text
+    if text and not text.endswith("\n"):
+        text += "\n"
+    return text + f"SPARSE_BASE_PATH={sparse_base_path(config_dir)}\n"
 
 
 def rewrite_container_loopback(text: str) -> str:
@@ -172,6 +196,7 @@ def env_text(config_dir: str = CONFIG_DIR) -> str:
         "EMBEDDING_BASE_PATH=http://host.docker.internal:8000/v1",
         f"EMBEDDING_MODEL_PREF={a['embedding']}",
         "HARDWARE_SERVER_URL=http://host.docker.internal:8002",
+        f"SPARSE_BASE_PATH={sparse_base_path(config_dir)}",
         "VECTOR_DB=lancedb",
         "",
     ])
@@ -196,6 +221,7 @@ def migrate(env_path: Optional[str], config_dir: str = CONFIG_DIR) -> Dict[str, 
             original = f.read()
         text, _ = md.migrate_env_text(original, legacy, new)
         text = rewrite_container_loopback(text)
+        text = ensure_sparse_base_path(text, config_dir)
         text = upsert_env_keys(text, token_budget(current_profile(config_dir)))
         if text != original:
             _write_text(env_path, text)

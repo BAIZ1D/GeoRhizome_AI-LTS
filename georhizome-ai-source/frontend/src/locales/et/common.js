@@ -1662,6 +1662,7 @@ const TRANSLATIONS = {
       embedder: "Embedder",
       reranker: "Reranker",
       hfSearch: "HuggingFace Search",
+      sparse: "Sparse Search",
     },
     quants: {
       all: "All Quants",
@@ -1678,6 +1679,16 @@ const TRANSLATIONS = {
       downloadOnboard: "Download & Onboard",
       delete: "Delete",
       offload: "Offload",
+    },
+    sparse: {
+      title: "Sparse Search Encoder",
+      description:
+        "Keyword-aware sparse encoder that complements dense search.",
+      statusRunning: "Running",
+      statusStopped: "Stopped",
+      serve: "Start",
+      offload: "Stop and free memory",
+      memoryNote: "Loads on demand; stopping it releases its memory.",
     },
   },
   knowledgeSync: {

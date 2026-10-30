@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Configurable SPLADE sparse encoder server (default :8004, loopback only).
+Configurable SPLADE sparse encoder server (port from config, loopback only).
 
 - Binds immediately; the model loads lazily on the first POST /v1/sparse/encode
   and unloads after ``sparse.idle_unload_minutes`` of idleness (<= 0 disables).

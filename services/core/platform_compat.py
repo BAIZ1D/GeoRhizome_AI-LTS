@@ -141,6 +141,57 @@ def kill_process_tree(pid: Optional[int]) -> None:
             pass
 
 
+def _listener_pids(port: int) -> List[int]:
+    """PIDs listening on ``port`` (argv-list subprocess, never a shell)."""
+    pids: List[int] = []
+    if IS_WINDOWS:
+        try:
+            out = subprocess.run(
+                ["netstat", "-ano"],
+                capture_output=True,
+                text=True,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            ).stdout
+        except Exception:
+            return []
+        suffix = ":" + str(port)
+        for line in (out or "").splitlines():
+            parts = line.split()
+            if len(parts) >= 5 and parts[0].upper() == "TCP" and parts[1].endswith(suffix) and parts[3].upper() == "LISTENING":
+                if parts[4].isdigit():
+                    pids.append(int(parts[4]))
+    else:
+        try:
+            out = subprocess.run(
+                ["lsof", "-ti:" + str(port)], capture_output=True, text=True
+            ).stdout
+        except Exception:
+            return []
+        pids = [int(x) for x in (out or "").split() if x.isdigit()]
+    seen: List[int] = []
+    for p in pids:
+        if p not in seen:
+            seen.append(p)
+    return seen
+
+
+def kill_port_listeners(port: int) -> List[int]:
+    """Terminate every process listening on ``port``; return the pids killed.
+
+    Never kills the current process. Raises ValueError for a port outside 1..65535.
+    """
+    if isinstance(port, bool) or not isinstance(port, int) or not (1 <= port <= 65535):
+        raise ValueError(f"invalid port: {port!r}")
+    me = os.getpid()
+    killed: List[int] = []
+    for pid in _listener_pids(port):
+        if pid == me or pid <= 0:
+            continue
+        kill_process_tree(pid)
+        killed.append(pid)
+    return killed
+
+
 # ── Shell / executable resolution ───────────────────────────────────────────
 _BASH_CACHE: Optional[str] = None
 _BASH_PROBED = False

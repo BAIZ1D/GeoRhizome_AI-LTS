@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
-import os
+import re
 import shutil
 from pathlib import Path
 
@@ -43,6 +43,17 @@ def _load():
 def env(tmp_path):
     for f in FILES:
         shutil.copy(SRC / f, tmp_path / f)
+    # Later plans append these sections to the live S1; tests add their own.
+    edit(
+        tmp_path,
+        "10-SPIKE-S1.md",
+        lambda t: re.sub(
+            r"^## (Server smoke|Container reachability)\s*\n.*?(?=^## |\Z)",
+            "",
+            t,
+            flags=re.M | re.S,
+        ),
+    )
     mod = _load()
     mod.PHASE_DIR = str(tmp_path)
     return mod, tmp_path

@@ -169,6 +169,10 @@ async function getDocumentsByFolder(folderName = "") {
  * @param {boolean} checkOnly - if true, only check if the file exists, do not return the cached data
  * @returns {Promise<{exists: boolean, chunks: any[]}>} - a promise that resolves to an object containing the existence of the file and its cached chunks
  */
+// Bump when the on-disk vector-cache format changes. Files below this version
+// (including legacy bare-array files) are never reported as cached.
+const VECTOR_CACHE_VERSION = 2;
+
 async function cachedVectorInformation(filename = null, checkOnly = false) {
   if (!filename) return checkOnly ? false : { exists: false, chunks: [] };
 
@@ -176,7 +180,24 @@ async function cachedVectorInformation(filename = null, checkOnly = false) {
   const file = path.resolve(vectorCachePath, `${digest}.json`);
   const exists = fs.existsSync(file);
 
-  if (checkOnly) return exists;
+  if (checkOnly) {
+    if (!exists) return false;
+    try {
+      if (fs.statSync(file).size >= FILE_READ_SIZE_THRESHOLD) return false;
+      const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+        return false;
+      if (!(Number(parsed.cache_version) >= VECTOR_CACHE_VERSION)) return false;
+      if (!Array.isArray(parsed.chunks)) return false;
+      return parsed.chunks.every(
+        (group) =>
+          Array.isArray(group) &&
+          group.every((rec) => rec && typeof rec.body === "string")
+      );
+    } catch {
+      return false;
+    }
+  }
   // Always force fresh 1024-dim embedding computation to guarantee vector accuracy
   return { exists: false, chunks: [] };
 }
@@ -192,7 +213,15 @@ async function storeVectorResult(vectorData = [], filename = null) {
 
   const digest = uuidv5(filename, uuidv5.URL);
   const writeTo = path.resolve(vectorCachePath, `${digest}.json`);
-  fs.writeFileSync(writeTo, JSON.stringify(vectorData), "utf8");
+  fs.writeFileSync(
+    writeTo,
+    JSON.stringify({
+      cache_version: VECTOR_CACHE_VERSION,
+      sparse: false,
+      chunks: vectorData,
+    }),
+    "utf8"
+  );
   return;
 }
 
@@ -497,6 +526,7 @@ function hasRequiredMetadata(metadata = {}) {
 module.exports = {
   findDocumentInDocuments,
   cachedVectorInformation,
+  VECTOR_CACHE_VERSION,
   viewLocalFiles,
   purgeSourceDocument,
   purgeVectorCache,

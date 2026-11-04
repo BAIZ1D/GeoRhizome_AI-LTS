@@ -167,6 +167,15 @@ class TextSplitter {
   async splitText(documentText) {
     return this.#splitter._splitText(documentText);
   }
+
+  /**
+   * Splits text and also returns the header-free chunk bodies, index-aligned
+   * with the returned pageContents (which equal splitText's result).
+   * @returns {Promise<{pageContents: string[], bodies: string[]}>}
+   */
+  async splitTextWithBodies(documentText) {
+    return this.#splitter._splitTextWithBodies(documentText);
+  }
 }
 
 // Wrapper for Langchain default RecursiveCharacterTextSplitter class.
@@ -192,14 +201,25 @@ class RecursiveSplitter {
   }
 
   async _splitText(documentText) {
-    if (!this.chunkHeader) return this.engine.splitText(documentText);
+    const { pageContents } = await this._splitTextWithBodies(documentText);
+    return pageContents;
+  }
+
+  async _splitTextWithBodies(documentText) {
     const strings = await this.engine.splitText(documentText);
+    if (!this.chunkHeader)
+      return { pageContents: strings, bodies: [...strings] };
     const documents = await this.engine.createDocuments(strings, [], {
       chunkHeader: this.chunkHeader,
     });
-    return documents
-      .filter((doc) => !!doc.pageContent)
-      .map((doc) => doc.pageContent);
+    const pageContents = [];
+    const bodies = [];
+    documents.forEach((doc, i) => {
+      if (!doc.pageContent) return;
+      pageContents.push(doc.pageContent);
+      bodies.push(strings[i]);
+    });
+    return { pageContents, bodies };
   }
 }
 

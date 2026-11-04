@@ -102,3 +102,34 @@ describe("TextSplitter", () => {
     expect(chunks.every(chunk => chunk.startsWith("testing3: <document_metadata>"))).toBe(true);
   });
 });
+
+describe("TextSplitter.splitTextWithBodies", () => {
+  const text = "This is a test text to be split into chunks".repeat(2);
+
+  test("with header: aligned, header-free bodies; pageContents equals splitText", async () => {
+    const splitter = new TextSplitter({
+      chunkSize: 20,
+      chunkOverlap: 0,
+      chunkHeaderMeta: TextSplitter.buildHeaderMeta({
+        title: "Example",
+        url: "https://example.com",
+        published: "2021-01-01",
+      }),
+    });
+    const { pageContents, bodies } = await splitter.splitTextWithBodies(text);
+    expect(pageContents).toEqual(await splitter.splitText(text));
+    expect(bodies.length).toEqual(pageContents.length);
+    pageContents.forEach((pc, i) => {
+      expect(pc.startsWith("<document_metadata>")).toBe(true);
+      expect(pc.endsWith(bodies[i])).toBe(true);
+      expect(bodies[i]).not.toContain("<document_metadata>");
+    });
+  });
+
+  test("without header: bodies equal pageContents", async () => {
+    const splitter = new TextSplitter({ chunkSize: 20, chunkOverlap: 0 });
+    const { pageContents, bodies } = await splitter.splitTextWithBodies(text);
+    expect(bodies).toEqual(pageContents);
+    expect(pageContents).toEqual(await splitter.splitText(text));
+  });
+});

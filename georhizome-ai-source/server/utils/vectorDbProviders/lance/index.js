@@ -11,6 +11,15 @@ const path = require("path");
 const locks = require("../../knowledgeSync/locks");
 const marker = require("../../knowledgeSync/marker");
 const { KnowledgeSyncError } = require("../../knowledgeSync/errors");
+const { encodeSparse } = require("../../sparse/client");
+const { loadSparseConfig } = require("../../sparse/config");
+const {
+  hasSparseColumns,
+  buildTypedTable,
+  ensureSparseColumns,
+  findExistingHashes,
+  stripSparseKeys,
+} = require("../../sparse/schema");
 
 /**
  * LancedDB Client connection object
@@ -169,7 +178,8 @@ class LanceDb extends VectorDatabase {
       !filterIdentifiers.includes(sourceIdentifier(row));
     const result = { contextTexts: [], sourceDocuments: [], scores: [] };
     const push = (row, score) => {
-      const { vector: _v, _distance: _d, ...rest } = row;
+      const { vector: _v, _distance: _d, ...withSparse } = row;
+      const rest = stripSparseKeys(withSparse);
       result.contextTexts.push(rest.text);
       result.sourceDocuments.push({ ...rest, score });
       result.scores.push(score);
@@ -264,7 +274,8 @@ class LanceDb extends VectorDatabase {
     response.forEach((item) => {
       if (this.distanceToSimilarity(item._distance) < similarityThreshold)
         return;
-      const { vector: _, ...rest } = item;
+      const { vector: _, ...withSparse } = item;
+      const rest = stripSparseKeys(withSparse);
       if (filterIdentifiers.includes(sourceIdentifier(rest))) {
         this.logger(
           "A source was filtered from context as it's parent document is pinned."
@@ -339,15 +350,23 @@ class LanceDb extends VectorDatabase {
           `\x1b[33m[LanceDB Auto-Heal] Table '${namespace}' schema dimension (${tableDim}) differs from incoming vector dimension (${incomingDim}). Dropping old table and recreating with new ${incomingDim}-dim schema...\x1b[0m`
         );
         await client.dropTable(namespace);
-        await client.createTable(namespace, data);
+        await client.createTable(namespace, buildTypedTable(data));
         return true;
       }
 
-      await collection.add(data);
+      // D1: legacy dense-only table gains typed sparse columns on first new
+      // upload (after the dim guard). The column swap invalidates the old
+      // handle, so reopen before adding.
+      let target = collection;
+      if (!(await hasSparseColumns(collection))) {
+        await ensureSparseColumns(client, namespace);
+        target = await client.openTable(namespace);
+      }
+      await target.add(data);
       return true;
     }
 
-    await client.createTable(namespace, data);
+    await client.createTable(namespace, buildTypedTable(data));
     return true;
   }
 
@@ -432,22 +451,38 @@ class LanceDb extends VectorDatabase {
       const pageContent = rawPageContent.normalize("NFKC");
 
       this.logger("Adding new vectorized document into namespace", namespace);
+      // NOTE: this branch is UNREACHABLE in production: every caller passes
+      // skipCache=true and the real non-check cachedVectorInformation always
+      // returns exists:false. Kept sparse-correct for completeness (D-R2):
+      // every cached record must carry its `body`, otherwise we embed fresh.
       if (!skipCache) {
         const cacheResult = await cachedVectorInformation(fullFilePath);
-        if (cacheResult.exists) {
+        const cachedRecords = cacheResult?.exists
+          ? (cacheResult.chunks || []).flat()
+          : [];
+        if (
+          cachedRecords.length > 0 &&
+          cachedRecords.every((r) => typeof r?.body === "string")
+        ) {
           const { client } = await this.connect();
-          const { chunks } = cacheResult;
+          const sparseVectors = await encodeSparse(
+            cachedRecords.map((r) => r.body)
+          );
           const documentVectors = [];
           const submissions = [];
 
-          for (const chunk of chunks) {
-            chunk.forEach((chunk) => {
-              const id = uuidv4();
-              const { id: _id, ...metadata } = chunk.metadata;
-              documentVectors.push({ docId, vectorId: id });
-              submissions.push({ id: id, vector: chunk.values, ...metadata });
+          cachedRecords.forEach((chunk, i) => {
+            const id = uuidv4();
+            const { id: _id, ...cachedMeta } = chunk.metadata;
+            documentVectors.push({ docId, vectorId: id });
+            submissions.push({
+              id: id,
+              vector: chunk.values,
+              ...cachedMeta,
+              sparse_idx: sparseVectors[i].indices,
+              sparse_val: sparseVectors[i].values,
             });
-          }
+          });
 
           await this.updateOrCreateCollection(client, submissions, namespace);
           await DocumentVectors.bulkInsert(documentVectors);
@@ -461,11 +496,15 @@ class LanceDb extends VectorDatabase {
       // from vectordb.
       const EmbedderEngine = getEmbeddingEngineSelection();
       const textSplitter = new TextSplitter({
-        chunkSize: TextSplitter.determineMaxChunkSize(
-          await SystemSettings.getValueOrFallback({
-            label: "text_splitter_chunk_size",
-          }),
-          EmbedderEngine?.embeddingMaxChunkLength
+        // Clamp so a chunk body can never exceed what the sparse encoder accepts.
+        chunkSize: Math.min(
+          TextSplitter.determineMaxChunkSize(
+            await SystemSettings.getValueOrFallback({
+              label: "text_splitter_chunk_size",
+            }),
+            EmbedderEngine?.embeddingMaxChunkLength
+          ),
+          loadSparseConfig().max_input_chars
         ),
         chunkOverlap: await SystemSettings.getValueOrFallback(
           { label: "text_splitter_chunk_overlap" },
@@ -474,30 +513,35 @@ class LanceDb extends VectorDatabase {
         chunkHeaderMeta: TextSplitter.buildHeaderMeta(metadata),
         chunkPrefix: EmbedderEngine?.embeddingPrefix,
       });
-      const textChunks = await textSplitter.splitText(pageContent);
+      // `bodies` are the header-free chunk texts (D-R1), index-aligned.
+      const { pageContents: textChunks, bodies } =
+        await textSplitter.splitTextWithBodies(pageContent);
 
       this.logger("Snippets created from document:", textChunks.length);
       const crypto = require("crypto");
       const { client } = await this.connect();
       const existingTableExists = await this.hasNamespace(namespace);
-      const existingHashes = new Set();
+      let existingHashes = new Set();
+      let denseOnly = new Map();
 
       if (existingTableExists) {
         try {
           const table = await client.openTable(namespace);
-          const existingRows = await table
-            .search()
-            .select(["content_hash"])
-            .toArray();
-          existingRows.forEach((row) => {
-            if (row.content_hash) existingHashes.add(row.content_hash);
-          });
-        } catch {}
+          const found = await findExistingHashes(
+            table,
+            await table.countRows()
+          );
+          existingHashes = found.complete;
+          denseOnly = found.denseOnly;
+        } catch (e) {
+          this.logger("existing hash scan failed", e.message);
+        }
       }
 
       const documentVectors = [];
       const vectors = [];
-      const submissions = [];
+      const keptBodies = [];
+      const staleIds = [];
       const vectorValues = await EmbedderEngine.embedChunks(textChunks);
 
       if (!!vectorValues && vectorValues.length > 0) {
@@ -509,7 +553,7 @@ class LanceDb extends VectorDatabase {
             .update(cleanHashInput)
             .digest("hex");
 
-          // Skip exact duplicate chunk in the same workspace table
+          // Skip exact duplicate chunk (complete rows only) in the same workspace table
           if (existingHashes.has(contentHash)) {
             this.logger(
               `[Deduplication] Skipping duplicate chunk hash ${contentHash.slice(0, 8)}...`
@@ -518,6 +562,12 @@ class LanceDb extends VectorDatabase {
           }
 
           existingHashes.add(contentHash);
+          // D-R3: a dense-only row with this hash is replaced by the new
+          // dense+sparse row; the stale row is deleted after the write.
+          if (denseOnly.has(contentHash)) {
+            staleIds.push(...denseOnly.get(contentHash));
+            denseOnly.delete(contentHash);
+          }
 
           // Infer block_type from text structure
           let block_type = "prose";
@@ -556,19 +606,19 @@ class LanceDb extends VectorDatabase {
             upload_timestamp: new Date().toISOString(),
           };
 
-          const vectorRecord = {
+          // `body` lives on the cache record only (not a LanceDB column) so a
+          // cached chunk can be re-encoded for sparse (D-R2).
+          vectors.push({
             id: uuidv4(),
             values: vector,
             metadata: enrichedMetadata,
-          };
-
-          vectors.push(vectorRecord);
-          submissions.push({
-            ...enrichedMetadata,
-            id: vectorRecord.id,
-            vector: vectorRecord.values,
+            body: bodies[i],
           });
-          documentVectors.push({ docId, vectorId: vectorRecord.id });
+          keptBodies.push(bodies[i]);
+          documentVectors.push({
+            docId,
+            vectorId: vectors[vectors.length - 1].id,
+          });
         }
       } else {
         throw new Error(
@@ -577,12 +627,39 @@ class LanceDb extends VectorDatabase {
       }
 
       if (vectors.length > 0) {
+        // IDX-02/D2/D3: encode ALL bodies BEFORE any table write, always,
+        // regardless of hybrid or sparse.enabled. SparseError propagates to
+        // the catch below as {vectorized:false, error: ja+en}.
+        const sparseVectors = await encodeSparse(keptBodies);
+        const submissions = vectors.map((v, i) => ({
+          ...v.metadata,
+          id: v.id,
+          vector: v.values,
+          sparse_idx: sparseVectors[i].indices,
+          sparse_val: sparseVectors[i].values,
+        }));
+
         const chunks = [];
         for (const chunk of toChunks(vectors, 500)) chunks.push(chunk);
 
         this.logger("Inserting vectorized chunks into LanceDB collection.");
         const { client } = await this.connect();
         await this.updateOrCreateCollection(client, submissions, namespace);
+
+        // D-R3: drop replaced dense-only rows. Ownership of the re-added
+        // chunk moves to the CURRENT docId via the normal bulkInsert below.
+        // Cleanup failure never fails the upload.
+        if (staleIds.length > 0) {
+          try {
+            const table = await client.openTable(namespace);
+            await table.delete(
+              `id IN (${staleIds.map((v) => `'${v}'`).join(",")})`
+            );
+            await DocumentVectors.delete({ vectorId: { in: staleIds } });
+          } catch (e) {
+            this.logger("stale dense-only cleanup failed", e.message);
+          }
+        }
         await storeVectorResult(chunks, fullFilePath);
       }
 
@@ -683,7 +760,9 @@ class LanceDb extends VectorDatabase {
     const documents = [];
     for (const source of sources) {
       const { text, vector: _v, _distance: _d, ...rest } = source;
-      const metadata = rest.hasOwnProperty("metadata") ? rest.metadata : rest;
+      const metadata = stripSparseKeys(
+        rest.hasOwnProperty("metadata") ? rest.metadata : rest
+      );
       if (Object.keys(metadata).length > 0) {
         documents.push({
           ...metadata,

@@ -116,6 +116,14 @@ const TRANSLATIONS = {
       telegram: "Telegram",
     },
   },
+  "hybrid-search": {
+    title: "Hybrid Search (keyword + semantic)",
+    description:
+      "Combines semantic and keyword search, then reranks with Ruri. Turn off to use semantic search only.",
+    "option-default": "Follow system setting",
+    "option-on": "On",
+    "option-off": "Off",
+  },
   login: {
     "multi-user": {
       welcome: "Welcome",

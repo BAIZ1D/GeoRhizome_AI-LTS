@@ -110,6 +110,14 @@ const TRANSLATIONS = {
     },
     "scheduled-jobs": "計画された作業",
   },
+  "hybrid-search": {
+    title: "ハイブリッド検索（キーワード＋意味）",
+    description:
+      "意味検索とキーワード検索を組み合わせ、Ruri で再ランク付けします。オフにすると意味検索のみを使用します。",
+    "option-default": "システム設定に従う",
+    "option-on": "オン",
+    "option-off": "オフ",
+  },
   login: {
     "multi-user": {
       welcome: "ようこそ",

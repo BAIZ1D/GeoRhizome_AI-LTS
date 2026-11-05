@@ -177,6 +177,8 @@ async function encodeInner(bodies, { cfg, now, ensure }) {
       started = true;
       const ok = await ensure(cfg);
       if (!ok) throw fail(autostart.getLastStartReason());
+      // A freshly started server is still loading its model: go cold.
+      lastSuccessAt = 0;
       try {
         out = await postBatchWithBusyRetry(batch, cfg, now);
       } catch (e2) {

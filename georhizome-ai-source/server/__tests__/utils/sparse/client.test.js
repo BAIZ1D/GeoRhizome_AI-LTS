@@ -173,6 +173,24 @@ describe("connection failure", () => {
     expect(ensure).toHaveBeenCalledTimes(1);
   });
 
+  test("retry after a restart uses the cold timeout even when warm", async () => {
+    await up();
+    await encodeSparse(["x"], { cfg: baseCfg });
+    expect(currentTimeoutMs(baseCfg)).toBe(5000);
+    const port = srv.port;
+    await srv.close();
+    const ensure = jest.fn(async () => {
+      srv = await fake.start({ port });
+      return true;
+    });
+    const timers = jest.spyOn(global, "setTimeout");
+    await encodeSparse(["x"], { cfg: baseCfg, ensure });
+    const delays = timers.mock.calls
+      .map((c) => c[1])
+      .filter((d) => d === 5000 || d === 233000);
+    expect(delays[delays.length - 1]).toBe(233000);
+  });
+
   test("timeout never triggers autostart", async () => {
     const err = Object.assign(new Error("aborted"), { name: "AbortError" });
     jest.spyOn(global, "fetch").mockRejectedValue(err);

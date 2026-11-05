@@ -103,6 +103,7 @@ const Workspace = {
     "agentModel",
     "queryRefusalResponse",
     "vectorSearchMode",
+    "hybridSearch",
   ],
 
   validations: {
@@ -180,6 +181,11 @@ const Workspace = {
       )
         return def;
       return value;
+    },
+    hybridSearch: (value) => {
+      if (value === true || value === "true") return true;
+      if (value === false || value === "false") return false;
+      return null;
     },
   },
 

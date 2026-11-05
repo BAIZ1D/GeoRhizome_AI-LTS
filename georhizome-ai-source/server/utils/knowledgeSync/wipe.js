@@ -1,4 +1,5 @@
 const fs = require("fs");
+const path = require("path");
 const paths = require("./paths");
 const locks = require("./locks");
 const marker = require("./marker");
@@ -32,6 +33,15 @@ async function wipeWorkspace({ slug, userId, user, multiUser } = {}) {
         throw new KnowledgeSyncError("KS_E_NOT_FOUND", { phase: "wipe" });
 
       await rmrf(paths.lancedbRoot(), paths.lanceTablePath(slug));
+      // IDX-04: crash-window staging table + marker (plan 11-05 D-R6).
+      await rmrf(
+        paths.lancedbRoot(),
+        paths.lanceTablePath(`${slug}__sparse_stage`)
+      );
+      await rmrf(
+        paths.lancedbRoot(),
+        path.join(paths.lancedbRoot(), `${slug}__sparse_stage.json`)
+      );
       await rmrf(paths.documentsRoot(), paths.ksDocsDir(slug));
       await rmrf(paths.storageBase(), paths.backupRoot(slug));
 

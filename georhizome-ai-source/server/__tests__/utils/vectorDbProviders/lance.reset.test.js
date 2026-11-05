@@ -43,4 +43,19 @@ describe("lance reset (W1)", () => {
     expect(fs.existsSync(path.join(TMP, "lancedb"))).toBe(false);
     await expect(LanceDb.reset()).resolves.toEqual({ reset: true });
   });
+
+  test("removes a sparse-bearing table together with its staging leftovers", async () => {
+    const { client } = await LanceDb.connect();
+    await client.createTable("sp", [
+      {
+        id: "1",
+        vector: [0.1, 0.2],
+        sparse_idx: [1, 2],
+        sparse_val: [0.5, 0.25],
+      },
+    ]);
+    fs.writeFileSync(path.join(TMP, "lancedb", "sp__sparse_stage.json"), "{}");
+    await LanceDb.reset();
+    expect(fs.existsSync(path.join(TMP, "lancedb"))).toBe(false);
+  });
 });

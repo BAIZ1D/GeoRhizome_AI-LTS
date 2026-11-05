@@ -324,7 +324,7 @@ function workspaceEndpoints(app) {
           try {
             await VectorDb["delete-namespace"]({ namespace: slug });
           } catch (e) {
-            console.error(e.message);
+            console.error(`delete-namespace failed for ${slug}:`, e.message);
           }
         });
         response.sendStatus(200).end();
@@ -369,7 +369,7 @@ function workspaceEndpoints(app) {
           try {
             await VectorDb["delete-namespace"]({ namespace: slug });
           } catch (e) {
-            console.error(e.message);
+            console.error(`delete-namespace failed for ${slug}:`, e.message);
           }
         });
         response.sendStatus(200).end();
@@ -414,6 +414,31 @@ function workspaceEndpoints(app) {
         response.status(200).json({ workspace });
       } catch (e) {
         console.error(e.message, e);
+        response.sendStatus(500).end();
+      }
+    }
+  );
+
+  app.get(
+    "/workspace/:slug/sparse-status",
+    [validatedRequest, flexUserRoleValid([ROLES.all])],
+    async (request, response) => {
+      try {
+        const { slug } = request.params;
+        const user = await userFromSession(request, response);
+        const workspace = multiUserMode(response)
+          ? await Workspace.getWithUser(user, { slug })
+          : await Workspace.get({ slug });
+        if (!workspace) return response.sendStatus(400);
+
+        const VectorDb = getVectorDbClass();
+        const sparseStatus =
+          typeof VectorDb.sparseStatus === "function"
+            ? await VectorDb.sparseStatus(workspace.slug)
+            : "missing";
+        response.status(200).json({ sparseStatus });
+      } catch (e) {
+        console.error("sparse-status failed:", e.message);
         response.sendStatus(500).end();
       }
     }

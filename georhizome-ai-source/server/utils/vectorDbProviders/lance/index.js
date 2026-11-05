@@ -19,7 +19,10 @@ const {
   ensureSparseColumns,
   findExistingHashes,
   stripSparseKeys,
+  stagingTableName,
+  stagingMarkerPath,
 } = require("../../sparse/schema");
+const { sparseStatus: sparseStatusOf } = require("../../sparse/status");
 
 /**
  * LancedDB Client connection object
@@ -397,8 +400,32 @@ class LanceDb extends VectorDatabase {
    */
   async deleteVectorsInNamespace(client, namespace = null) {
     locks.assertNotSyncing(namespace);
+    await this.removeSparseStaging(client, namespace);
     await client.dropTable(namespace);
     return true;
+  }
+
+  /**
+   * IDX-04 / D-R6: drop any leftover `<ns>__sparse_stage` table and its
+   * crash-recovery marker so a later upload never promotes stale data.
+   */
+  async removeSparseStaging(client, namespace) {
+    const stage = stagingTableName(namespace);
+    if ((await client.tableNames()).includes(stage))
+      await client.dropTable(stage);
+    await require("fs").promises.rm(stagingMarkerPath(this.uri, namespace), {
+      force: true,
+    });
+  }
+
+  /**
+   * IDX-05 / D4: on-demand sparse index status for a namespace.
+   * @returns {Promise<"missing"|"partial"|"ready">}
+   */
+  async sparseStatus(namespace) {
+    const { client } = await this.connect();
+    if (!(await this.namespaceExists(client, namespace))) return "missing";
+    return sparseStatusOf(await client.openTable(namespace));
   }
 
   async deleteDocumentFromNamespace(namespace, docId) {
@@ -735,8 +762,10 @@ class LanceDb extends VectorDatabase {
     const { namespace = null } = reqBody;
     locks.assertNotSyncing(namespace);
     const { client } = await this.connect();
-    if (!(await this.namespaceExists(client, namespace)))
+    if (!(await this.namespaceExists(client, namespace))) {
+      await this.removeSparseStaging(client, namespace);
       throw new Error("Namespace by that name does not exist.");
+    }
 
     await this.deleteVectorsInNamespace(client, namespace);
     return {

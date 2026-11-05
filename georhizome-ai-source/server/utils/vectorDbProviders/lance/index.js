@@ -574,7 +574,9 @@ class LanceDb extends VectorDatabase {
       if (!!vectorValues && vectorValues.length > 0) {
         for (const [i, vector] of vectorValues.entries()) {
           const textChunk = textChunks[i];
-          const cleanHashInput = this.normalizeChunkForHash(textChunk);
+          // Hash the header-free body: the metadata header carries a
+          // per-upload `published` timestamp that would defeat dedupe.
+          const cleanHashInput = this.normalizeChunkForHash(bodies[i]);
           const contentHash = crypto
             .createHash("sha256")
             .update(cleanHashInput)

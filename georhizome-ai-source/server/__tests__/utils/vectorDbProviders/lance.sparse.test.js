@@ -253,6 +253,20 @@ describe("lance sparse write path", () => {
     expect(await (await open(ns)).countRows()).toBe(4);
   });
 
+  test("dedupe re-upload: same body with a new published header is skipped", async () => {
+    const ns = nextNs();
+    const meta = (published) => ({ title: "doc1.txt", published });
+    await upload(ns, doc3("A", "B", "C"), { meta: meta("11/5/2026, 9:36:10 AM") });
+    const before = await (await open(ns)).countRows();
+    sent = [];
+    await upload(ns, doc3("A", "B", "C"), {
+      docId: "doc-2",
+      meta: meta("11/5/2026, 9:36:43 AM"),
+    });
+    expect(sent).toHaveLength(0);
+    expect(await (await open(ns)).countRows()).toBe(before);
+  });
+
   test("dedupe dense-only: stale row replaced by dense+sparse row, old id deleted", async () => {
     const ns = nextNs();
     const { client } = await LanceDb.connect();

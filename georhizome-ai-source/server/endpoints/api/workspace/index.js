@@ -999,6 +999,7 @@ function apiWorkspaceEndpoints(app) {
           similarityThreshold: parseSimilarityThreshold(),
           topN: parseTopN(),
           rerank: workspace?.vectorSearchMode === "rerank",
+          hybrid: workspace?.hybridSearch ?? null,
         });
 
         response.status(200).json({

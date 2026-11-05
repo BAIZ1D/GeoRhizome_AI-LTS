@@ -98,6 +98,7 @@ async function streamChatWithForEmbed(
           topN: embed.workspace?.topN,
           filterIdentifiers: pinnedDocIdentifiers,
           rerank: embed.workspace?.vectorSearchMode === "rerank",
+          hybrid: embed.workspace?.hybridSearch ?? null,
         }).catch((e) => {
           // D-02: surface the import/rollback gate readably (single authority: lance).
           if (e?.code === "KS_E_SYNCING")

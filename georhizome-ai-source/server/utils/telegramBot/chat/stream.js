@@ -226,6 +226,7 @@ async function buildSearchContext({
           topN: workspace?.topN,
           filterIdentifiers: pinnedDocIdentifiers,
           rerank: workspace?.vectorSearchMode === "rerank",
+          hybrid: workspace?.hybridSearch ?? null,
         }).catch((e) => {
           // D-02: surface the import/rollback gate readably (single authority: lance).
           if (e?.code === "KS_E_SYNCING")

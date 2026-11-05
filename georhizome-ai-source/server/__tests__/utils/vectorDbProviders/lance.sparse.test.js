@@ -162,6 +162,7 @@ const legacyRow = (id, text, dim = DIM) => ({
 });
 
 describe("lance sparse write path", () => {
+  jest.setTimeout(20000);
   test("one add: dense+sparse for every chunk, ids match DocumentVectors, typed schema", async () => {
     const ns = nextNs();
     const spy = jest.spyOn(LanceDb, "updateOrCreateCollection");

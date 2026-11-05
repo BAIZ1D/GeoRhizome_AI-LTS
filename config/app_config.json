@@ -155,6 +155,8 @@
     "rrf_k": 60,
     "dense_top_n": 50,
     "sparse_top_n": 50,
+    "leg_timeout_ms": 3000,
+    "sparse_query_timeout_ms": 3000,
     "scan_budget_p95_ms": 300,
     "storage_method": "column_scan"
   }

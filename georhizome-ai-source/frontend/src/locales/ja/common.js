@@ -1157,7 +1157,7 @@ const TRANSLATIONS = {
     select_model: "モデルを選択",
     sources: "出典",
     document: "文書",
-    similarity_match: "試合",
+    similarity_match: "一致",
     source_count_one: "{{count}} 参照",
     source_count_other: "{{count}} への参照",
 

@@ -211,7 +211,7 @@ describe("lance hybrid retrieval", () => {
     expect(lastLine()).toMatch(/retrievalPath=hybrid_rrf/);
     expect(lastLine()).toMatch(/reason=reranker_timeout/);
     expect(res.sources.length).toBeGreaterThan(0);
-    const m = res.sources[0].metadata;
+    const m = res.sources[0];
     expect(m.scoreType).toBe("rrf");
     expect(m.score).toBeLessThan(0.05);
     expect(retrievalLines()).toHaveLength(1);
@@ -271,12 +271,12 @@ describe("lance hybrid retrieval", () => {
     scoreTable.mockResolvedValue([{ id: target.id, score: 9 }]);
     rerankerClient.rerank.mockResolvedValue({ results: null, reason: "x" });
     const res = await search();
-    const hit = res.sources.find((s) => s.metadata.id === target.id);
+    const hit = res.sources.find((s) => s.id === target.id);
     expect(hit).toBeDefined();
-    expect(hit.metadata.text).toBe(target.text);
-    expect(hit.metadata.vector).toBeUndefined();
-    expect(hit.metadata.sparse_idx).toBeUndefined();
-    expect(hit.metadata.sparse_val).toBeUndefined();
+    expect(hit.text).toBe(target.text);
+    expect(hit.vector).toBeUndefined();
+    expect(hit.sparse_idx).toBeUndefined();
+    expect(hit.sparse_val).toBeUndefined();
   });
 
   test("scoreTable throw -> hybrid_error dense; syncing propagates", async () => {

@@ -23,6 +23,38 @@ const {
   stagingMarkerPath,
 } = require("../../sparse/schema");
 const { sparseStatus: sparseStatusOf } = require("../../sparse/status");
+const { loadHybridConfig } = require("../../hybrid/config");
+const { encodeQuery } = require("../../hybrid/queryEncoder");
+const { scoreTable } = require("../../hybrid/sparseScan");
+const { fuse } = require("../../hybrid/rrf");
+const {
+  logRetrieval,
+  rerankerReason,
+  PATHS,
+  REASONS,
+} = require("../../hybrid/log");
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const KNOWN_REASONS = new Set(Object.values(REASONS));
+
+/** Race a promise against a timer; rejection carries `.reason`. */
+function withTimeout(promise, ms, reason) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      const e = new Error(reason);
+      e.reason = reason;
+      reject(e);
+    }, ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+const tagged = (reason) => {
+  const e = new Error(reason);
+  e.reason = reason;
+  return e;
+};
 
 /**
  * LancedDB Client connection object
@@ -141,6 +173,8 @@ class LanceDb extends VectorDatabase {
     // Accepted for caller compatibility only: Stage 2 is gated solely by
     // app_config.reranker.enabled, whatever the workspace vectorSearchMode is.
     rerank: _rerank = false,
+    // Gating is resolved by performSimilaritySearch; accepted for pass-through.
+    hybrid: _hybrid = null,
   }) {
     locks.assertNotSyncing(namespace);
     const cfg = rerankerClient.loadRerankerConfig();
@@ -209,6 +243,7 @@ class LanceDb extends VectorDatabase {
         .filter(({ row }) => unpinned(row))
         .slice(0, finalLimit)
         .forEach(({ row, score }) => push(row, score));
+      result.rerankUsed = true;
       return result;
     }
 
@@ -220,6 +255,169 @@ class LanceDb extends VectorDatabase {
       .slice(0, finalLimit)
       .forEach(({ row, score }) => push(row, score));
     return result;
+  }
+
+  /**
+   * Hybrid (dense + sparse) retrieval: parallel legs with per-leg timeouts,
+   * RRF fusion, sparse-only hydration, Ruri rerank with RRF-order fallback.
+   * Returns {fallback: reason} when the dense path should be used instead.
+   * Only KS_E_SYNCING propagates; unexpected errors are handled by the caller.
+   */
+  async hybridSimilarityResponse({
+    client,
+    namespace,
+    query,
+    queryVector,
+    topN = 5,
+    filterIdentifiers = [],
+  }) {
+    const hybridCfg = loadHybridConfig();
+    const rerankCfg = rerankerClient.loadRerankerConfig();
+    const finalLimit = rerankCfg.final_top_k || topN || 10;
+    const wideCount = rerankerClient.resolveWideCount(rerankCfg, finalLimit);
+
+    const table = await client.openTable(namespace);
+    const status = await sparseStatusOf(table);
+    if (status !== "ready")
+      return {
+        fallback:
+          status === "partial"
+            ? REASONS.SPARSE_PARTIAL
+            : REASONS.SPARSE_MISSING,
+      };
+
+    const denseLeg = withTimeout(
+      table
+        .vectorSearch(queryVector)
+        .distanceType("cosine")
+        .limit(hybridCfg.dense_top_n)
+        .toArray(),
+      hybridCfg.leg_timeout_ms,
+      REASONS.DENSE_TIMEOUT
+    );
+    const sparseLeg = withTimeout(
+      (async () => {
+        const { vec, reason } = await encodeQuery(query, {
+          cfg: loadSparseConfig(),
+          timeoutMs: hybridCfg.sparse_query_timeout_ms,
+        });
+        if (!vec) throw tagged(reason || REASONS.SPARSE_UNAVAILABLE);
+        const scored = await scoreTable(table, vec, hybridCfg.sparse_top_n);
+        if (!scored || scored.length === 0) throw tagged(REASONS.SPARSE_EMPTY);
+        return scored;
+      })(),
+      hybridCfg.leg_timeout_ms,
+      REASONS.SPARSE_TIMEOUT
+    );
+    const [dRes, sRes] = await Promise.allSettled([denseLeg, sparseLeg]);
+    locks.assertNotSyncing(namespace);
+
+    if (sRes.status === "rejected") {
+      const e = sRes.reason;
+      if (!e || !e.reason) throw e; // unexpected -> caller maps hybrid_error
+      return {
+        fallback: KNOWN_REASONS.has(e.reason) ? e.reason : REASONS.SPARSE_ERROR,
+      };
+    }
+    if (dRes.status === "rejected" && !dRes.reason?.reason) {
+      // Non-timeout dense failure (e.g. dimension mismatch): treat as error.
+      throw dRes.reason;
+    }
+    const denseRows = dRes.status === "fulfilled" ? dRes.value || [] : [];
+    const sparseHits = sRes.value;
+    if (denseRows.some((r) => !r || !r.id))
+      return { fallback: REASONS.MISSING_ROW_ID };
+
+    const byId = new Map(denseRows.map((r) => [String(r.id), r]));
+    const fused = fuse(
+      [
+        { name: "dense", ids: denseRows.map((r) => String(r.id)) },
+        { name: "sparse", ids: sparseHits.map((h) => String(h.id)) },
+      ],
+      hybridCfg.rrf_k
+    ).slice(0, wideCount);
+
+    // Hydrate sparse-only ids (UUID-validated before SQL interpolation).
+    const missing = fused
+      .map((f) => String(f.id))
+      .filter((id) => !byId.has(id) && UUID_RE.test(id));
+    if (missing.length > 0) {
+      const cols = (await table.schema()).fields
+        .map((f) => f.name)
+        .filter(
+          (n) => n !== "vector" && n !== "sparse_idx" && n !== "sparse_val"
+        );
+      const hydrated = await table
+        .query()
+        .where(`id IN (${missing.map((id) => `'${id}'`).join(", ")})`)
+        .select(cols)
+        .limit(missing.length)
+        .toArray();
+      hydrated.forEach((r) => byId.set(String(r.id), r));
+    }
+    locks.assertNotSyncing(namespace);
+
+    const candidates = fused
+      .map((f) => ({ row: byId.get(String(f.id)), rrf: f.rrf, id: f.id }))
+      .filter((c) => c.row);
+    const counts = {
+      dense: denseRows.length,
+      sparse: sparseHits.length,
+      fused: candidates.length,
+    };
+    if (candidates.length === 0) return { fallback: REASONS.SPARSE_EMPTY };
+
+    const unpinned = (row) =>
+      !filterIdentifiers.includes(sourceIdentifier(row));
+    const result = { contextTexts: [], sourceDocuments: [], scores: [] };
+    const push = (row, score, extra = {}) => {
+      const { vector: _v, _distance: _d, ...withSparse } = row;
+      const rest = stripSparseKeys(withSparse);
+      result.contextTexts.push(rest.text);
+      result.sourceDocuments.push({ ...rest, score, ...extra });
+      result.scores.push(score);
+    };
+
+    const { results, reason: rrReason } = !rerankCfg.enabled
+      ? { results: null, reason: "disabled" }
+      : await rerankerClient.rerank({
+          query,
+          candidates: candidates.map((c) => ({
+            id: String(c.id),
+            text: c.row.text || "",
+          })),
+          cfg: rerankCfg,
+          label: `workspace '${namespace}' hybrid`,
+        });
+    locks.assertNotSyncing(namespace);
+
+    if (results) {
+      const cand = new Map(candidates.map((c) => [String(c.id), c]));
+      results
+        .map((r) => ({ c: cand.get(String(r.id)), score: r.score }))
+        .filter(({ c, score }) => c && score >= rerankCfg.min_reranker_score)
+        .filter(({ c }) => unpinned(c.row))
+        .slice(0, finalLimit)
+        .forEach(({ c, score }) => push(c.row, score));
+      return {
+        result,
+        retrievalPath: PATHS.HYBRID_RERANK,
+        reason: REASONS.OK,
+        counts,
+      };
+    }
+
+    // Reranker down: RRF order, no cosine/logit threshold on RRF scores.
+    candidates
+      .filter((c) => unpinned(c.row))
+      .slice(0, finalLimit)
+      .forEach((c) => push(c.row, c.rrf, { scoreType: "rrf" }));
+    return {
+      result,
+      retrievalPath: PATHS.HYBRID_RRF,
+      reason: rerankerReason(rrReason),
+      counts,
+    };
   }
 
   /**
@@ -708,6 +906,7 @@ class LanceDb extends VectorDatabase {
     topN = 4,
     filterIdentifiers = [],
     rerank = false,
+    hybrid = null,
   }) {
     if (!namespace || !input || !LLMConnector)
       throw new Error("Invalid request to performSimilaritySearch.");
@@ -725,16 +924,69 @@ class LanceDb extends VectorDatabase {
     const EmbedderEngine = getEmbeddingEngineSelection();
     const queryVector = await EmbedderEngine.embedTextInput(input);
 
-    // Two-stage retrieval (cosine candidates -> cross-encoder rerank), gated by app_config.reranker.enabled
-    const result = await this.rerankedSimilarityResponse({
-      client,
+    const started = Date.now();
+    const hybridCfg = loadHybridConfig();
+    let fallback = null;
+    if (hybrid === false) fallback = REASONS.HYBRID_DISABLED_WORKSPACE;
+    else if (hybrid == null && !hybridCfg.enabled)
+      fallback = REASONS.HYBRID_DISABLED_GLOBAL;
+    else if (!loadSparseConfig().enabled) fallback = REASONS.SPARSE_DISABLED;
+
+    let result = null;
+    let path = null;
+    let reason = REASONS.OK;
+    let counts = { dense: 0, sparse: 0, fused: 0 };
+    if (!fallback) {
+      try {
+        const h = await this.hybridSimilarityResponse({
+          client,
+          namespace,
+          query: input,
+          queryVector,
+          topN,
+          filterIdentifiers,
+        });
+        if (h.fallback) fallback = h.fallback;
+        else {
+          result = h.result;
+          path = h.retrievalPath;
+          reason = h.reason;
+          counts = h.counts;
+        }
+      } catch (err) {
+        if (err && err.code === "KS_E_SYNCING") throw err;
+        console.warn(`[LanceDb] hybrid retrieval failed: ${err?.message}`);
+        fallback = REASONS.HYBRID_ERROR;
+      }
+    }
+
+    if (!result) {
+      // Two-stage retrieval (cosine candidates -> cross-encoder rerank), gated by app_config.reranker.enabled
+      result = await this.rerankedSimilarityResponse({
+        client,
+        namespace,
+        query: input,
+        queryVector,
+        similarityThreshold,
+        topN,
+        filterIdentifiers,
+        rerank,
+        hybrid,
+      });
+      path = result.rerankUsed ? PATHS.DENSE_RERANK : PATHS.DENSE_ONLY;
+      reason = fallback || REASONS.OK;
+      counts = {
+        dense: result.contextTexts.length,
+        sparse: 0,
+        fused: 0,
+      };
+    }
+    logRetrieval({
       namespace,
-      query: input,
-      queryVector,
-      similarityThreshold,
-      topN,
-      filterIdentifiers,
-      rerank,
+      retrievalPath: path,
+      reason,
+      ...counts,
+      ms: Date.now() - started,
     });
 
     const { contextTexts, sourceDocuments } = result;

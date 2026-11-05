@@ -110,14 +110,21 @@ export function SourceTypeCircle({
 export function combineLikeSources(sources) {
   const combined = {};
   sources.forEach((source) => {
-    const { id, title, text, chunkSource = "", score = null } = source;
+    const {
+      id,
+      title,
+      text,
+      chunkSource = "",
+      score = null,
+      scoreType = null,
+    } = source;
     if (combined.hasOwnProperty(title)) {
-      combined[title].chunks.push({ id, text, chunkSource, score });
+      combined[title].chunks.push({ id, text, chunkSource, score, scoreType });
       combined[title].references += 1;
     } else {
       combined[title] = {
         title,
-        chunks: [{ id, text, chunkSource, score }],
+        chunks: [{ id, text, chunkSource, score, scoreType }],
         references: 1,
       };
     }
@@ -246,7 +253,7 @@ export function CitationDetailModal({ source, onClose }) {
           style={{ maxHeight: "calc(100vh - 200px)" }}
         >
           <div className="py-7 px-9 space-y-2 flex-col">
-            {chunks.map(({ text, score }, idx) => (
+            {chunks.map(({ text, score, scoreType }, idx) => (
               <Fragment key={idx}>
                 <div className="pt-6 text-white light:text-slate-900">
                   <div className="flex flex-col w-full justify-start pb-6 gap-y-1">
@@ -254,7 +261,7 @@ export function CitationDetailModal({ source, onClose }) {
                       {HTMLDecode(omitChunkHeader(text))}
                     </p>
 
-                    {!!score && (
+                    {!!score && scoreType !== "rrf" && (
                       <div className="w-full flex items-center text-xs text-white/60 light:text-slate-500 gap-x-2 cursor-default">
                         <div
                           data-tooltip-id="similarity-score"
